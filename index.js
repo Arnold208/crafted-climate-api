@@ -22,7 +22,8 @@ const secureMqtt = require('./routes/telemetry/mqtt_secure_msg');
 const { setupSocket } = require("./config/socket/socketio");
 const { startTelemetryWorker } = require('./routes/telemetry/queue_worker/telemetryWorker');
 const { startStatusWorker } = require('./routes/telemetry/queue_worker/statusWorker');
-
+const { startFlushDirectCron } = require('./cron/flushEnqueueCron');
+const { startFlushWorker } = require('./routes/telemetry/queue_worker/flushWorker');
 const app = express();
 
 // Load environment variables
@@ -70,9 +71,11 @@ connectRedis()
   .then(() => {
 
     startTelemetryWorker();
-    startStatusWorker();
+    //startStatusWorker();
+    //startFlushWorker();       // horizontally scalable (PM2/k8s or raise concurrency)
+startFlushDirectCron();
     const PORT = process.env.PORT || 3000;
-  
+
     const server = app.listen(PORT, () => {
       console.log(`🚀 Server running at http://localhost:${PORT}`);
       console.log(`📘 Swagger docs available at http://localhost:${PORT}/climate-docs`);

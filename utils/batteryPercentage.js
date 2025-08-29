@@ -5,7 +5,7 @@
  * @param {number} maxVoltage - The maximum voltage representing 100%.
  * @returns {number} Battery percentage (0–100).
  */
-function batteryPercentage(voltage, minVoltage = 3.3, maxVoltage = 3.54) {
+function batteryPercentage(voltage, minVoltage = 3.3, maxVoltage = 4.1) {
   if (voltage < minVoltage) {
     return 0;
   } else if (voltage > maxVoltage) {

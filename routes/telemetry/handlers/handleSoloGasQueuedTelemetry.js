@@ -26,9 +26,8 @@ async function handleGasSoloQueuedTelemetry(messageObj) {
 
     const formattedData = {
       transport_time: isNaN(messageObj.when) ? 0 : +messageObj.when,
-      telem_time: isNaN(body.timestamp) ? 0 : +body.timestamp,
+      telem_time: isNaN(body.ts) ? 0 : +body.ts,
       auid,
-
       temperature: isNaN(body.temp) ? 0 : +body.temp,
       humidity: isNaN(body.humidity) ? 0 : +body.humidity,
       pressure: isNaN(body.pressure) ? 0 : +body.pressure,

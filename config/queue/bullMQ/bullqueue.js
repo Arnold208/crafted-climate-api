@@ -14,7 +14,14 @@ const connection = {
 
 const telemetryQueue = new Queue('telemetry', { connection });
 const statusQueue = new Queue('status', { connection });
-
+const flushQueue     = new Queue('flush-telem', {
+  connection,
+  defaultJobOptions: {
+    attempts: 1, // idempotent
+    removeOnComplete: { age: 3600, count: 5000 },
+    removeOnFail:     { age: 86400, count: 1000 },
+  },
+});
 
 console.log('✅ Redis connection and Queue created');
-module.exports = {telemetryQueue,statusQueue};
+module.exports = {telemetryQueue,statusQueue, flushQueue};

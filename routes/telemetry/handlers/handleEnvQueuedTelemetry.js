@@ -31,7 +31,7 @@ async function handleEnvQueuedTelemetry(messageObj) {
 
     const formattedData = {
       transport_time : isNaN(messageObj.when) ? 0 : +messageObj.when,
-      telem_time : isNaN(body.timestamp) ?  messageObj.when : +body.timestamp,
+      telem_time : isNaN(body.ts) ?  messageObj.when : +body.ts,
       temperature: isNaN(body.temp) ? 0 : +body.temp,
       humidity: isNaN(body.humidity) ? 0 : +body.humidity,
       pressure: isNaN(body.pressure) ? 0 : +body.pressure,
