@@ -72,8 +72,7 @@ connectRedis()
 
     startTelemetryWorker();
     //startStatusWorker();
-    //startFlushWorker();       // horizontally scalable (PM2/k8s or raise concurrency)
-startFlushDirectCron();
+    startFlushDirectCron();
     const PORT = process.env.PORT || 3000;
 
     const server = app.listen(PORT, () => {

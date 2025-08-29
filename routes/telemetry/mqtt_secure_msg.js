@@ -44,13 +44,13 @@ function initializeMQTTClient(client, topics) {
         }
       });
 
-      const status = await statusQueue.add('deviceStatus', jobPayload, {
-        removeOnComplete: true,
-        removeOnFail: true, // keep failed jobs for manual review or retry logic
-      });
+      // const status = await statusQueue.add('deviceStatus', jobPayload, {
+      //   removeOnComplete: true,
+      //   removeOnFail: true, // keep failed jobs for manual review or retry logic
+      // });
 
       console.log(`📦 Telemetry queued as Job ID: ${result.id}`);
-      console.log(`📦 Status queued as Job ID: ${status.id}`);
+      //console.log(`📦 Status queued as Job ID: ${status.id}`);
 
     } catch (error) {
       console.error("❌ Failed to parse or queue message:", error.message);
