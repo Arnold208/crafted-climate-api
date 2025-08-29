@@ -13,8 +13,8 @@ const connection = {
 };
 
 const telemetryQueue = new Queue('telemetry', { connection });
-//const telemetryQueue = new Queue('telemetryQueue', { connection });
+const statusQueue = new Queue('status', { connection });
 
 
 console.log('✅ Redis connection and Queue created');
-module.exports = telemetryQueue;
+module.exports = {telemetryQueue,statusQueue};

@@ -21,6 +21,7 @@ const telemetry = require('./routes/devices/telemetry/telemetry');
 const secureMqtt = require('./routes/telemetry/mqtt_secure_msg');
 const { setupSocket } = require("./config/socket/socketio");
 const { startTelemetryWorker } = require('./routes/telemetry/queue_worker/telemetryWorker');
+const { startStatusWorker } = require('./routes/telemetry/queue_worker/statusWorker');
 
 const app = express();
 
@@ -69,7 +70,7 @@ connectRedis()
   .then(() => {
 
     startTelemetryWorker();
-
+    startStatusWorker();
     const PORT = process.env.PORT || 3000;
   
     const server = app.listen(PORT, () => {

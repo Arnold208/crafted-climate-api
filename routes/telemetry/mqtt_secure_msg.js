@@ -1,10 +1,10 @@
-const telemetryQueue = require("../../config/queue/bullMQ/bullqueue");
+const {telemetryQueue,statusQueue} = require("../../config/queue/bullMQ/bullqueue");
 const { createMqttClient } = require("../../config/mqtt/mqtt_secure/mqtt_secure");
 
 function initializeMQTTClient(client, topics) {
   client.on("connect", () => {
     console.log("🔗 Connected to MQTT broker");
-
+ 
     client.subscribe(topics, (err, granted) => {
       if (err) {
         console.error("❌ Subscription error:", err);
@@ -44,7 +44,14 @@ function initializeMQTTClient(client, topics) {
         }
       });
 
+      const status = await statusQueue.add('deviceStatus', jobPayload, {
+        removeOnComplete: true,
+        removeOnFail: true, // keep failed jobs for manual review or retry logic
+      });
+
       console.log(`📦 Telemetry queued as Job ID: ${result.id}`);
+      console.log(`📦 Status queued as Job ID: ${status.id}`);
+
     } catch (error) {
       console.error("❌ Failed to parse or queue message:", error.message);
     }

@@ -1,20 +1,4 @@
-// ✅ Correct: destructure `client` to get the usable Redis instance
 const { client: redisClient } = require('../config/redis/redis');
-
-const dotenv = require('dotenv');
-const path = require('path');
-
-// const { connectRedis } = require('../config/redis/redis'); // ✅ Add this line
-// const connectDB = require('../config/database/mongodb');
-
-// connectRedis()
-// connectDB();
-
-// Load correct .env file based on NODE_ENV
-const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
-dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
-
-const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '100', 10);
 
 /**
  * Flush telemetry entries for a specific AUID to MongoDB
@@ -24,7 +8,20 @@ const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '100', 10);
  * @param {Mongoose.Model} mongoModel - MongoDB model (e.g., EnvTelemetry)
  */
 async function flushTelemetryToMongo(auid, mongoModel) {
+  const LOCK_KEY = `flush_lock_${auid}`;
+  const LOCK_EXPIRY = 60; // seconds
+
   try {
+    // Acquire lock to prevent race conditions
+    const lock = await redisClient.set(LOCK_KEY, '1', {
+      NX: true,
+      EX: LOCK_EXPIRY,
+    });
+
+    if (!lock) {
+      return { status: "locked", message: `Another flush is in progress for ${auid}` };
+    }
+
     const entries = await redisClient.hGetAll(auid);
     if (!entries || Object.keys(entries).length <= 2) {
       return { status: "empty", message: "No telemetry data to flush." };
@@ -39,7 +36,6 @@ async function flushTelemetryToMongo(auid, mongoModel) {
       try {
         const parsed = JSON.parse(value);
 
-        // ✅ Only flush if it's not already flushed
         if (parsed.f === 0) {
           datapoints.push(parsed);
           flushedTimestamps.push(key); // key is timestamp string
@@ -49,21 +45,24 @@ async function flushTelemetryToMongo(auid, mongoModel) {
       }
     }
 
-    if (datapoints.length < BATCH_SIZE) {
+    if (datapoints.length < parseInt(process.env.BATCH_SIZE || '100', 10)) {
       return {
         status: "pending",
-        message: `Only ${datapoints.length}/${BATCH_SIZE} unflushed entries available. Threshold not reached.`,
+        message: `Only ${datapoints.length} unflushed entries available. Threshold not reached.`,
       };
     }
 
-    // ✅ Insert to MongoDB
-    await mongoModel.insertMany(datapoints);
+    // Insert into MongoDB with unordered option to avoid failure on single bad doc
+    await mongoModel.insertMany(datapoints, { ordered: false });
     console.log(`✅ Flushed ${datapoints.length} telemetry entries for ${auid} to MongoDB.`);
 
-    // ✅ Update Redis: set `"f": 1` for flushed entries
+    // Update Redis entries: mark as flushed
     for (const ts of flushedTimestamps) {
-      const updated = { ...datapoints.find(d => d.date.toString() === ts), f: 1 };
-      await redisClient.hSet(auid, ts, JSON.stringify(updated));
+      const original = datapoints.find(d => d.date && d.date.toString() === ts);
+      if (original) {
+        const updated = { ...original, f: 1 };
+        await redisClient.hSet(auid, ts, JSON.stringify(updated));
+      }
     }
 
     return {
@@ -72,8 +71,11 @@ async function flushTelemetryToMongo(auid, mongoModel) {
     };
 
   } catch (err) {
-    console.error(` Error flushing telemetry for ${auid}:`, err.message);
+    console.error(`❌ Error flushing telemetry for ${auid}:`, err.message);
     return { status: "error", message: err.message };
+  } finally {
+    // Release lock
+    await redisClient.del(`flush_lock_${auid}`);
   }
 }
 
