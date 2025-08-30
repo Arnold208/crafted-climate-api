@@ -3,7 +3,14 @@ const path = require('path');
 const { Server } = require("socket.io");
 const { useAzureSocketIO } = require("@azure/web-pubsub-socket.io");
 
-const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
+let envFile;
+
+if (process.env.NODE_ENV === 'development') {
+  envFile = '.env.development';
+} else {
+  envFile = '.env';   // default for production or if NODE_ENV not set
+}
+
 dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
 
 let io;
