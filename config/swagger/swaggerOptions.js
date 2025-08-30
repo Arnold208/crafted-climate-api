@@ -1,6 +1,7 @@
 const swaggerJsdoc = require('swagger-jsdoc');
 
 const isProd = process.env.NODE_ENV === 'production';
+const prodUrl = process.env.PROD_URL;
 
 const options = {
   definition: {
@@ -15,7 +16,7 @@ const options = {
     servers: [
       {
         url: isProd
-          ? 'https://api.craftedclimate.com'
+          ? prodUrl
           : 'http://localhost:3000',
         description: isProd ? 'Production Server' : 'Development Server',
       },
