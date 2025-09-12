@@ -48,4 +48,6 @@ const envTelemetrySchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+envTelemetrySchema.index({ auid: 1, transport_time: -1 });
+
 module.exports = mongoose.model('EnvTelemetry', envTelemetrySchema);

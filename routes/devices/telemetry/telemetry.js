@@ -234,14 +234,22 @@ router.get('/:userid/device/:auid', async (req, res) => {
  *     tags:
  *       - Telemetry
  *     summary: Get telemetry with metadata for public devices
- *     description: Retrieves all cached telemetry data along with metadata for each device marked as publicly available.
+ *     description: Retrieves cached telemetry data (capped per device) with metadata for devices marked public.
  *     parameters:
  *       - name: model
  *         in: query
  *         required: false
  *         schema:
  *           type: string
- *         description: Filter devices by model (e.g., "env", "gas")
+ *         description: Filter devices by model (e.g., "env", "gas-solo")
+ *       - name: limit
+ *         in: query
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 1000
+ *         description: Max telemetry points per device (default 50)
  *     responses:
  *       200:
  *         description: Telemetry and metadata fetched for public devices
@@ -251,37 +259,53 @@ router.get('/:userid/device/:auid', async (req, res) => {
 
 router.get('/public/telemetry', async (req, res) => {
   const { model } = req.query;
+  const limit = Math.min(
+    Math.max(parseInt(req.query.limit || '50', 10), 1),
+    1000
+  );
 
   try {
     const query = { availability: 'public' };
     if (model) query.model = model.toLowerCase();
 
-    const devices = await registerNewDevice.find(query, { auid: 1 });
+    const devices = await registerNewDevice.find(query, { auid: 1 }).lean();
 
     const result = await Promise.all(
-      devices.map(async (device) => {
+      devices.map(async ({ auid }) => {
         try {
-          const all = await redisClient.hGetAll(device.auid);
+          const all = await redisClient.hGetAll(auid);
           if (!all || Object.keys(all).length === 0) return null;
 
           const metadata = all.metadata ? JSON.parse(all.metadata) : null;
-          const telemetry = Object.entries(all)
-            .filter(([key]) => !['metadata', 'flushed'].includes(key))
-            .map(([_, value]) => {
-              try {
-                return JSON.parse(value);
-              } catch {
-                return null;
-              }
-            })
-            .filter(Boolean); // Remove nulls
 
-          return {
-            metadata,
-            telemetry,
-          };
+          // Collect telemetry fields (skip admin fields)
+          const entries = [];
+          for (const [field, value] of Object.entries(all)) {
+            if (field === 'metadata' || field === 'flushed') continue;
+
+            // Treat hash field name as a timestamp if possible
+            const ts = Number(field);
+            if (!Number.isFinite(ts)) continue;
+
+            try {
+              const parsed = JSON.parse(value);
+              entries.push([ts, parsed]);
+            } catch {
+              // skip bad JSON
+            }
+          }
+
+          if (entries.length === 0) {
+            return { metadata, telemetry: [] };
+          }
+
+          // Sort newest → oldest and take top N
+          entries.sort((a, b) => b[0] - a[0]);
+          const telemetry = entries.slice(0, limit).map(([_, v]) => v);
+
+          return { metadata, telemetry };
         } catch (err) {
-          console.warn(`⚠️ Error reading Redis for ${device.auid}:`, err.message);
+          console.warn(`⚠️ Error reading Redis for ${auid}:`, err.message);
           return null;
         }
       })
@@ -290,6 +314,7 @@ router.get('/public/telemetry', async (req, res) => {
     const filtered = result.filter(Boolean);
     return res.status(200).json({
       count: filtered.length,
+      per_device_limit: limit,
       data: filtered,
     });
   } catch (err) {

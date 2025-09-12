@@ -2,7 +2,14 @@ const { io } = require("socket.io-client");
 const dotenv = require('dotenv');
 const path = require('path');
  
-const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
+let envFile;
+
+if (process.env.NODE_ENV === 'development') {
+  envFile = '.env.development';
+} else {
+  envFile = '.env';   // default for production or if NODE_ENV not set
+}
+
 dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
 
 // Replace this with your actual local or deployed server
