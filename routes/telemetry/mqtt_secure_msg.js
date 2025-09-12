@@ -33,14 +33,14 @@ function initializeMQTTClient(client, topics) {
         topic,
         receivedAt: new Date().toISOString()
       };
-
+//1
       const result = await telemetryQueue.add('processTelemetry', jobPayload, {
         removeOnComplete: true,
-        removeOnFail: false, // keep failed jobs for manual review or retry logic
-        attempts: 3,         // retry up to 3 times
+        removeOnFail: { age: 5 }, // auto-remove failed jobs 5s after final failure
+        attempts: 2,              // retry up to 2 times
         backoff: {
           type: 'exponential',
-          delay: 5000        // wait 5s, then 10s, then 20s
+          delay: 5000             // wait 5s, then 10s
         }
       });
 

@@ -51,10 +51,12 @@ dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
       // Anything with body but unknown devmod → skip quietly (per your rule)
       return;
     },
+    //1
     {
       connection,
       removeOnComplete: { age: 60, count: 1000 },
-      removeOnFail: { age: 3600, count: 100 },
+      // ⬇️ Keep failed jobs very briefly to avoid Redis pile-up
+      removeOnFail: { age: 5 }, // auto-remove failed jobs ~5s after final failure
       // concurrency: 5,
       // lockDuration: 30000,
     }

@@ -50,7 +50,8 @@ dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
     'status',
     async (job) => {
       // Disable retries for status pings (idempotent)
-      job.discard();
+      // job.discard();
+      // ↑ Legacy behavior disabled: we now allow up to 2 retries per global policy.
 
       // 0) Extract devid (body-only per your rule, with a fallback if you ever change producers)
       const devid =
@@ -101,10 +102,11 @@ dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
 
       return;
     },
+    //1
     {
       connection,
       removeOnComplete: { age: 60, count: 1000 },
-      removeOnFail: { age: 3600, count: 100 },
+      removeOnFail: { age: 5 }, // remove failed jobs ~5s after final failure
       // Optional tuning to reduce lock churn:
       // concurrency: 10,
       // lockDuration: 30000,
@@ -112,7 +114,27 @@ dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
   );
 
   worker.on('completed', (job) => console.log(`✅ Status Job ${job.id} completed`));
-  worker.on('failed', (job, err) => console.error(`❌ Status Job ${job?.id} failed:`, err?.stack || err));
+  worker.on('failed', async (job, err) => {
+    console.error(`❌ Status Job ${job?.id} failed:`, err?.stack || err);
+
+    // Belt-and-suspenders cleanup in case removeOnFail isn't honored in some edge case.
+    try {
+      if (job && job.opts && typeof job.attemptsMade === 'number') {
+        const maxAttempts = job.opts.attempts ?? 0;
+        if (job.attemptsMade >= maxAttempts) {
+          setTimeout(async () => {
+            try {
+              const fresh = await job.queue.getJob(job.id);
+              if (fresh) {
+                await fresh.remove();
+                console.log(`🧹 Removed terminally failed status job ${job.id}`);
+              }
+            } catch (_) {}
+          }, 5000);
+        }
+      }
+    } catch (_) {}
+  });
   worker.on('error', (err) => console.error('🚨 Status Worker error:', err));
 
   return worker;
