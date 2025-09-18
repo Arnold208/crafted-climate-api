@@ -3,6 +3,8 @@ const { containerClient, upload, generateSignedUrl } = require("../../../config/
 const SensorModel = require("../../../model/devices/deviceModels");
 const authenticateToken = require("../../../middleware/bearermiddleware");
 const router = express.Router();
+const authorizeRoles = require('../../../middleware/rbacMiddleware');
+const verifyApiKey = require('../../../middleware/apiKeymiddleware');
 
 /**
  * @swagger
@@ -34,7 +36,7 @@ const router = express.Router();
  *       201:
  *         description: Model created with image successfully.
  */
-router.post("/models", authenticateToken, upload.single("image"), async (req, res) => {
+router.post("/models", authenticateToken, authorizeRoles('admin','supervisor'),upload.single("image"), async (req, res) => {
   const { model, description, version } = req.body;
 
   if (!req.file || !model || !description) {
@@ -78,7 +80,7 @@ router.post("/models", authenticateToken, upload.single("image"), async (req, re
  *       - Sensor Models
  *     summary: Get all sensor models
  */
-router.get("/models", async (req, res) => {
+router.get("/models", verifyApiKey,authenticateToken,authorizeRoles('admin'),async (req, res) => {
   try {
     const models = await SensorModel.find();
     res.status(200).send({ message: "Sensor models retrieved", data: models });
@@ -95,7 +97,7 @@ router.get("/models", async (req, res) => {
  *       - Sensor Models
  *     summary: Search and filter sensor models
  */
-router.get("/models/search", async (req, res) => {
+router.get("/models/search", verifyApiKey,authenticateToken,authorizeRoles('admin'), async (req, res) => {
   const { query, version } = req.query;
   try {
     const filter = {};
@@ -123,7 +125,7 @@ router.get("/models/search", async (req, res) => {
  *       - Sensor Models
  *     summary: Get model by UUID
  */
-router.get("/models/uuid/:uuid", async (req, res) => {
+router.get("/models/uuid/:uuid", verifyApiKey,authenticateToken,authorizeRoles('admin'),async (req, res) => {
   try {
     const model = await SensorModel.findOne({ uuid: req.params.uuid });
     if (!model) {
@@ -143,7 +145,7 @@ router.get("/models/uuid/:uuid", async (req, res) => {
  *       - Sensor Models
  *     summary: Get a specific sensor model by name
  */
-router.get("/models/:model", async (req, res) => {
+router.get("/models/:model", verifyApiKey,authenticateToken,authorizeRoles('admin'), async (req, res) => {
   const { model } = req.params;
   try {
     const data = await SensorModel.findOne({ model: model.toLowerCase() });
@@ -164,7 +166,7 @@ router.get("/models/:model", async (req, res) => {
  *       - Sensor Models
  *     summary: Update a model's image or description
  */
-router.put("/models/:model", authenticateToken, upload.single("image"), async (req, res) => {
+router.put("/models/:model", verifyApiKey,authenticateToken,authorizeRoles('admin'), upload.single("image"), async (req, res) => {
   const { model } = req.params;
   const { description } = req.body;
 
@@ -203,7 +205,7 @@ router.put("/models/:model", authenticateToken, upload.single("image"), async (r
  *       - Sensor Models
  *     summary: Delete a model
  */
-router.delete("/models/:model", authenticateToken, async (req, res) => {
+router.delete("/models/:model", verifyApiKey,authenticateToken,authorizeRoles('admin'), async (req, res) => {
   const { model } = req.params;
   try {
     const deleted = await SensorModel.findOneAndDelete({ model: model.toLowerCase() });

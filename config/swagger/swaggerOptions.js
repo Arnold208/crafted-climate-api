@@ -10,7 +10,7 @@ const options = {
       title: 'Crafted Climate API',
       version: '1.0.0',
       description: isProd
-        ? 'Crafted Climate Production API Docs'
+        ? 'Crafted Climate Development API Docs'
         : 'Crafted Climate Development API Docs',
     },
     servers: [
@@ -18,7 +18,7 @@ const options = {
         url: isProd
           ? prodUrl
           : 'http://localhost:3000',
-        description: isProd ? 'Production Server' : 'Development Server',
+        description: isProd ? 'Development Server' : 'Development Server',
       },
     ],
     components: {
