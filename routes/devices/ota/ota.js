@@ -68,7 +68,7 @@ const router = express.Router();
  *         description: Internal server error
  */
 
-router.post("/upload-firmware", upload.single("firmware"), async (req, res) => {
+router.post("/upload-firmware", verifyApiKey,authenticateToken,authorizeRoles('admin'),upload.single("firmware"), async (req, res) => {
   try {
     const { firmware_version, hardware_version, model, author } = req.body;
 
@@ -174,7 +174,7 @@ router.post("/upload-firmware", upload.single("firmware"), async (req, res) => {
  *       404:
  *         description: No update found for the specified device
  */
-router.get("/latest-update", async (req, res) => {
+router.get("/latest-update", verifyApiKey,authenticateToken,authorizeRoles('admin','supervisor'),async (req, res) => {
   try {
     const { firmware_version, hardware_version, model } = req.query;
 
@@ -243,7 +243,7 @@ router.get("/latest-update", async (req, res) => {
  *                 type: string
  *                 format: date-time
  */
-router.get("/list-firmware", async (req, res) => {
+router.get("/list-firmware", verifyApiKey,authenticateToken,authorizeRoles('admin','supervisor'),async (req, res) => {
     try {
         const firmwareList = await OTAUpdate.find();
         res.status(200).json(firmwareList);
@@ -276,7 +276,7 @@ router.get("/list-firmware", async (req, res) => {
  *       500:
  *         description: Internal server error
  */
-router.delete("/delete-firmware/:uuid", async (req, res) => {
+router.delete("/delete-firmware/:uuid",verifyApiKey,authenticateToken,authorizeRoles('admin','supervisor'), async (req, res) => {
     try {
         const { uuid } = req.params;
         const deletedFirmware = await OTAUpdate.findOneAndDelete({ uuid });

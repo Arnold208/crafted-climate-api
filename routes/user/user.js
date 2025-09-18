@@ -587,7 +587,7 @@ router.get('/user-info', async (req, res) => {
         }
 
         // If neither email nor userId is provided, this will fetch all users
-        const users = await User.find(query).select('-password'); // Exclude passwords from the response
+        const users = await User.find(query).select('-password -otp');
 
         if (users.length === 0) {
             return res.status(404).send({ message: 'User not found' });
@@ -746,7 +746,7 @@ router.put('/update-user/:userid', upload.single('profilePicture'), async (req, 
  *               description: Detailed error information.
  */
 
-router.delete('/delete-user/:userid', async (req, res) => {
+router.delete('/delete-user/:userid', authorizeRoles('admin'), async (req, res) => {
     const { userid } = req.params;
 
     try {
