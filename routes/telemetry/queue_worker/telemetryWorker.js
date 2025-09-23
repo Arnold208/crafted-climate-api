@@ -35,6 +35,13 @@ dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
       if (!body.devid) return;
 
       const devmod = (body.devmod || '').toUpperCase();
+      const devid = body.devid;
+     
+      if (devid == '2af0' || devid == '2af1' || devid == '2af2' ) {
+        console.log('🌿 Processing Afriset ENV telemetry');
+        await handleEnvQueuedTelemetry(data);
+        return;
+      }
 
       if (devmod === 'ENV') {
         console.log('🌿 Processing ENV telemetry');

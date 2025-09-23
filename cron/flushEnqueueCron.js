@@ -141,7 +141,7 @@ function startFlushDirectCron() {
         await flushDirectOnce();
     }, { timezone: process.env.TZ || 'Africa/Accra' });
 
-    console.log('⏱️ Direct flush cron scheduled: every minute.');
+    console.log('⏱️ Direct flush cron scheduled');
 }
 
 module.exports = { startFlushDirectCron, flushDirectOnce };

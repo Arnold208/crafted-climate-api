@@ -323,10 +323,259 @@ router.get('/public/telemetry', async (req, res) => {
   }
 });
 
- 
- 
+// const GasTelemetry = require('../../../model/telemetry/gasModel'); // future
+// const TerraTelemetry = require('../../../model/telemetry/terraModel'); // future
 
- 
+/**
+ * @swagger
+ * /api/telemetry/db/{model}/{auid}:
+ *   get:
+ *     summary: Fetch telemetry data for a device
+ *     description: >
+ *       Retrieve telemetry data from the database for a given device `auid` and telemetry `model`.
+ *       Currently only the **env** model is supported.
+ *     tags:
+ *       - Telemetry
+ *     parameters:
+ *       - in: path
+ *         name: model
+ *         schema:
+ *           type: string
+ *           enum: [env]
+ *         required: true
+ *         description: Telemetry model (e.g. "env").
+ *       - in: path
+ *         name: auid
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Device AUID (unique identifier).
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 2
+ *           maximum: 200
+ *         description: Maximum number of records to return.
+ *       - in: query
+ *         name: start
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         required: false
+ *         description: Optional start date/time (ISO string or epoch).
+ *       - in: query
+ *         name: end
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         required: false
+ *         description: Optional end date/time (ISO string or epoch).
+ *     responses:
+ *       200:
+ *         description: Telemetry data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 model:
+ *                   type: string
+ *                 auid:
+ *                   type: string
+ *                 count:
+ *                   type: integer
+ *                 telemetry:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       404:
+ *         description: No telemetry data found for the given device or model.
+ *       500:
+ *         description: Server error.
+ */
+router.get('/db/:model/:auid', async (req, res) => {
+  const model = String(req.params.model || '').toLowerCase();
+  const auid  = String(req.params.auid || '').trim();
+
+  let limit = parseInt(req.query.limit, 10);
+  if (!Number.isFinite(limit) || limit <= 0) limit = 10;
+  if (limit > 200) limit = 200;
+
+  try {
+    // pick the mongoose model
+    let dataNew = null;
+    if (model === 'env') {
+      dataNew = EnvTelemetry;
+    } else {
+      return res.status(404).json({
+        message: `Unknown telemetry model '${model}'`,
+        valid: ['env']
+      });
+    }
+
+    // build query
+    const query = { auid };
+    const { start, end } = req.query;
+    if (start || end) {
+      query.transport_time = {};
+      if (start) query.transport_time.$gte = new Date(start);
+      if (end)   query.transport_time.$lte = new Date(end);
+    }
+
+    // fetch
+    const telemetryData = await dataNew
+      .find(query)
+      //.sort({ transport_time: -1 })
+      .limit(limit)
+      .lean();
+
+    if (!telemetryData.length) {
+      return res.status(404).json({ message: 'No telemetry data found for this device.' });
+    }
+
+    return res.status(200).json({
+      model,
+      auid,
+      count: telemetryData.length,
+      telemetry: telemetryData
+    });
+  } catch (err) {
+    console.error('❌ DB telemetry fetch error:', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/telemetry/db/{model}/{auid}/csv:
+ *   get:
+ *     tags:
+ *       - Telemetry (DB)
+ *     summary: Download telemetry as CSV by AUID (descending order)
+ *     description: >
+ *       Streams telemetry rows for the given device AUID as CSV, sorted by `transport_time` **descending** (newest → oldest).
+ *       Includes `transport_time`, `telem_time`, and all sensor fields.
+ *       Optionally filter by a date range using `start` and/or `end` (applies to `transport_time`).
+ *     parameters:
+ *       - name: model
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [env]
+ *         description: Telemetry model (currently only "env").
+ *       - name: auid
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Device AUID.
+ *       - name: start
+ *         in: query
+ *         required: false
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Start of time range (inclusive). ISO 8601 or epoch milliseconds.
+ *       - name: end
+ *         in: query
+ *         required: false
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: End of time range (inclusive). ISO 8601 or epoch milliseconds.
+ *     responses:
+ *       200:
+ *         description: CSV stream (newest → oldest)
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *             examples:
+ *               sample:
+ *                 summary: Example CSV content
+ *                 value: |
+ *                   auid,transport_time,telem_time,temperature,humidity,pressure,altitude,pm1,pm2_5,pm10,pm1s,pm2_5s,pm10s,lux,uv,sound,aqi,battery,error
+ *                   GH-XXXX,2025-09-23T18:00:00.000Z,2025-09-23T18:00:00.000Z,28.7,65.9,1009.43,0,0,0,0,0,0,0,15.67,38,0,0,27.5,00001
+ *       404:
+ *         description: Unknown model.
+ *       500:
+ *         description: Server error.
+ */
+
+router.get('/db/:model/:auid/csv', async (req, res) => {
+  const model = String(req.params.model || '').toLowerCase();
+  const auid  = String(req.params.auid || '').trim();
+
+  try {
+    if (model !== 'env') {
+      return res.status(404).json({ message: `Unknown telemetry model '${model}'`, valid: ['env'] });
+    }
+
+    const columns = [
+      'auid','transport_time','telem_time','temperature','humidity','pressure','altitude',
+      'pm1','pm2_5','pm10','pm1s','pm2_5s','pm10s','lux','uv','sound','aqi','battery','error'
+    ];
+
+    const safeAuid = auid.replace(/[^A-Za-z0-9._-]/g, '_');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${model}_${safeAuid}.csv"`);
+
+    const escapeCsv = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v);
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    // write header
+    res.write(columns.join(',') + '\n');
+
+    // Build query with optional start/end
+    const query = { auid };
+    const { start, end } = req.query;
+    if (start || end) {
+      query.transport_time = {};
+      if (start) query.transport_time.$gte = new Date(isNaN(start) ? start : Number(start));
+      if (end)   query.transport_time.$lte = new Date(isNaN(end) ? end : Number(end));
+    }
+
+    // DESCENDING sort
+    const cursor = EnvTelemetry.find(query)
+      .sort({ transport_time: -1 }) // ✅ newest → oldest
+      .select(columns.join(' '))
+      .lean()
+      .cursor();
+
+    cursor.on('data', (doc) => {
+      const row = columns.map((key) => {
+        const val = doc[key];
+        if (val instanceof Date) return escapeCsv(val.toISOString());
+        return escapeCsv(val);
+      }).join(',');
+      if (!res.write(row + '\n')) {
+        cursor.pause();
+        res.once('drain', () => cursor.resume());
+      }
+    });
+
+    cursor.on('end', () => res.end());
+    cursor.on('error', (err) => {
+      console.error('❌ CSV stream error:', err);
+      if (!res.headersSent) res.status(500).json({ message: 'Server error streaming CSV' });
+      else res.end();
+    });
+
+    req.on('close', () => {
+      if (cursor && typeof cursor.close === 'function') cursor.close().catch(() => {});
+    });
+
+  } catch (err) {
+    console.error('❌ CSV route error:', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
 
 
 module.exports = router;
