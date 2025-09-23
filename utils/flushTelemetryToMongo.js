@@ -1,6 +1,6 @@
 // utils/flushTelemetryToMongo.js
 const { client: redisClient } = require('../config/redis/redis');
-// const { connectRedis } = require('../config/redis/redis'); // ✅ Add this line
+const { connectRedis } = require('../config/redis/redis'); // ✅ Add this line
 // const connectDB = require('../config/database/mongodb');
 
 // connectRedis()

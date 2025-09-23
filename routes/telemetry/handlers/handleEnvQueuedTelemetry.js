@@ -5,8 +5,6 @@ const { calculateAQI } = require("../../../utils/aqiFunction");
 const { cacheTelemetryToRedis } = require('../../../utils/redisTelemetry');
 const { publishToSensor } = require("../../../config/socket/socketio");
 
-// const connectDB = require('../../../config/database/mongodb'); // adjust path
-// connectDB();
 async function handleEnvQueuedTelemetry(messageObj) {
   const body = messageObj.body;
   const devid = body?.devid;
@@ -24,57 +22,59 @@ async function handleEnvQueuedTelemetry(messageObj) {
     }
 
     const auid = foundDevice.auid;
-    
 
-    const pm2_5 = parseFloat(body.pm2_5);
-    const voltage = parseFloat(body.voltage);
+    // Parse numbers safely (works for v1 and v2)
+    const getNum = (val, def = 0) => {
+      const n = parseFloat(val);
+      return isNaN(n) ? def : n;
+    };
+
+    const pm2_5 = getNum(body.pm2_5);
+    const voltage = getNum(body.voltage);
 
     const formattedData = {
       transport_time : isNaN(messageObj.when) ? 0 : +messageObj.when,
-      telem_time : isNaN(body.ts) ?  messageObj.when : +body.ts,
-      temperature: isNaN(body.temp) ? 0 : +body.temp,
-      humidity: isNaN(body.humidity) ? 0 : +body.humidity,
-      pressure: isNaN(body.pressure) ? 0 : +body.pressure,
-      sound: isNaN(body.sound) ? 0 : +body.sound,
-      current: isNaN(body.current) ? 0 : +body.current,
+      telem_time     : isNaN(body.ts) ? messageObj.when : +body.ts,
+      temperature    : getNum(body.temp),
+      humidity       : getNum(body.humidity),
+      pressure       : getNum(body.pressure),
+      sound          : getNum(body.sound),
+      current        : getNum(body.current),
       auid,
-      pm1: isNaN(body.pm1) ? 0 : +body.pm1,
-      pm2_5: isNaN(pm2_5) ? 0 : pm2_5,
-      pm10: isNaN(body.pm10) ? 0 : +body.pm10,
-      pm1s: isNaN(body.pm1s) ? 0 : +body.pm1s,
-      pm2_5s: isNaN(body.pm2_5s) ? 0 : +body.pm2_5s,
-      pm10s: isNaN(body.pm10s) ? 0 : +body.pm10s,
-      lux: isNaN(body.lux) ? 0 : +body.lux,
-      battery: isNaN(voltage) ? 0 : batteryPercentage(voltage),
-      uv: isNaN(body.uv) ? 0 : +body.uv,
-      aqi: isNaN(pm2_5) ? 0 : calculateAQI(pm2_5),
-      error: body.err || "0000"
+      pm1            : getNum(body.pm1),
+      pm2_5,
+      pm10           : getNum(body.pm10),
+
+      // v2-only fields → fall back to 0 if missing in v1
+      pm1s           : getNum(body.pm1s),
+      pm2_5s         : getNum(body.pm2_5s),
+      pm10s          : getNum(body.pm10s),
+
+      lux            : getNum(body.lux),
+      battery        : batteryPercentage(voltage),
+      uv             : getNum(body.uv),
+      aqi            : calculateAQI(pm2_5),
+      error          : body.err || "0000"
     };
 
-    // Optional tower metadata
+    // Tower metadata (present in v1 payloads)
     const towerFields = [
       "tower_when", "tower_lat", "tower_lon", "tower_country",
       "tower_location", "tower_timezone", "tower_id"
     ];
-
     const towerInfo = {};
-    for (const field of towerFields) {
-      if (messageObj[field] !== undefined) {
-        towerInfo[field] = messageObj[field];
-      }
+    for (const f of towerFields) {
+      if (messageObj[f] !== undefined) towerInfo[f] = messageObj[f];
     }
-
     if (Object.keys(towerInfo).length > 0) {
       formattedData.towerInfo = towerInfo;
     }
 
     console.log(formattedData);
 
-    // // Real-time push
+    // Real-time push + Redis caching
     publishToSensor(auid, formattedData);
-
     await cacheTelemetryToRedis(auid, formattedData, foundDevice);
-
 
   } catch (err) {
     console.error("❌ handleEnvQueuedTelemetry Error:", err.message);

@@ -2,6 +2,6 @@ const { flushTelemetryToMongo } = require('../flushTelemetryToMongo');
 
 const EnvTelemetry = require('../../model/telemetry/envModel');
 
-flushTelemetryToMongo("GH-YJG9XN24WVQ2-SW3JXMP2", EnvTelemetry)
+flushTelemetryToMongo("GH-P8W5YXFEHGP0B1KI4W4I2", EnvTelemetry)
   .then(console.log)
   .catch(console.error);
