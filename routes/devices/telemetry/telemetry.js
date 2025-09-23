@@ -451,7 +451,7 @@ router.get('/db/:model/:auid', async (req, res) => {
  * /api/telemetry/db/{model}/{auid}/csv:
  *   get:
  *     tags:
- *       - Telemetry (DB)
+ *       - Telemetry
  *     summary: Download telemetry as CSV by AUID (descending order)
  *     description: >
  *       Streams telemetry rows for the given device AUID as CSV, sorted by `transport_time` **descending** (newest → oldest).
