@@ -4,6 +4,7 @@ const path = require('path');
 const connectDB = require('./config/database/mongodb');
 const { connectRedis } = require('./config/redis/redis'); // ✅ Add this line
 
+const redoc = require('redoc-express');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger/swaggerOptions');
 const basicAuth = require('express-basic-auth');
@@ -26,6 +27,48 @@ const { startFlushDirectCron } = require('./cron/flushEnqueueCron');
 const { startFlushWorker } = require('./routes/telemetry/queue_worker/flushWorker');
 const app = express();
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
+// Import auth middleware
+const auth = require('./middleware/docsAuthMiddleware');
+
+// Documentation landing page with authentication
+app.get('/docs', auth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'docs-landing.html'));
+});
+
+// Swagger UI documentation with authentication
+app.use('/docs/swagger', auth, swaggerUi.serve);
+app.get('/docs/swagger', auth, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'CraftedClimate API Documentation',
+}));
+
+// ReDoc documentation with authentication
+app.get('/docs/redoc', auth, redoc({
+  title: 'CraftedClimate API Documentation',
+  specUrl: '/docs/swagger-json',
+  redocOptions: {
+    theme: {
+      typography: {
+        fontFamily: 'Inter, sans-serif',
+        headings: {
+          fontFamily: 'Inter, sans-serif',
+        },
+        code: {
+          fontFamily: 'JetBrains Mono, monospace',
+        },
+      },
+    },
+  },
+}));
+
+// Expose OpenAPI spec as JSON for ReDoc
+app.get('/docs/swagger-json', (req, res) => {
+  res.json(swaggerSpec);
+});
+
 let envFile;
 
 if (process.env.NODE_ENV === 'development') {
@@ -46,18 +89,131 @@ app.use(globalRateLimiter);
 app.use(express.json());
 
 // Swagger docs route (protected)
-app.use(
-  '/climate-docs',
-  swaggerRateLimiter,
-  basicAuth({
-    users: { [process.env.SWAGGER_USERNAME]: process.env.SWAGGER_PASSWORD },
-    challenge: true,
-    unauthorizedResponse: (req) =>
-      req.auth ? 'Credentials rejected' : 'No credentials provided',
-  }),
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerSpec)
-);
+// Serve OpenAPI spec
+app.get('/climate-docs/swagger.json', swaggerRateLimiter, (req, res) => {
+  res.json(swaggerSpec);
+});
+
+// Auth middleware for docs
+const docsAuth = basicAuth({
+  users: { [process.env.SWAGGER_USERNAME]: process.env.SWAGGER_PASSWORD },
+  challenge: true,
+  unauthorizedResponse: (req) =>
+    req.auth ? 'Credentials rejected' : 'No credentials provided',
+});
+
+// Serve logo for documentation
+app.get('/climate-docs/logo', swaggerRateLimiter, (req, res) => {
+  res.sendFile(path.join(__dirname, 'config/mail/logo/splash.png'));
+});
+
+// Documentation UI router
+app.use('/climate-docs', swaggerRateLimiter, docsAuth, (req, res, next) => {
+  const useSwagger = req.query.ui === 'swagger';
+  
+  if (useSwagger) {
+    // Serve Swagger UI and its assets
+    app.use('/climate-docs', swaggerUi.serve);
+    return swaggerUi.setup(swaggerSpec, {
+      customSiteTitle: 'CraftedClimate API Documentation',
+      customfavIcon: '/climate-docs/logo',
+      customCss: `
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+        
+        .swagger-ui {
+          font-family: 'Montserrat', sans-serif;
+        }
+        .swagger-ui .topbar { display: none }
+        .swagger-ui img { content: url('/climate-docs/logo'); max-width: 300px; margin: 20px auto; display: block; }
+        .swagger-ui .info { margin: 20px 0 }
+        .swagger-ui .scheme-container { box-shadow: none }
+        .swagger-ui .opblock-tag { font-family: 'Montserrat', sans-serif; font-weight: 600; }
+        .swagger-ui .opblock .opblock-summary-operation-id { font-family: 'Montserrat', sans-serif; }
+        .swagger-ui table thead tr td, .swagger-ui table thead tr th { font-family: 'Montserrat', sans-serif; }
+        .swagger-ui .btn { font-family: 'Montserrat', sans-serif; }
+        .swagger-ui select { font-family: 'Montserrat', sans-serif; }
+        .swagger-ui .auth-wrapper .authorize { background-color: #2C3E50; border-color: #2C3E50; }
+        .swagger-ui .auth-wrapper .authorize svg { fill: white; }
+        .swagger-ui .auth-container { box-shadow: 0 0 8px rgba(0,0,0,0.1); }
+        .swagger-ui .opblock.opblock-post { background: rgba(73, 204, 144, 0.1); }
+        .swagger-ui .opblock.opblock-get { background: rgba(97, 175, 254, 0.1); }
+        .swagger-ui .opblock.opblock-delete { background: rgba(249, 62, 62, 0.1); }
+        .swagger-ui .opblock.opblock-put { background: rgba(252, 161, 48, 0.1); }
+      `,
+      swaggerOptions: {
+        persistAuthorization: true,
+        defaultModelsExpandDepth: 3,
+        displayRequestDuration: true,
+        filter: true,
+        deepLinking: true
+      }
+    })(req, res, next);
+  } else {
+    // Serve ReDoc by default
+    redoc({
+      title: 'CraftedClimate API Documentation',
+      specUrl: '/climate-docs/swagger.json',
+      redocOptions: {
+        theme: {
+          logo: {
+            gutter: '20px'
+          },
+          colors: {
+            primary: {
+              main: '#2C3E50'
+            },
+            success: {
+              main: '#49cc90'
+            },
+            warning: {
+              main: '#fca130'
+            },
+            error: {
+              main: '#f93e3e'
+            },
+            gray: {
+              50: '#f8f9fa',
+              100: '#f1f3f5'
+            }
+          },
+          typography: {
+            fontSize: '14px',
+            lineHeight: '1.5em',
+            fontFamily: 'Montserrat, sans-serif',
+            headings: {
+              fontFamily: 'Montserrat, sans-serif',
+              fontWeight: '600'
+            },
+            code: {
+              fontFamily: 'Roboto Mono, monospace',
+              fontSize: '13px'
+            }
+          },
+          sidebar: {
+            backgroundColor: '#f8f9fa',
+            textColor: '#2C3E50',
+            activeTextColor: '#2C3E50',
+            width: '300px'
+          },
+          rightPanel: {
+            backgroundColor: '#2C3E50',
+            textColor: '#ffffff'
+          }
+        },
+        hideDownloadButton: true,
+        expandResponses: '200,201',
+        jsonSampleExpandLevel: 2,
+        requiredPropsFirst: true,
+        sortPropsAlphabetically: true,
+        expandSingleSchemaField: true,
+        showExtensions: true,
+        noAutoAuth: false,
+        pathInMiddlePanel: true,
+        hideHostname: false
+      }
+    })(req, res, next);
+  }
+});
 
 secureMqtt.connectSecureMqtt();
 

@@ -1,0 +1,26 @@
+{
+  "name": "crafted-climate-docs",
+  "version": "1.0.0",
+  "description": "Documentation and mock server for CraftedClimate API",
+  "scripts": {
+    "docs:install": "npm install",
+    "docs:start": "http-server . -p 8080",
+    "docs:mock": "prism mock openapi.yaml --port 4010",
+    "docs:validate": "swagger-cli validate openapi.yaml",
+    "docs:build": "echo 'Static documentation build placeholder'",
+    "generate:postman": "openapi2postmanv2 -s openapi.yaml -o postman/CraftedClimate.postman_collection.json"
+  },
+  "dependencies": {
+    "@stoplight/prism-cli": "^4.10.5",
+    "axios": "^1.5.0",
+    "http-server": "^14.1.1",
+    "swagger-cli": "^4.0.4",
+    "openapi-to-postmanv2": "^4.16.0"
+  },
+  "devDependencies": {
+    "redoc-cli": "^0.13.20"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

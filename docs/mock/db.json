@@ -1,0 +1,38 @@
+{
+  "users": [
+    {
+      "id": "user123",
+      "username": "testuser",
+      "email": "test@example.com",
+      "contact": "233555123456"
+    }
+  ],
+  "devices": [
+    {
+      "id": "device123",
+      "model": "env",
+      "userId": "user123"
+    }
+  ],
+  "telemetry": [
+    {
+      "id": "tel123",
+      "deviceId": "device123",
+      "timestamp": "2025-10-04T12:00:00Z",
+      "data": {
+        "temperature": 25.4,
+        "humidity": 65,
+        "pressure": 1013.25
+      }
+    }
+  ],
+  "deployments": [
+    {
+      "id": "dep123",
+      "userId": "user123",
+      "name": "Test Deployment",
+      "description": "Test deployment for mock server",
+      "createdAt": "2025-10-04T12:00:00Z"
+    }
+  ]
+}

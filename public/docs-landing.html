@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CraftedClimate API Documentation</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background: #f8f9fa;
+            color: #1a1a1a;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 60px auto;
+            padding: 0 24px;
+        }
+        
+        .logo {
+            display: block;
+            margin: 0 auto 40px;
+            max-width: 300px;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+            font-weight: 600;
+        }
+        
+        .docs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+        
+        .doc-option {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .doc-option:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .doc-option h2 {
+            margin: 0 0 12px;
+            font-size: 1.5em;
+            color: #2563eb;
+        }
+        
+        .doc-option p {
+            margin: 0;
+            color: #4b5563;
+        }
+        
+        .trademark {
+            text-align: center;
+            font-size: 0.8em;
+            color: #6b7280;
+            margin-top: 60px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="/climate-docs/logo" alt="CraftedClimate Logo" class="logo">
+        <h1>API Documentation</h1>
+        
+        <div class="docs-grid">
+            <a href="/docs/swagger" class="doc-option">
+                <h2>Swagger UI</h2>
+                <p>Interactive documentation with a familiar interface. Try out API endpoints directly in your browser.</p>
+            </a>
+            
+            <a href="/docs/redoc" class="doc-option">
+                <h2>ReDoc</h2>
+                <p>Modern, responsive, and clean documentation viewer with excellent search capabilities.</p>
+            </a>
+        </div>
+        
+        <div class="trademark">
+            © CraftedClimate 2025. All rights reserved.
+        </div>
+    </div>
+</body>
+</html>
