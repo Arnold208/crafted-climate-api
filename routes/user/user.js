@@ -426,82 +426,82 @@ router.post('/verify-otp-signup', async (req, res) => {
     }
 });
 
-/**
- * @swagger
- * /api/user/list-users:
- *   get:
- *     tags:
- *       - Users
- *     summary: Retrieve all users
- *     description: Fetches a list of all users, excluding their passwords. Requires admin privileges.
- *     responses:
- *       '200':
- *         description: A list of users retrieved successfully.
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   _id:
- *                     type: string
- *                     description: The user's unique identifier.
- *                   username:
- *                     type: string
- *                     description: The user's username.
- *                   email:
- *                     type: string
- *                     description: The user's email address.
- *                   isAdmin:
- *                     type: boolean
- *                     description: Flag indicating whether the user has admin privileges.
- *                 example:
- *                   - _id: "507f1f77bcf86cd799439011"
- *                     username: "johndoe"
- *                     email: "johndoe@example.com"
- *                     isAdmin: false
- *                   - _id: "507f1f77bcf86cd799439012"
- *                     username: "janedoe"
- *                     email: "janedoe@example.com"
- *                     isAdmin: true
- *       '403':
- *         description: Access denied. User does not have admin privileges.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   description: Error message indicating lack of access rights.
- *                   example: "Access denied."
- *       '500':
- *         description: Internal server error encountered while fetching users.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   description: General error message.
- *                   example: "Error fetching users."
- *                 error:
- *                   type: string
- *                   description: Detailed error message.
- *                   example: "Database connection failed."
- */
+// /**
+//  * @swagger
+//  * /api/user/list-users:
+//  *   get:
+//  *     tags:
+//  *       - Users
+//  *     summary: Retrieve all users
+//  *     description: Fetches a list of all users, excluding their passwords. Requires admin privileges.
+//  *     responses:
+//  *       '200':
+//  *         description: A list of users retrieved successfully.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: array
+//  *               items:
+//  *                 type: object
+//  *                 properties:
+//  *                   _id:
+//  *                     type: string
+//  *                     description: The user's unique identifier.
+//  *                   username:
+//  *                     type: string
+//  *                     description: The user's username.
+//  *                   email:
+//  *                     type: string
+//  *                     description: The user's email address.
+//  *                   isAdmin:
+//  *                     type: boolean
+//  *                     description: Flag indicating whether the user has admin privileges.
+//  *                 example:
+//  *                   - _id: "507f1f77bcf86cd799439011"
+//  *                     username: "johndoe"
+//  *                     email: "johndoe@example.com"
+//  *                     isAdmin: false
+//  *                   - _id: "507f1f77bcf86cd799439012"
+//  *                     username: "janedoe"
+//  *                     email: "janedoe@example.com"
+//  *                     isAdmin: true
+//  *       '403':
+//  *         description: Access denied. User does not have admin privileges.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *               properties:
+//  *                 message:
+//  *                   type: string
+//  *                   description: Error message indicating lack of access rights.
+//  *                   example: "Access denied."
+//  *       '500':
+//  *         description: Internal server error encountered while fetching users.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *               properties:
+//  *                 message:
+//  *                   type: string
+//  *                   description: General error message.
+//  *                   example: "Error fetching users."
+//  *                 error:
+//  *                   type: string
+//  *                   description: Detailed error message.
+//  *                   example: "Database connection failed."
+//  */
 
-router.get('/list-users', authenticateToken, authorizeRoles('admin'), async (req, res) => {
-    try {
-        const users = await User.find().select('-password'); // Exclude passwords from the response
-        res.status(200).send(users);
-    } catch (error) {
-        res.status(500).send({ message: 'Error fetching users', error: error.message });
-        console.log(error);
-    }
-});
+// router.get('/list-users', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+//     try {
+//         const users = await User.find().select('-password'); // Exclude passwords from the response
+//         res.status(200).send(users);
+//     } catch (error) {
+//         res.status(500).send({ message: 'Error fetching users', error: error.message });
+//         console.log(error);
+//     }
+// });
 
 
 /**
@@ -1020,71 +1020,71 @@ router.post('/verify-otp-reset-password', async (req, res) => {
     }
 });
 
-/**
- * @swagger
- * /api/auth/change-role/{userid}:
- *   patch:
- *     tags:
- *       - Authentication
- *     summary: Change a user's role
- *     description: Change the role of a specific user. Requires an API key in the `X-API-KEY` header.
- *     security:
- *       - apiKeyAuth: []
- *     parameters:
- *       - in: path
- *         name: userid
- *         required: true
- *         description: The unique user ID to change the role for.
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - role
- *             properties:
- *               role:
- *                 type: string
- *                 enum: [admin, supervisor, user]
- *                 example: supervisor
- *     responses:
- *       200:
- *         description: Role updated successfully
- *       400:
- *         description: Missing or invalid data
- *       404:
- *         description: User not found
- *       500:
- *         description: Internal server error
- */
+// /**
+//  * @swagger
+//  * /api/auth/change-role/{userid}:
+//  *   patch:
+//  *     tags:
+//  *       - Authentication
+//  *     summary: Change a user's role
+//  *     description: Change the role of a specific user. Requires an API key in the `X-API-KEY` header.
+//  *     security:
+//  *       - apiKeyAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: userid
+//  *         required: true
+//  *         description: The unique user ID to change the role for.
+//  *         schema:
+//  *           type: string
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             required:
+//  *               - role
+//  *             properties:
+//  *               role:
+//  *                 type: string
+//  *                 enum: [admin, supervisor, user]
+//  *                 example: supervisor
+//  *     responses:
+//  *       200:
+//  *         description: Role updated successfully
+//  *       400:
+//  *         description: Missing or invalid data
+//  *       404:
+//  *         description: User not found
+//  *       500:
+//  *         description: Internal server error
+//  */
 
-router.patch('/change-role/:userid', verifyApiKey, authenticateToken, authorizeRoles('admin'), async (req, res) => {
-    const { userid } = req.params;
-    const { role } = req.body;
+// router.patch('/change-role/:userid', verifyApiKey, authenticateToken, authorizeRoles('admin'), async (req, res) => {
+//     const { userid } = req.params;
+//     const { role } = req.body;
 
-    if (!role || !['admin', 'supervisor', 'user'].includes(role)) {
-        return res.status(400).send({ message: 'Invalid or missing role' });
-    }
+//     if (!role || !['admin', 'supervisor', 'user'].includes(role)) {
+//         return res.status(400).send({ message: 'Invalid or missing role' });
+//     }
 
-    try {
-        const user = await User.findOneAndUpdate(
-            { userid },
-            { role },
-            { new: true }
-        ).select('-password');
+//     try {
+//         const user = await User.findOneAndUpdate(
+//             { userid },
+//             { role },
+//             { new: true }
+//         ).select('-password');
 
-        if (!user) {
-            return res.status(404).send({ message: 'User not found' });
-        }
+//         if (!user) {
+//             return res.status(404).send({ message: 'User not found' });
+//         }
 
-        res.status(200).send({ message: 'User role updated successfully', user });
-    } catch (error) {
-        res.status(500).send({ message: 'Internal server error', error: error.message });
-    }
-});
+//         res.status(200).send({ message: 'User role updated successfully', user });
+//     } catch (error) {
+//         res.status(500).send({ message: 'Internal server error', error: error.message });
+//     }
+// });
 
 
 module.exports = router;

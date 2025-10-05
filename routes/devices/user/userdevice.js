@@ -146,37 +146,37 @@ router.post('/register-device', async (req, res) => {
 });
 
 
-/**
- * @swagger
- * /api/devices/all-registered-devices:
- *   get:
- *     tags:
- *       - Devices
- *     summary: Get all registered devices
- *     description: Retrieve a list of all registered devices.
- *     responses:
- *       200:
- *         description: Successfully retrieved all registered devices.
- *       404:
- *         description: No devices found.
- *       500:
- *         description: Error retrieving registered devices.
- */
+// /**
+//  * @swagger
+//  * /api/devices/all-registered-devices:
+//  *   get:
+//  *     tags:
+//  *       - Devices
+//  *     summary: Get all registered devices
+//  *     description: Retrieve a list of all registered devices.
+//  *     responses:
+//  *       200:
+//  *         description: Successfully retrieved all registered devices.
+//  *       404:
+//  *         description: No devices found.
+//  *       500:
+//  *         description: Error retrieving registered devices.
+//  */
 
 
-router.get('/all-registered-devices', async (req, res) => {
-  try {
-    const devices = await registerNewDevice.find();
+// router.get('/all-registered-devices', async (req, res) => {
+//   try {
+//     const devices = await registerNewDevice.find();
 
-    if (devices && devices.length > 0) {
-      res.json(devices);
-    } else {
-      res.status(404).json({ message: 'No devices found' });
-    }
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+//     if (devices && devices.length > 0) {
+//       res.json(devices);
+//     } else {
+//       res.status(404).json({ message: 'No devices found' });
+//     }
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
 
 
 /**
@@ -264,35 +264,106 @@ router.get('/find-registered-device/:auid', async (req, res) => {
 });
 
 
+// /**
+//  * @swagger
+//  * /api/devices/delete-device/{auid}:
+//  *   delete:
+//  *     tags:
+//  *       - Devices
+//  *     summary: Delete a device
+//  *     description: Deletes a device from the system using its AUID. Also removes the device from any deployments and clears its collaborators before deletion.
+//  *     parameters:
+//  *       - name: auid
+//  *         in: path
+//  *         required: true
+//  *         type: string
+//  *     responses:
+//  *       200:
+//  *         description: Device successfully deleted from all records.
+//  *       404:
+//  *         description: Device not found in registration records.
+//  *       500:
+//  *         description: Error deleting device.
+//  */
+// router.delete('/delete-device/:auid', async (req, res) => {
+//   const { auid } = req.params;
+
+//   try {
+//     // Get the registered device
+//     const device = await registerNewDevice.findOne({ auid });
+//     if (!device) {
+//       return res.status(404).json({ message: 'Device not found in registration records' });
+//     }
+
+//     const { devid } = device;
+
+//     // Remove this device from all deployments it's part of
+//     await Deployment.updateMany(
+//       { devices: devid },
+//       { $pull: { devices: devid } }
+//     );
+
+//     // Clear collaborators from the device
+//     device.collaborators = [];
+//     await device.save();
+
+//     // Delete from addDevice collection (if applicable)
+//     // await addDevice.findOneAndDelete({ devid });
+
+//     // Delete from registerNewDevice collection
+//     await registerNewDevice.findOneAndDelete({ auid });
+
+//     console.log("Device and its associated data removed from deployments and database.");
+//     return res.status(200).json({ message: 'Device successfully deleted from all records' });
+//   } catch (error) {
+//     console.error("Error during device deletion:", error);
+//     return res.status(500).json({ error: error.message });
+//   }
+// });
+
 /**
  * @swagger
- * /api/devices/delete-device/{auid}:
+ * /api/devices/delete-device/{userid}/{auid}:
  *   delete:
  *     tags:
  *       - Devices
- *     summary: Delete a device
- *     description: Deletes a device from the system using its AUID. Also removes the device from any deployments and clears its collaborators before deletion.
+ *     summary: Delete a device (owner only)
+ *     description: Deletes a device from the system using the owner's user ID and device AUID. Also removes the device from any deployments and clears its collaborators before deletion.
  *     parameters:
+ *       - name: userid
+ *         in: path
+ *         required: true
+ *         type: string
+ *         description: The user ID of the owner of the device.
  *       - name: auid
  *         in: path
  *         required: true
  *         type: string
+ *         description: The AUID of the device.
  *     responses:
  *       200:
  *         description: Device successfully deleted from all records.
+ *       403:
+ *         description: Forbidden — user is not the owner.
  *       404:
  *         description: Device not found in registration records.
  *       500:
  *         description: Error deleting device.
  */
-router.delete('/delete-device/:auid', async (req, res) => {
-  const { auid } = req.params;
+router.delete('/delete-device/:userid/:auid', async (req, res) => {
+  const { userid, auid } = req.params;
 
   try {
-    // Get the registered device
+    // Get the registered device by AUID
     const device = await registerNewDevice.findOne({ auid });
     if (!device) {
       return res.status(404).json({ message: 'Device not found in registration records' });
+    }
+
+    // Ensure the requester is the owner of the device
+    // device.userid may be ObjectId or string -> normalize to string
+    if (device.userid.toString() !== userid.toString()) {
+      return res.status(403).json({ message: 'Forbidden: only the device owner can delete this device.' });
     }
 
     const { devid } = device;
@@ -307,7 +378,7 @@ router.delete('/delete-device/:auid', async (req, res) => {
     device.collaborators = [];
     await device.save();
 
-    // Delete from addDevice collection (if applicable)
+    // Optionally delete from manufacturing/addDevice collection if desired
     // await addDevice.findOneAndDelete({ devid });
 
     // Delete from registerNewDevice collection
@@ -320,7 +391,6 @@ router.delete('/delete-device/:auid', async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
-
 
 
 /**
