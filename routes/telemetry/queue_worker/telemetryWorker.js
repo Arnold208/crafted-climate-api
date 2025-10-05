@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const path = require('path');
 const { handleEnvQueuedTelemetry } = require("../handlers/handleEnvQueuedTelemetry");
 const { handleGasSoloQueuedTelemetry } = require("../handlers/handleSoloGasQueuedTelemetry");
+const { handleAquaQueuedTelemetry } = require('../handlers/handleAquaQueuedTelemetry');
 
 function startTelemetryWorker() {
  let envFile;
@@ -49,6 +50,11 @@ dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
         return;
       }
 
+      if (devmod === 'AQUA') {
+        console.log('🌿 Processing ENV telemetry');
+        await handleAquaQueuedTelemetry(data)
+        return;
+      }
       if (devmod === 'GAS-SOLO') {
         console.log('🧪 Processing GAS-SOLO telemetry');
        await handleGasSoloQueuedTelemetry(data);
