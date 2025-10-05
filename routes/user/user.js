@@ -305,6 +305,95 @@ router.post('/login', async (req, res) => {
 
 /**
  * @swagger
+ * /api/auth/refresh-token:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Refresh access and refresh tokens
+ *     description: Exchange a valid refresh token for a new access token and refresh token.
+ *     consumes:
+ *       - application/json
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *     responses:
+ *       200:
+ *         description: Tokens refreshed successfully.
+ *       400:
+ *         description: Missing refresh token.
+ *       401:
+ *         description: Invalid or expired refresh token.
+ *       500:
+ *         description: Server error.
+ */
+router.post('/refresh-token', async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    return res.status(400).send({ message: 'refreshToken is required' });
+  }
+
+  try {
+    // Verify the refresh token
+    const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+
+    // Optional: if you store refresh tokens in DB / allow revocation, verify it here.
+    // e.g. if User model stores refreshTokens: if (!user.refreshTokens.includes(refreshToken)) return 401
+
+    // Ensure the user exists
+    const user = await User.findById(payload.userId);
+    if (!user) {
+      return res.status(401).send({ message: 'Invalid token: user not found' });
+    }
+
+    // Build new payload (keep same claims as login)
+    const newPayload = {
+      userId: user._id,
+      role: user.role,
+      userid: user.userid,
+      email: user.email,
+      username: user.username,
+    };
+
+    // Issue new tokens — keep the same expiry rules used in /login
+    const accessToken = jwt.sign(newPayload, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '60m' });
+    const newRefreshToken = jwt.sign(newPayload, process.env.REFRESH_TOKEN_SECRET); // no expiresIn to match your login
+
+    // Optional: if storing refresh tokens server-side, replace the old token with the new one here
+    // e.g.
+    // user.refreshTokens = user.refreshTokens.filter(t => t !== refreshToken);
+    // user.refreshTokens.push(newRefreshToken);
+    // await user.save();
+
+    return res.status(200).send({
+      accessToken,
+      refreshToken: newRefreshToken,
+      userid: user.userid,
+      email: user.email,
+      username: user.username,
+      role: user.role,
+    });
+  } catch (err) {
+    // jwt.verify throws on invalid/expired tokens
+    if (err.name === 'TokenExpiredError' || err.name === 'JsonWebTokenError') {
+      return res.status(401).send({ message: 'Invalid or expired refresh token' });
+    }
+    console.error('Error refreshing token:', err);
+    return res.status(500).send({ message: 'Internal server error', error: err.message });
+  }
+});
+
+
+/**
+ * @swagger
  * /api/auth/verify-otp-signup:
  *   post:
  *     tags:
