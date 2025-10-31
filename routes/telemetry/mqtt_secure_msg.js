@@ -70,7 +70,8 @@ function initializeMQTTClient(client, topics) {
 function connectSecureMqtt() {
   const topics = [
     "eventroutes/Env-Telemetry-Dev",
-    "eventroutes/Env-Telemetry"
+    "eventroutes/Env-Telemetry",
+    "eventroutes/Aqua-Telemetry"
 
     // Add more topics as needed
   ];

@@ -37,7 +37,7 @@ dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
 
       const devmod = (body.devmod || '').toUpperCase();
       const devid = body.devid;
-     
+     console.log("Devvvvvvv.....", devid)
       if (devid == '2af0' || devid == '2af1' || devid == '2af2' ) {
         console.log('🌿 Processing Afriset ENV telemetry');
         await handleEnvQueuedTelemetry(data);

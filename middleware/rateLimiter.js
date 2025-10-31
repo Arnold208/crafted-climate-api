@@ -26,8 +26,46 @@ const otpLimiter = rateLimit({
   legacyHeaders: false,
   message: 'Too many OTP requests. Please try again later.'
 });
+
+/** ─────────────────────────────
+ *  Per-device + per-model keys
+ *  (prevents one client scraping many devices)
+ *  If you have auth, we fold user id into the key too.
+ *  ─────────────────────────────
+ */
+const perDeviceKeyGen = (req) => {
+  const ip    = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+  const uid   = req.user?.id || 'anon';
+  const model = String(req.params.model || 'unknown').toLowerCase();
+  const auid  = String(req.params.auid || 'unknown').toUpperCase();
+  return `${uid}:${ip}:${model}:${auid}`;
+};
+
+// 🗄️ DB JSON limiter (reads)
+const dbRouteLimiter = rateLimit({
+  windowMs: parseInt(process.env.DB_LIMIT_WINDOW_MS, 10) || 5 * 60 * 1000,  // 5 min
+  max: parseInt(process.env.DB_LIMIT_MAX, 10) || 120,                       // 120 reads / 5 min / key
+  message: 'Too many DB reads for this device from your client. Please slow down.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: perDeviceKeyGen,
+});
+
+// 📄 CSV export limiter (heavier)
+const csvRouteLimiter = rateLimit({
+  windowMs: parseInt(process.env.CSV_LIMIT_WINDOW_MS, 10) || 10 * 60 * 1000, // 10 min
+  max: parseInt(process.env.CSV_LIMIT_MAX, 10) || 20,                         // 20 CSVs / 10 min / key
+  message: 'CSV export rate limit exceeded for this device. Please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: perDeviceKeyGen,
+});
+
+
 module.exports = {
   globalRateLimiter,
   swaggerRateLimiter,
-  otpLimiter
+  otpLimiter,
+  dbRouteLimiter,
+  csvRouteLimiter,
 };

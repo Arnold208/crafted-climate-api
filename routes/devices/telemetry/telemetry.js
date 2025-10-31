@@ -3,12 +3,38 @@ const express = require('express');
 const router = express.Router();
 const registerNewDevice = require('../../../model/devices/registerDevice');
 const EnvTelemetry = require('../../../model/telemetry/envModel');
+const AquaTelemetry = require('../../../model/telemetry/aquaModel');
+const GasSoloTelemetry = require('../../../model/telemetry/gasSoloModel');
 const { mapTelemetryData } = require('../../../utils/telemetryMapper');
 const SensorModel = require('../../../model/devices/deviceModels');
 const { cacheTelemetryToRedis } = require('../../../utils/redisTelemetry');
 const { client: redisClient } = require('../../../config/redis/redis');
 const modelRegistry = require('../../../utils/modelRegistry');
 const {calculateAQI} = require('../../../utils/aqiFunction')
+const {dbRouteLimiter,csvRouteLimiter} =  require('../../../middleware/rateLimiter');
+// const csvRouteLimiter
+
+const MODEL_MAP = {
+  env: EnvTelemetry,
+  aqua: AquaTelemetry,
+  'gas-solo': GasSoloTelemetry
+};
+
+const CSV_COLUMNS = {
+  env: [
+    'auid','transport_time','telem_time','temperature','humidity','pressure','altitude',
+    'pm1','pm2_5','pm10','pm1s','pm2_5s','pm10s','lux','uv','sound','aqi','battery','error'
+  ],
+  aqua: [
+    'auid','transport_time','telem_time','ec','humidity','temperature_water','temperature_ambient',
+    'pressure','ph','lux','turbidity','voltage','current','aqi','battery','error'
+  ],
+  gasSolo: [
+    'auid','transport_time','telem_time','temperature','humidity','pressure',
+    'aqi','current','eco2_ppm','tvoc_ppb','voltage','battery','error'
+  ]
+};
+
 /**
  * @swagger
  * /api/telemetry/{model}:
@@ -140,7 +166,7 @@ router.post('/:model', async (req, res) => {
  *     tags:
  *       - Telemetry
  *     summary: Get telemetry and metadata for a device owned by a user
- *     description: Fetches telemetry entries and device metadata from Redis. Validates that the user has access to the device.
+ *     description: Fetches telemetry entries and device metadata from Redis. Falls back to MongoDB if Redis is empty. Validates that the user has access to the device.
  *     parameters:
  *       - name: userid
  *         in: path
@@ -176,7 +202,6 @@ router.post('/:model', async (req, res) => {
 router.get('/:userid/device/:auid', async (req, res) => {
   const { userid, auid } = req.params;
   let limit = parseInt(req.query.limit, 10);
-
   if (isNaN(limit) || limit <= 0) limit = 50;
   if (limit > 50) limit = 50;
 
@@ -187,41 +212,73 @@ router.get('/:userid/device/:auid', async (req, res) => {
 
     const isOwner = device.userid === userid;
     const isCollaborator = device.collaborators?.some(c => c.userid === userid);
-
     if (!isOwner && !isCollaborator) {
       return res.status(403).json({ message: 'Unauthorized access to device' });
     }
 
-    // ✅ Fetch telemetry and metadata
+    // ✅ Try Redis first
     const entries = await redisClient.hGetAll(auid);
-    if (!entries || Object.keys(entries).length === 0) {
-      return res.status(404).json({ message: 'No telemetry found for this device' });
+
+    if (entries && Object.keys(entries).length > 0) {
+      const metadata = entries.metadata ? JSON.parse(entries.metadata) : null;
+
+      const telemetryData = Object.entries(entries)
+        .filter(([key]) => key !== 'metadata' && key !== 'flushed')
+        .map(([key, value]) => {
+          try {
+            const parsed = JSON.parse(value);
+            return { timestamp: key, ...parsed };
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean)
+        .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
+        .slice(0, limit)
+        .reverse();
+
+      return res.status(200).json({
+        source: 'redis',
+        metadata,
+        count: telemetryData.length,
+        telemetry: telemetryData
+      });
     }
 
-    const metadata = entries.metadata ? JSON.parse(entries.metadata) : null;
+    // ⚠️ If Redis is empty, fall back to MongoDB
+    console.warn(`ℹ️ No Redis data for ${auid}, falling back to MongoDB...`);
 
-    const telemetryData = Object.entries(entries)
-      .filter(([key]) => key !== 'metadata' && key !== 'flushed')
-      .map(([key, value]) => {
-        try {
-          const parsed = JSON.parse(value);
-          return { timestamp: key, ...parsed };
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean)
-      .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
-      .slice(0, limit)
-      .reverse();
+    // pick the correct model based on device.model
+    const model = device.model?.toLowerCase();
+    const MODEL_MAP = {
+      env: EnvTelemetry,
+      aqua: AquaTelemetry,
+      'gas-solo': GasSoloTelemetry
+    };
+    const M = MODEL_MAP[model];
+    if (!M) {
+      return res.status(404).json({ message: `No telemetry model found for '${model || 'unknown'}'` });
+    }
+
+    // Fetch last N telemetry entries from MongoDB
+    const telemetryData = await M.find({ auid })
+      .sort({ transport_time: -1 })
+      .limit(limit)
+      .lean();
+
+    if (!telemetryData.length) {
+      return res.status(404).json({ message: 'No telemetry found for this device in Redis or MongoDB.' });
+    }
 
     return res.status(200).json({
-      metadata,
+      source: 'mongo',
+      metadata: device.metadata || null,
       count: telemetryData.length,
-      telemetry: telemetryData
+      telemetry: telemetryData.reverse() // reverse to show oldest → newest
     });
+
   } catch (err) {
-    console.error(`Redis fetch error for ${auid}:`, err);
+    console.error(`❌ Telemetry fetch error for ${auid}:`, err);
     return res.status(500).json({ message: 'Server error' });
   }
 });
@@ -341,7 +398,7 @@ router.get('/public/telemetry', async (req, res) => {
  *         name: model
  *         schema:
  *           type: string
- *           enum: [env]
+ *           enum: [env, aqua, gasSolo]
  *         required: true
  *         description: Telemetry model (e.g. "env").
  *       - in: path
@@ -394,7 +451,7 @@ router.get('/public/telemetry', async (req, res) => {
  *       500:
  *         description: Server error.
  */
-router.get('/db/:model/:auid', async (req, res) => {
+router.get('/db/:model/:auid', dbRouteLimiter,async (req, res) => {
   const model = String(req.params.model || '').toLowerCase();
   const auid  = String(req.params.auid || '').trim();
 
@@ -403,43 +460,30 @@ router.get('/db/:model/:auid', async (req, res) => {
   if (limit > 200) limit = 200;
 
   try {
-    // pick the mongoose model
-    let dataNew = null;
-    if (model === 'env') {
-      dataNew = EnvTelemetry;
-    } else {
-      return res.status(404).json({
-        message: `Unknown telemetry model '${model}'`,
-        valid: ['env']
-      });
+    let M = null;
+    switch (model) {
+      case 'env':      M = EnvTelemetry; break;
+      case 'aqua':     M = AquaTelemetry; break;
+      case 'gas-solo': M = GasSoloTelemetry; break;
+      default:
+        return res.status(404).json({ message: `Unknown telemetry model '${model}'`, valid: ['env','aqua','gas-solo'] });
     }
 
-    // build query
     const query = { auid };
     const { start, end } = req.query;
     if (start || end) {
       query.transport_time = {};
-      if (start) query.transport_time.$gte = new Date(start);
-      if (end)   query.transport_time.$lte = new Date(end);
+      if (start) query.transport_time.$gte = new Date(isNaN(start) ? start : Number(start));
+      if (end)   query.transport_time.$lte = new Date(isNaN(end) ? end   : Number(end));
     }
 
-    // fetch
-    const telemetryData = await dataNew
-      .find(query)
-      //.sort({ transport_time: -1 })
-      .limit(limit)
-      .lean();
+    const telemetryData = await M.find(query).limit(limit).lean();
 
     if (!telemetryData.length) {
       return res.status(404).json({ message: 'No telemetry data found for this device.' });
     }
 
-    return res.status(200).json({
-      model,
-      auid,
-      count: telemetryData.length,
-      telemetry: telemetryData
-    });
+    return res.status(200).json({ model, auid, count: telemetryData.length, telemetry: telemetryData });
   } catch (err) {
     console.error('❌ DB telemetry fetch error:', err);
     return res.status(500).json({ message: 'Server error' });
@@ -463,7 +507,7 @@ router.get('/db/:model/:auid', async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *           enum: [env]
+ *           enum: [env, aqua, gasSolo]
  *         description: Telemetry model (currently only "env").
  *       - name: auid
  *         in: path
@@ -505,19 +549,16 @@ router.get('/db/:model/:auid', async (req, res) => {
  *         description: Server error.
  */
 
-router.get('/db/:model/:auid/csv', async (req, res) => {
+router.get('/db/:model/:auid/csv', csvRouteLimiter,async (req, res) => {
   const model = String(req.params.model || '').toLowerCase();
   const auid  = String(req.params.auid || '').trim();
 
   try {
-    if (model !== 'env') {
-      return res.status(404).json({ message: `Unknown telemetry model '${model}'`, valid: ['env'] });
+    const M = MODEL_MAP[model];
+    const columns = CSV_COLUMNS[model];
+    if (!M || !columns) {
+      return res.status(404).json({ message: `Unknown telemetry model '${model}'`, valid: Object.keys(MODEL_MAP) });
     }
-
-    const columns = [
-      'auid','transport_time','telem_time','temperature','humidity','pressure','altitude',
-      'pm1','pm2_5','pm10','pm1s','pm2_5s','pm10s','lux','uv','sound','aqi','battery','error'
-    ];
 
     const safeAuid = auid.replace(/[^A-Za-z0-9._-]/g, '_');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -529,24 +570,20 @@ router.get('/db/:model/:auid/csv', async (req, res) => {
       return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
 
-    // write header
+    // header
     res.write(columns.join(',') + '\n');
 
-    // Build query with optional start/end
+    // optional time filters (apply to transport_time)
     const query = { auid };
     const { start, end } = req.query;
     if (start || end) {
       query.transport_time = {};
       if (start) query.transport_time.$gte = new Date(isNaN(start) ? start : Number(start));
-      if (end)   query.transport_time.$lte = new Date(isNaN(end) ? end : Number(end));
+      if (end)   query.transport_time.$lte = new Date(isNaN(end) ? end   : Number(end));
     }
 
-    // DESCENDING sort
-    const cursor = EnvTelemetry.find(query)
-      .sort({ transport_time: -1 }) // ✅ newest → oldest
-      .select(columns.join(' '))
-      .lean()
-      .cursor();
+    // newest → oldest
+    const cursor = M.find(query).sort({ transport_time: -1 }).select(columns.join(' ')).lean().cursor();
 
     cursor.on('data', (doc) => {
       const row = columns.map((key) => {
@@ -576,6 +613,7 @@ router.get('/db/:model/:auid/csv', async (req, res) => {
     return res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 
 module.exports = router;
