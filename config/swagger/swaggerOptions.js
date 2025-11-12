@@ -86,45 +86,52 @@ Welcome to the CraftedClimate API documentation. This API provides endpoints for
 
 ## Key Features
 
-- **Authentication**: Secure user registration and login with JWT tokens
-- **Device Management**: Register and manage IoT devices with real-time updates
-- **Telemetry**: Submit and retrieve device telemetry data with efficient caching
-- **Deployments**: Organize devices into deployments with access control
+- **Authentication**: Secure user registration and login with JWT tokens  
+- **Device Management**: Register and manage IoT devices with real-time updates  
+- **Telemetry**: Submit and retrieve device telemetry data with efficient caching  
+- **Deployments**: Organize devices into deployments with access control  
 
 ## Security
 
-This API implements multiple layers of security:
+This API implements multiple layers of protection:
 
-- **JWT Authentication**: Required for user-specific operations
-- **API Key Authentication**: Required for device operations and telemetry submissions
-- **Rate Limiting**: Prevents abuse of the API
-- **Role-Based Access Control**: Restricts access based on user roles
+- **JWT Authentication** – required for user operations  
+- **API Key Authentication** – required for device telemetry submissions  
+- **Rate Limiting** – prevents abuse of endpoints  
+- **Role-Based Access Control** – user roles define privileges  
 
-## Getting Started
-
-1. Register a new user account
-2. Obtain your JWT token via login
-3. Use the token in the Authorization header
-4. For device operations, request an API key from support
+---
 
 ## Real-time Data with WebSocket
 
-Connect to real-time device telemetry using Socket.IO:
+Crafted Climate provides a secure JWT-authenticated WebSocket service for real-time telemetry access.
 
 \`\`\`javascript
 // Initialize Socket.IO client
-const socket = io('https://your-api-endpoint', {
+const socket = io('https://api.craftedclimate.org', {
+  transports: ['websocket'],
   auth: {
-    token: 'your-jwt-token'
+    token: 'your-jwt-access-token' // obtained from /api/auth/login
   }
 });
 
-// Join a specific device's room
-socket.emit('join', 'device-auid');
+// Join a device telemetry channel (AUID)
+socket.emit('join', 'device-auid', (ack) => {
+  if (ack?.ok) {
+    console.log(\`Joined telemetry channel: \${ack.room}\`);
+  } else {
+    console.error('Join failed:', ack?.error);
+  }
+});
 
-// Listen for real-time telemetry
+// Receive live telemetry
 socket.on('telemetry', (data) => {
   console.log('Received telemetry:', data);
+});
+
+// Handle disconnects
+socket.on('disconnect', (reason) => {
+  console.warn('Disconnected:', reason);
 });
 \`\`\`
 
@@ -132,11 +139,46 @@ socket.on('telemetry', (data) => {
 
 | Event | Description |
 |-------|-------------|
-| \`join\` | Join a device's room using AUID |
-| \`telemetry\` | Real-time telemetry updates |
-| \`disconnect\` | Disconnection event |
+| \`join\` | Join a device’s telemetry channel using its AUID |
+| \`leave\` | Leave a previously joined telemetry channel |
+| \`telemetry\` | Receive real-time sensor telemetry updates |
+| \`disconnect\` | Fired when the connection closes or times out |
 
-For detailed examples and use cases, visit our [documentation](https://craftedclimate.com/docs).
+### Authentication
+
+All realtime connections require a **JWT access token**.  
+Tokens are obtained from:
+
+\`\`\`
+POST /api/auth/login
+\`\`\`
+
+Include the token in the \`auth\` property when connecting.
+
+### Example Telemetry Payload
+
+\`\`\`json
+{
+  "auid": "GH-YV91YJL2DIN_TWBS9W7AR",
+  "temperature_water": 26.4,
+  "ph": 7.2,
+  "ec": 0.48,
+  "lux": 325,
+  "battery": 88,
+  "timestamp": 1762980213
+}
+\`\`\`
+
+### Error Responses
+
+| Error | Cause |
+|-------|-------|
+| \`Missing authentication token.\` | JWT token not provided |
+| \`Authentication failed.\` | Token invalid or expired |
+| \`Invalid AUID\` | AUID missing or malformed |
+| \`Socket.IO not initialized\` | Server not active |
+
+For more examples and SDKs, visit [craftedclimate.com/docs](https://craftedclimate.com/docs).
 
 <div class="trademark">© CraftedClimate 2025. All rights reserved.</div>
 `,
@@ -161,66 +203,34 @@ For detailed examples and use cases, visit our [documentation](https://craftedcl
         Error: {
           type: 'object',
           properties: {
-            message: {
-              type: 'string',
-              description: 'Error message'
-            },
-            error: {
-              type: 'string',
-              description: 'Detailed error information'
-            }
+            message: { type: 'string', description: 'Error message' },
+            error: { type: 'string', description: 'Detailed error information' }
           }
         },
         User: {
           type: 'object',
           properties: {
-            userid: {
-              type: 'string',
-              description: 'Unique user identifier'
-            },
-            username: {
-              type: 'string',
-              description: 'User\'s username'
-            },
-            email: {
-              type: 'string',
-              description: 'User\'s email address'
-            }
+            userid: { type: 'string', description: 'Unique user identifier' },
+            username: { type: 'string', description: 'User name' },
+            email: { type: 'string', description: 'User email address' }
           }
         },
         Device: {
           type: 'object',
           properties: {
-            devid: {
-              type: 'string',
-              description: 'Device identifier'
-            },
-            model: {
-              type: 'string',
-              description: 'Device model'
-            },
-            type: {
-              type: 'string',
-              description: 'Device type'
-            }
+            devid: { type: 'string', description: 'Device identifier' },
+            model: { type: 'string', description: 'Device model' },
+            type: { type: 'string', description: 'Device type' }
           }
         },
         Deployment: {
           type: 'object',
           properties: {
-            deploymentid: {
-              type: 'string',
-              description: 'Deployment identifier'
-            },
-            name: {
-              type: 'string',
-              description: 'Deployment name'
-            },
+            deploymentid: { type: 'string', description: 'Deployment identifier' },
+            name: { type: 'string', description: 'Deployment name' },
             devices: {
               type: 'array',
-              items: {
-                $ref: '#/components/schemas/Device'
-              }
+              items: { $ref: '#/components/schemas/Device' }
             }
           }
         }
@@ -236,32 +246,16 @@ For detailed examples and use cases, visit our [documentation](https://craftedcl
           type: 'apiKey',
           in: 'header',
           name: 'X-API-KEY',
-          description: 'API key required for telemetry submissions and device operations'
+          description: 'API key for device telemetry operations'
         }
       }
     },
-    security: [
-      {
-        bearerAuth: []
-      },
-      {
-        apiKeyAuth: []
-      }
-    ],
+    security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
     tags: [
-      {
-        name: 'Authentication',
-        description: 'User registration, login, and session management'
-      },
-      {
-        name: 'Telemetry',
-        description: 'Device telemetry data submission and retrieval'
-      },
-      {
-        name: 'Deployments',
-        description: 'Deployment creation, configuration, and device management'
-      }
-    ],
+      { name: 'Authentication', description: 'User registration and login' },
+      { name: 'Telemetry', description: 'Device telemetry submission and retrieval' },
+      { name: 'Deployments', description: 'Deployment configuration and management' }
+    ]
   },
   apis: [
     './routes/user/**/*.js',
@@ -271,9 +265,8 @@ For detailed examples and use cases, visit our [documentation](https://craftedcl
     './model/user/**/*.js',
     './model/deployment/**/*.js',
     './model/telemetry/**/*.js'
-  ],
+  ]
 };
 
 const swaggerSpec = swaggerJsdoc(options);
-
 module.exports = swaggerSpec;

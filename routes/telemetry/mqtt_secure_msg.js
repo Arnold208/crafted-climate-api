@@ -35,6 +35,7 @@ function initializeMQTTClient(client, topics) {
       };
 //1
       const result = await telemetryQueue.add('processTelemetry', jobPayload, {
+        jobId: data.event || `${Date.now()}-${Math.random()}`,
         removeOnComplete: true,
         removeOnFail: { age: 5 }, // auto-remove failed jobs 5s after final failure
         attempts: 2,              // retry up to 2 times

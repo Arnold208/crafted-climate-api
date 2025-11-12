@@ -20,11 +20,11 @@ const deployment = require('./routes/devices/deployment/deployment');
 const telemetry = require('./routes/devices/telemetry/telemetry');
 
 const secureMqtt = require('./routes/telemetry/mqtt_secure_msg');
-const { setupSocket } = require("./config/socket/socketio");
+const { setupRealtime } = require("./config/socket/socketio");
 const { startTelemetryWorker } = require('./routes/telemetry/queue_worker/telemetryWorker');
 const { startStatusWorker } = require('./routes/telemetry/queue_worker/statusWorker');
 const { startFlushDirectCron } = require('./cron/flushEnqueueCron');
-const { startFlushWorker } = require('./routes/telemetry/queue_worker/flushWorker');
+const { startUpdateRedisStatusCron } = require('./cron/updateRedisStatusCron');
 const app = express();
 
 // Serve static files from public directory
@@ -215,7 +215,6 @@ app.use('/climate-docs', swaggerRateLimiter, docsAuth, (req, res, next) => {
   }
 });
 
-secureMqtt.connectSecureMqtt();
 
 // API Routes
 app.use('/api', testRoutes);
@@ -235,6 +234,9 @@ connectRedis()
     startTelemetryWorker();
     //startStatusWorker();
     startFlushDirectCron();
+    startUpdateRedisStatusCron();
+
+
     const PORT = process.env.PORT || 3000;
 
     const server = app.listen(PORT, () => {
@@ -242,11 +244,12 @@ connectRedis()
       console.log(`📘 Swagger docs available at http://localhost:${PORT}/climate-docs`);
     });
 
-    setupSocket(server);
+    setupRealtime(server);
   })
   .catch((err) => {
     console.error('❌ Failed to connect to Redis:', err);
     process.exit(1); // Exit app if Redis fails
   });
 
+  secureMqtt.connectSecureMqtt();
 

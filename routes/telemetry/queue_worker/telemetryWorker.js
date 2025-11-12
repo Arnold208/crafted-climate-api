@@ -70,8 +70,8 @@ dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
       removeOnComplete: { age: 60, count: 1000 },
       // ⬇️ Keep failed jobs very briefly to avoid Redis pile-up
       removeOnFail: { age: 5 }, // auto-remove failed jobs ~5s after final failure
-      // concurrency: 5,
-      // lockDuration: 30000,
+      concurrency: 5,
+      lockDuration: 30000,
     }
   );
 

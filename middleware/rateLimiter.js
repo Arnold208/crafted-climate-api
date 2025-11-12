@@ -1,5 +1,5 @@
 // middlewares/rateLimiter.js
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 // 🔐 Global Rate Limiter – applies to all routes
 const globalRateLimiter = rateLimit({
@@ -48,7 +48,7 @@ const dbRouteLimiter = rateLimit({
   message: 'Too many DB reads for this device from your client. Please slow down.',
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: perDeviceKeyGen,
+keyGenerator: (req) => ipKeyGenerator(req),
 });
 
 // 📄 CSV export limiter (heavier)
@@ -58,7 +58,7 @@ const csvRouteLimiter = rateLimit({
   message: 'CSV export rate limit exceeded for this device. Please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: perDeviceKeyGen,
+keyGenerator: (req) => ipKeyGenerator(req),
 });
 
 

@@ -3,7 +3,7 @@ const registerNewDevice = require("../../../model/devices/registerDevice");
 const gasSoloTelemetry = require("../../../model/telemetry/gasSoloModel");
 const { batteryPercentage } = require("../../../utils/batteryPercentage");
 const { cacheTelemetryToRedis } = require("../../../utils/redisTelemetry");
-const { publishToSensor } = require("../../../config/socket/socketio");
+const { publishToAUID } = require("../../../config/socket/socketio");
 
 async function handleGasSoloQueuedTelemetry(messageObj) {
   const body = messageObj.body;
@@ -59,10 +59,10 @@ async function handleGasSoloQueuedTelemetry(messageObj) {
 
     console.log("🧪 GAS-SOLO Telemetry:", formattedData);
 
-    // Push + cache
-    publishToSensor(auid, formattedData);
-    await cacheTelemetryToRedis(auid, formattedData, foundDevice);
 
+    await cacheTelemetryToRedis(auid, formattedData, foundDevice);
+    // Push + cache
+    publishToAUID(auid, formattedData);
     // Optionally: Save to MongoDB
     // await gasSoloTelemetry.create(formattedData);
 

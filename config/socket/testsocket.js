@@ -1,40 +1,24 @@
 const { io } = require("socket.io-client");
-const dotenv = require('dotenv');
-const path = require('path');
- 
-let envFile;
 
-if (process.env.NODE_ENV === 'development') {
-  envFile = '.env.development';
-} else {
-  envFile = '.env';   // default for production or if NODE_ENV not set
-}
+const SERVER_URL = "http://localhost:3000";
+const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGUyOWZhMzU2ZmQ4MjUyMGZkYmIxODMiLCJyb2xlIjoidXNlciIsInVzZXJpZCI6IjFWWTZLWEpGQUMiLCJlbWFpbCI6Imdlb3JnaW5hQHZlcnRldG93ZXIuY29tIiwidXNlcm5hbWUiOiJnZW9yZ2luYSIsImlhdCI6MTc2Mjk3NTA5MywiZXhwIjoxNzYyOTc4NjkzfQ.v0SaT_OMh5Fj2qN0a8AYmf_8jLPYJCFoP_1xrlYyJFA"
 
-dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
-
-// Replace this with your actual local or deployed server
-const SOCKET_SERVER_URL = process.env.WEB_PUBSUB_CONNECTION_STRING_CLIENT; 
-const SENSOR_AUID = "sensor-2af3"; // Replace with a real AUID you use
-
-const socket = io(SOCKET_SERVER_URL);
+const socket = io(SERVER_URL, {
+  transports: ["websocket"],
+  auth: { token: TOKEN }, // pass JWT here
+});
 
 socket.on("connect", () => {
-  console.log("✅ Connected to server:", socket.id);
-
-  // Join a sensor room
-  socket.emit("join", SENSOR_AUID);
-  console.log(`📡 Subscribed to sensor: ${SENSOR_AUID}`);
+  console.log("✅ Connected to Realtime Server");
+  socket.emit("join", "GH-YV91YJL2DIN_TWBS9W7AR", (ack) => {
+    console.log("Join response:", ack);
+  });
 });
 
 socket.on("telemetry", (data) => {
-  console.log("📥 Received telemetry update:");
-  console.log(JSON.stringify(data, null, 2));
-});
-
-socket.on("disconnect", () => {
-  console.log("❌ Disconnected from server");
+  console.log("📥 Telemetry update:", data);
 });
 
 socket.on("connect_error", (err) => {
-  console.error("⚠️ Connection error:", err.message);
+  console.error("⚠️ Connection failed:", err.message);
 });

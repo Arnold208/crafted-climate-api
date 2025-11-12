@@ -1,60 +1,91 @@
-const dotenv = require('dotenv');
-const path = require('path');
+/**
+ * Crafted Climate | Realtime WebSocket Server
+ * JWT-based authentication (using `userId` from token only)
+ * Join/leave AUID rooms and broadcast telemetry updates.
+ */
+
 const { Server } = require("socket.io");
-const { useAzureSocketIO } = require("@azure/web-pubsub-socket.io");
+const jwt = require("jsonwebtoken");
 
-let envFile;
-
-if (process.env.NODE_ENV === 'development') {
-  envFile = '.env.development';
-} else {
-  envFile = '.env';   // default for production or if NODE_ENV not set
-}
-
-dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
-
+const JWT_SECRET = process.env.ACCESS_TOKEN_SECRET ;
 let io;
-const sensorClients = {}; // Track clients connected by sensor AUID
 
-function setupSocket(server) {
-  // Initialize Socket.IO server
-  io = new Server(server);
-
-  // Integrate with Azure Web PubSub
-  useAzureSocketIO(io, {
-    hub: "Sensors", // The hub name
-    connectionString: process.env.WEB_PUBSUB_CONNECTION_STRING, // Use connection string from .env
+function setupRealtime(server) {
+  io = new Server(server, {
+    cors: { origin: "*", methods: ["GET", "POST"] },
+    transports: ["websocket"],
   });
 
-  // Socket.IO connection
+  // Authenticate socket connection using JWT
+  io.use((socket, next) => {
+    try {
+      const token =
+        socket.handshake.auth?.token || socket.handshake.query?.token;
+      if (!token) return next(new Error("Missing authentication token."));
+
+      // Verify and decode token
+      const decoded = jwt.verify(token, JWT_SECRET);
+
+      const userId = decoded.userId;
+      const email = decoded.email;
+      const username = decoded.username || "Unknown";
+      const role = decoded.role || "user";
+
+      if (!userId || !email) {
+        return next(new Error("Invalid token payload: missing userId or email."));
+      }
+
+      // Attach limited user context (no sensitive info)
+      socket.user = { username, role };
+      next();
+    } catch (err) {
+      console.error("JWT verification failed:", err.message);
+      next(new Error("Authentication failed."));
+    }
+  });
+
+  // Handle new connections
   io.on("connection", (socket) => {
-    console.log("A client connected:", socket.id);
+    const { username } = socket.user;
+    console.log(`Realtime connection established for user: ${username}`);
 
-    // Join room based on sensor AUID
-    socket.on("join", (sensorAUID) => {
-      console.log(`Client ${socket.id} joined room: ${sensorAUID}`);
-      socket.join(sensorAUID);
+    // Join a telemetry room (AUID)
+    socket.on("join", (auid, ack) => {
+      if (!auid || typeof auid !== "string") {
+        return ack?.({ ok: false, error: "Invalid AUID" });
+      }
 
-      // Track the client and the sensor AUID they are interested in
-      sensorClients[socket.id] = sensorAUID;
+      socket.join(auid);
+      const roomSize = io.sockets.adapter.rooms.get(auid)?.size || 1;
+      console.log(`${username} joined telemetry channel: ${auid} (${roomSize} clients).`);
+      ack?.({ ok: true, room: auid, members: roomSize });
     });
 
-    // Handle client disconnection
-    socket.on("disconnect", () => {
-      console.log(`Client disconnected: ${socket.id}`);
-      delete sensorClients[socket.id];
+    // Leave room
+    socket.on("leave", (auid, ack) => {
+      socket.leave(auid);
+      console.log(`${username} left telemetry channel: ${auid}.`);
+      ack?.({ ok: true });
+    });
+
+    // Handle disconnection
+    socket.on("disconnect", (reason) => {
+      console.log(`${username} disconnected: ${reason}`);
     });
   });
+
+  console.log("Crafted Climate Realtime WebSocket Server initialized successfully.");
+  return io;
 }
 
-// Function to emit data to specific rooms
-function publishToSensor(sensorAUID, data) {
-  if (io) {
-    io.to(sensorAUID).emit("telemetry", data);
-    console.log(sensorAUID, " Telemetry Published on SocketIO");
-  } else {
-    console.error("Socket.IO server is not initialized.");
+// Broadcast telemetry updates to all clients in an AUID room
+function publishToAUID(auid, data) {
+  if (!io) {
+    console.error("Socket.IO not initialized. Telemetry broadcast aborted.");
+    return;
   }
+  io.to(auid).emit("telemetry", data);
+  console.log(`Telemetry broadcast → ${auid}`);
 }
 
-module.exports = { setupSocket, publishToSensor };
+module.exports = { setupRealtime, publishToAUID };
