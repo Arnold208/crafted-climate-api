@@ -14,7 +14,7 @@ async function main() {
 
     console.log("✅ MongoDB connected!");
 
-    const auid ="GH-YJG9XN24WVQ2-SW3JXMP2";
+    const auid ="GH-JUSHPNL5TDMQF0JJPSAW6";
 
     const simulatedData = {
       aqi: 200,

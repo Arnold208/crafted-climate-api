@@ -1,42 +1,31 @@
-const mongoose = require('mongoose');
-const dotenv = require('dotenv');
-const path = require('path');
+// middleware/bearermiddleware.js
 
-// Load correct .env file based on NODE_ENV
-let envFile;
-
-if (process.env.NODE_ENV === 'development') {
-  envFile = '.env.development';
-} else {
-  envFile = '.env';   // default for production or if NODE_ENV not set
-}
-
-dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
-
-const jwt = require('jsonwebtoken');
-
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
+const jwt = require("jsonwebtoken");
 
 function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'] || req.headers['Authorization'];
-  const token = authHeader && authHeader.startsWith('Bearer ')
-    ? authHeader.split(' ')[1]
-    : null;
+  const authHeader =
+    req.headers["authorization"] || req.headers["Authorization"];
+  const token =
+    authHeader && authHeader.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : null;
 
   if (!token) {
-    return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    return res.status(401).json({ error: "Unauthorized: No token provided" });
   }
 
-  jwt.verify(token, ACCESS_TOKEN_SECRET, (err, decoded) => {
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (err) {
-      return res.status(403).json({ error: 'Forbidden: Invalid or expired token' });
+      return res
+        .status(403)
+        .json({ error: "Forbidden: Invalid or expired token" });
     }
 
-    // Attach user info (including role) to request
+    // 🔥 This is the CORRECT mapping:
     req.user = {
-      id: decoded.userId,
-      role: decoded.role,
+      userid: decoded.userid, // <-- THIS is what all routes expect
       email: decoded.email,
+      role: decoded.role,
     };
 
     next();

@@ -7,13 +7,16 @@ const jwt = require('jsonwebtoken');
 const authenticateToken = require('../../middleware/bearermiddleware');
 const Invitation = require('../../model/invitation/invitationModel');
 const rateLimit = require('express-rate-limit');
+const Plan = require('../../model/subscriptions/Plan');
+const UserSubscription = require('../../model/subscriptions/UserSubscription');
+
 // const { sendEmail } = require('../../mail-service/nodemailer');
 const { sendSMS } = require('../../config/sms/sms');
 const { sendEmail } = require('../../config/mail/nodemailer');
 
 const { upload, containerClient, generateSignedUrl } = require('../../config/storage/storage');
 const { otpLimiter } = require('../../middleware/rateLimiter');
-const { generateUserId } = require('../../utils/idGenerator');
+const { generateuserid } = require('../../utils/idGenerator');
 const authorizeRoles = require('../../middleware/rbacMiddleware');
 const verifyApiKey = require('../../middleware/apiKeymiddleware');
 
@@ -117,7 +120,7 @@ router.post('/signup', otpLimiter, upload.single('profilePicture'), async (req, 
 
         const otpCode = Math.floor(100000 + Math.random() * 900000);
         const hashedPassword = await bcrypt.hash(password, 10);
-        const userid = generateUserId();
+        const userid = generateuserid();
 
         let profilePictureUrl = '';
         if (req.file) {
@@ -147,6 +150,41 @@ router.post('/signup', otpLimiter, upload.single('profilePicture'), async (req, 
 
         await newUser.save();
 
+       try {
+    const freemiumPlan = await Plan.findOne({ name: "freemium", isActive: true });
+
+    if (!freemiumPlan) {
+        console.error("❌ Freemium plan not found.");
+    } else {
+
+        // Create subscription with UUID-based identifiers
+        const subscription = await UserSubscription.create({
+            subscriptionId: uuidv4(),    // explicitly assign if you want to override default
+            userid: userid,
+            planId: freemiumPlan.planId, // UUID string from Plan
+            billingCycle: "free",
+            status: "active",
+            startDate: new Date(),
+            endDate: null,
+            autoRenew: false,
+            usage: {
+                devicesCount: 0,
+                exportsThisMonth: 0,
+                apiCallsThisMonth: 0
+            }
+        });
+
+        // Store the UUID subscriptionId inside User model
+        newUser.subscription = subscription.subscriptionId;
+        await newUser.save();
+
+        console.log(`✔ Auto-assigned freemium plan to user: ${userid}`);
+    }
+
+} catch (subErr) {
+    console.error("❌ Error auto-assigning freemium plan:", subErr);
+}
+
         if (invitation) {
             invitation.accepted = true;
             await invitation.save();
@@ -154,7 +192,7 @@ router.post('/signup', otpLimiter, upload.single('profilePicture'), async (req, 
             const organization = await Organization.findOne({ organizationId: invitation.organizationId });
             if (organization) {
                 organization.collaborators.push({
-                    userId: userid,
+                    userid: userid,
                     accessLevel: invitation.accessLevel || 'MODERATOR',
                     permissions: []
                 });
@@ -278,7 +316,6 @@ router.post('/login', async (req, res) => {
         }
 
         const payload = {
-            userId: user._id,
             role: user.role,
             userid: user.userid,
             email: user.email,
@@ -336,59 +373,59 @@ router.post('/login', async (req, res) => {
  *         description: Server error.
  */
 router.post('/refresh-token', async (req, res) => {
-  const { refreshToken } = req.body;
-  if (!refreshToken) {
-    return res.status(400).send({ message: 'refreshToken is required' });
-  }
-
-  try {
-    // Verify the refresh token
-    const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-
-    // Optional: if you store refresh tokens in DB / allow revocation, verify it here.
-    // e.g. if User model stores refreshTokens: if (!user.refreshTokens.includes(refreshToken)) return 401
-
-    // Ensure the user exists
-    const user = await User.findById(payload.userId);
-    if (!user) {
-      return res.status(401).send({ message: 'Invalid token: user not found' });
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+        return res.status(400).send({ message: 'refreshToken is required' });
     }
 
-    // Build new payload (keep same claims as login)
-    const newPayload = {
-      userId: user._id,
-      role: user.role,
-      userid: user.userid,
-      email: user.email,
-      username: user.username,
-    };
+    try {
+        // Verify the refresh token
+        const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
 
-    // Issue new tokens — keep the same expiry rules used in /login
-    const accessToken = jwt.sign(newPayload, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '60m' });
-    const newRefreshToken = jwt.sign(newPayload, process.env.REFRESH_TOKEN_SECRET); // no expiresIn to match your login
+        // Optional: if you store refresh tokens in DB / allow revocation, verify it here.
+        // e.g. if User model stores refreshTokens: if (!user.refreshTokens.includes(refreshToken)) return 401
 
-    // Optional: if storing refresh tokens server-side, replace the old token with the new one here
-    // e.g.
-    // user.refreshTokens = user.refreshTokens.filter(t => t !== refreshToken);
-    // user.refreshTokens.push(newRefreshToken);
-    // await user.save();
+        // Ensure the user exists
+        const user = await User.findById(payload.userid);
+        if (!user) {
+            return res.status(401).send({ message: 'Invalid token: user not found' });
+        }
 
-    return res.status(200).send({
-      accessToken,
-      refreshToken: newRefreshToken,
-      userid: user.userid,
-      email: user.email,
-      username: user.username,
-      role: user.role,
-    });
-  } catch (err) {
-    // jwt.verify throws on invalid/expired tokens
-    if (err.name === 'TokenExpiredError' || err.name === 'JsonWebTokenError') {
-      return res.status(401).send({ message: 'Invalid or expired refresh token' });
+        // Build new payload (keep same claims as login)
+        const newPayload = {
+            userid: user._id,
+            role: user.role,
+            userid: user.userid,
+            email: user.email,
+            username: user.username,
+        };
+
+        // Issue new tokens — keep the same expiry rules used in /login
+        const accessToken = jwt.sign(newPayload, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '60m' });
+        const newRefreshToken = jwt.sign(newPayload, process.env.REFRESH_TOKEN_SECRET); // no expiresIn to match your login
+
+        // Optional: if storing refresh tokens server-side, replace the old token with the new one here
+        // e.g.
+        // user.refreshTokens = user.refreshTokens.filter(t => t !== refreshToken);
+        // user.refreshTokens.push(newRefreshToken);
+        // await user.save();
+
+        return res.status(200).send({
+            accessToken,
+            refreshToken: newRefreshToken,
+            userid: user.userid,
+            email: user.email,
+            username: user.username,
+            role: user.role,
+        });
+    } catch (err) {
+        // jwt.verify throws on invalid/expired tokens
+        if (err.name === 'TokenExpiredError' || err.name === 'JsonWebTokenError') {
+            return res.status(401).send({ message: 'Invalid or expired refresh token' });
+        }
+        console.error('Error refreshing token:', err);
+        return res.status(500).send({ message: 'Internal server error', error: err.message });
     }
-    console.error('Error refreshing token:', err);
-    return res.status(500).send({ message: 'Internal server error', error: err.message });
-  }
 });
 
 
@@ -600,7 +637,7 @@ router.post('/verify-otp-signup', async (req, res) => {
  *     tags:
  *       - Users
  *     summary: Retrieve user information
- *     description: Fetches user information based on the provided email or userID. If neither is provided, returns all users excluding their passwords.
+ *     description: Fetches user information based on the provided email or userid. If neither is provided, returns all users excluding their passwords.
  *     parameters:
  *       - in: query
  *         name: email
@@ -665,17 +702,17 @@ router.post('/verify-otp-signup', async (req, res) => {
  */
 
 router.get('/user-info', async (req, res) => {
-    const { email, userid } = req.query; // Get email and userId from query parameters
+    const { email, userid } = req.query; // Get email and userid from query parameters
 
     try {
         let query = {};
         if (email) {
             query.email = email; // Search by email if provided
         } else if (userid) {
-            query.userid = userId; // Search by userId if provided
+            query.userid = userid; // Search by userid if provided
         }
 
-        // If neither email nor userId is provided, this will fetch all users
+        // If neither email nor userid is provided, this will fetch all users
         const users = await User.find(query).select('-password -otp');
 
         if (users.length === 0) {

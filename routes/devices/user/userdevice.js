@@ -6,6 +6,9 @@ const SensorModel= require('../../../model/devices/deviceModels')
 const User = require('../../../model/user/userModel');
 const Deployment = require('../../../model/deployment/deploymentModel');
 const { sendEmail } = require('../../../config/mail/nodemailer');
+const enforceDeviceLimit = require('../../../middleware/subscriptions/enforceDeviceLimit');
+const UserSubscription = require('../../../model/subscriptions/UserSubscription');
+const checkFeatureAccess = require("../../../middleware/subscriptions/checkFeatureAccess");
 
 // const CardSubscription = require("../../model/subscriptions/cardSubscription");
 // const authenticateToken = require('../../middleware/apiKeymiddleware');
@@ -72,24 +75,27 @@ router.post('/register-device', async (req, res) => {
   const { auid, serial, location, userid, nickname } = req.body;
 
   try {
-    // Check if already registered
+   
+    await enforceDeviceLimit(userid);
+
+
     const existing = await registerNewDevice.findOne({ serial });
     if (existing) {
       const message = existing.userid === userid
         ? 'Device is already registered to this user.'
-        : 'Device is already registered.';
+        : 'Device is already registered by another user.';
       return res.status(409).json({ message });
     }
 
-    // Find in manufacturing database
+
     const manufactured = await addDevice.findOne({ serial });
     if (!manufactured) {
       return res.status(404).json({ message: 'Device not found in manufacturing records.' });
     }
 
+
     const [latitude, longitude] = location;
 
-    // Get reverse geolocation
     const geoRes = await axios.get(`https://atlas.microsoft.com/search/address/reverse/json`, {
       params: {
         'api-version': '1.0',
@@ -99,6 +105,7 @@ router.post('/register-device', async (req, res) => {
     });
 
     const address = geoRes?.data?.addresses?.[0]?.address || {};
+
     const locationInfo = {
       country: address.country,
       region: address.countrySubdivision,
@@ -111,11 +118,12 @@ router.post('/register-device', async (req, res) => {
       longitude
     };
 
-    // Get image from SensorModel
+
+
     const modelEntry = await SensorModel.findOne({ model: manufactured.model.toLowerCase() });
     const imageUrl = modelEntry?.imageUrl || process.env.DEFAULT_IMAGE_URL;
 
-    // Construct registration object
+
     const newDevice = new registerNewDevice({
       auid,
       serial,
@@ -128,7 +136,7 @@ router.post('/register-device', async (req, res) => {
       nickname,
       location: JSON.stringify(locationInfo),
       battery: 100,
-      subscription: [], // can be added later
+      subscription: [],
       image: imageUrl,
       status: 'offline',
       availability: 'private',
@@ -137,11 +145,19 @@ router.post('/register-device', async (req, res) => {
 
     await newDevice.save();
     console.log('Device registered:', newDevice);
-    res.status(201).json(newDevice);
+
+
+    await UserSubscription.updateOne(
+      { userId: userid },
+      { $inc: { "usage.devicesCount": 1 } }
+    );
+
+
+    return res.status(201).json(newDevice);
 
   } catch (error) {
     console.error('Error registering device:', error);
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 });
 
@@ -505,7 +521,7 @@ router.get('/user/:userid/device-locations', async (req, res) => {
  *       500:
  *         description: Error retrieving the device information.
  */
-router.get('/user/:userid/device/:auid/location', async (req, res) => {
+router.get('/user/:userid/device/:auid/location', checkFeatureAccess("location_access"),async (req, res) => {
   const { userid, auid } = req.params;
 
   try {
@@ -575,7 +591,7 @@ router.get('/user/:userid/device/:auid/location', async (req, res) => {
  *       500:
  *         description: Server error while updating device.
  */
-router.put('/user/:userid/device/:auid/update', async (req, res) => {
+router.put('/user/:userid/device/:auid/update', checkFeatureAccess("device_update"),async (req, res) => {
   const { userid, auid } = req.params;
   const { nickname, location } = req.body;
 
@@ -681,7 +697,7 @@ router.put('/user/:userid/device/:auid/update', async (req, res) => {
  *       404:
  *         description: Device or user not found.
  */
-router.post('/:userid/device/:auid/collaborators', async (req, res) => {
+router.post('/:userid/device/:auid/collaborators', checkFeatureAccess("collaboration"), async (req, res) => {
   const { userid, auid } = req.params;
   const { email, role, permissions = [] } = req.body;
 
@@ -1091,7 +1107,7 @@ router.post('/collaborator/:email/devices/batch', async (req, res) => {
  *       500:
  *         description: Server error.
  */
-router.put('/user/:userid/device/:auid/availability', async (req, res) => {
+router.put('/user/:userid/device/:auid/availability', checkFeatureAccess("public_listing"),async (req, res) => {
   const { userid, auid } = req.params;
   const { availability } = req.body;
 

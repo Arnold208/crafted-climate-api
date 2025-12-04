@@ -70,6 +70,12 @@ const userSchema = new mongoose.Schema({
     default: 'user'
   },
 
+  subscription: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "UserSubscription",
+  default: null
+},
+
   // ✅ Devices owned or invited to
   devices: [
     {

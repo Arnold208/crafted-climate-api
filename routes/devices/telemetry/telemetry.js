@@ -12,6 +12,10 @@ const { client: redisClient } = require('../../../config/redis/redis');
 const modelRegistry = require('../../../utils/modelRegistry');
 const {calculateAQI} = require('../../../utils/aqiFunction')
 const {dbRouteLimiter,csvRouteLimiter} =  require('../../../middleware/rateLimiter');
+const enforceTelemetryIngestion = require('../../../middleware/subscriptions/enforceTelemetryIngestion');
+const enforceTelemetryFeature = require('../../../middleware/subscriptions/enforceTelemetryFeature');
+const authenticateToken = require('../../../middleware/bearermiddleware');
+
 // const csvRouteLimiter
 
 const MODEL_MAP = {
@@ -122,7 +126,7 @@ const CSV_COLUMNS = {
  *         description: Server error
  */
 
-router.post('/:model', async (req, res) => {
+router.post('/:model', enforceTelemetryIngestion, async (req, res) => {
   const model = req.params.model.toLowerCase();
   const { i: devid } = req.body;
 
@@ -199,7 +203,7 @@ router.post('/:model', async (req, res) => {
  *         description: Server error
  */
 
-router.get('/:userid/device/:auid', async (req, res) => {
+router.get('/:userid/device/:auid',enforceTelemetryFeature({ feature: "device_read" }), async (req, res) => {
   const { userid, auid } = req.params;
   let limit = parseInt(req.query.limit, 10);
   if (isNaN(limit) || limit <= 0) limit = 50;
@@ -451,7 +455,7 @@ router.get('/public/telemetry', async (req, res) => {
  *       500:
  *         description: Server error.
  */
-router.get('/db/:model/:auid', dbRouteLimiter,async (req, res) => {
+router.get('/db/:model/:auid', dbRouteLimiter,enforceTelemetryFeature({ feature: "device_read" }),async (req, res) => {
   const model = String(req.params.model || '').toLowerCase();
   const auid  = String(req.params.auid || '').trim();
 
@@ -549,7 +553,13 @@ router.get('/db/:model/:auid', dbRouteLimiter,async (req, res) => {
  *         description: Server error.
  */
 
-router.get('/db/:model/:auid/csv', csvRouteLimiter,async (req, res) => {
+router.get('/db/:model/:auid/csv',   authenticateToken,
+csvRouteLimiter,enforceTelemetryFeature({
+      feature: "export",
+      quotaKey: "monthlyExports",
+      log: "monthlyExports"
+  }),
+  async (req, res) => {
   const model = String(req.params.model || '').toLowerCase();
   const auid  = String(req.params.auid || '').trim();
 

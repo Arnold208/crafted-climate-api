@@ -21,6 +21,8 @@ const telemetry = require('./routes/devices/telemetry/telemetry');
 const notecard = require('./routes/devices/notecard/envDeviceRoutes')
 const notecardDeployment = require('./routes/devices/notecard/envDeploymentRoutes')
 const threshold = require('./routes/devices/threshold/thresholdRoutes')
+const admin_subscription = require('./routes/subscriptions/subscriptionAdminRoutes')
+const user_subscription = require('./routes/subscriptions/subscriptionUserRoutes')
 
 const secureMqtt = require('./routes/telemetry/mqtt_secure_msg');
 const { setupRealtime } = require("./config/socket/socketio");
@@ -232,6 +234,9 @@ app.use('/api/telemetry', telemetry);
 app.use('/api/devices',notecard)
 app.use('/api/devices',notecardDeployment)
 app.use('/api',threshold)
+app.use('/api/subscriptions/admin',admin_subscription)
+app.use('/api/subscriptions/user',user_subscription)
+
 
 // ✅ Connect Redis before starting server
 connectRedis()
