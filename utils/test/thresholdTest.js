@@ -14,10 +14,13 @@ async function main() {
 
     console.log("✅ MongoDB connected!");
 
-    const auid ="";
+    const auid ="GH-YJG9XN24WVQ2-SW3JXMP2";
 
     const simulatedData = {
-      ec: 100
+      aqi: 200,
+      pm2_5: 10,
+      hum: 66,
+      temperature: 40
     };
 
     console.log("Running threshold check...");

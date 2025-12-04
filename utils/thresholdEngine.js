@@ -5,7 +5,6 @@ const registerNewDevice = require("../model/devices/registerDevice");
 const { sendSMS } = require("../config/sms/sms");
 const { sendEmail } = require("../config/mail/nodemailer");
 
-
 // ======================================================
 // 0️⃣ Resolve device owner & details (nickname + model)
 // ======================================================
@@ -41,7 +40,10 @@ async function getDeviceInfoByAUID(auid) {
 async function checkThresholds(auid, data) {
   try {
     const rules = await Threshold.find({ deviceAuid: auid, enabled: true });
-    if (!rules.length) return;
+    if (!rules.length) {
+      console.log(`No enabled thresholds for device ${auid}`);
+      return;
+    }
 
     const info = await getDeviceInfoByAUID(auid);
     if (!info) return;
@@ -53,29 +55,35 @@ async function checkThresholds(auid, data) {
       const key = rule.datapoint;
       const value = data[key];
 
-      if (value === undefined || value === null) continue;
+      if (value === undefined || value === null) {
+        // No value for this datapoint in current telemetry
+        continue;
+      }
 
       const triggered = evaluateRule(rule, value);
       if (!triggered) continue;
 
-      // Cooldown
+      // Cooldown (avoid spamming)
       const last = rule.lastTriggeredAt ? new Date(rule.lastTriggeredAt).getTime() : 0;
       const nextAllowed = last + rule.cooldownMinutes * 60 * 1000;
 
       if (now < nextAllowed) {
-        console.log(`Cooldown active for ${key}. Skipping alert.`);
+        console.log(`Cooldown active for ${key} on ${nickname}. Skipping alert.`);
         continue;
       }
 
+      // Update last triggered time
       rule.lastTriggeredAt = now;
       await rule.save();
 
+      // Build messages
       const smsMessage = buildSMSMessage(nickname, rule, value);
       const emailMessage = buildEmailMessage(nickname, rule, value);
 
+      // Send notifications
       await sendAlerts(user, rule, smsMessage, emailMessage);
 
-      console.log(`ALERT SENT → ${smsMessage}`);
+      console.log(`ALERT SENT for ${nickname} (${key}) → value=${value}`);
     }
   } catch (err) {
     console.error("Threshold Engine Error:", err.message);
@@ -89,65 +97,78 @@ async function checkThresholds(auid, data) {
 // ======================================================
 function evaluateRule(rule, value) {
   switch (rule.operator) {
-    case ">": return value > rule.min;
-    case ">=": return value >= rule.min;
-    case "<": return value < rule.max;
-    case "<=": return value <= rule.max;
-    case "between": return value >= rule.min && value <= rule.max;
-    case "outside": return value < rule.min || value > rule.max;
-    default: return false;
+    case ">":
+      return value > rule.min;
+    case ">=":
+      return value >= rule.min;
+    case "<":
+      return value < rule.max;
+    case "<=":
+      return value <= rule.max;
+    case "between":
+      return value >= rule.min && value <= rule.max;
+    case "outside":
+      return value < rule.min || value > rule.max;
+    default:
+      return false;
   }
 }
 
 
 
 // ======================================================
-// 3️⃣ SMS Message (Plain text – NO emojis, NO bold)
+// 3️⃣ Units map
 // ======================================================
-function buildSMSMessage(nickname, rule, value) {
-  const dp = prettyName(rule.datapoint);
-  let condition = "";
+function getUnitForDatapoint(dp) {
+  const unitMap = {
+    // Air quality
+    aqi: "",               // AQI index (unit-less)
+    pm1: "ug/m3",
+    pm2_5: "ug/m3",
+    pm10: "ug/m3",
 
-  switch (rule.operator) {
-    case ">": condition = `has gone above ${rule.min}`; break;
-    case ">=": condition = `has reached or gone above ${rule.min}`; break;
-    case "<": condition = `has dropped below ${rule.max}`; break;
-    case "<=": condition = `is at or below ${rule.max}`; break;
-    case "between": condition = `is between ${rule.min} and ${rule.max}`; break;
-    case "outside": condition = `is outside the safe range of ${rule.min} to ${rule.max}`; break;
-  }
+    // Environmental
+    temperature: "°C",
+    temperature_ambient: "°C",
+    temperature_water: "°C",
+    hum: "%",             // legacy key
+    humidity: "%",        // preferred key
+    pressure: "hPa",
+    altitude: "m",
+    uv: "",               // UV index
+    lux: "lux",
+    sound: "dB",
 
-  return `ALERT from ${nickname}\n${dp} is currently ${value} and ${condition}.`;
+    // Power / electronics
+    battery: "%",         // remaining battery
+    voltage: "V",
+    current: "A",
+
+    // Gas / air chemistry
+    eco2_ppm: "ppm",
+    tvoc_ppb: "ppb",
+
+    // Water quality
+    ph: "",
+    ec: "uS/cm",
+    turbidity: "NTU",
+
+    // Soil / agriculture
+    waterTemp: "°C",
+    soilTemp: "°C",
+    moisture: "%",
+    npk_n: "mg/kg",
+    npk_p: "mg/kg",
+    npk_k: "mg/kg",
+  };
+
+  return unitMap[dp] || "";
 }
 
 
 
 // ======================================================
-// 3️⃣ Email Message (HTML allowed)
-// ======================================================
-function buildEmailMessage(nickname, rule, value) {
-  const dp = prettyName(rule.datapoint);
-  let condition = "";
-
-  switch (rule.operator) {
-    case ">": condition = `has gone above <b>${rule.min}</b>`; break;
-    case ">=": condition = `has reached or gone above <b>${rule.min}</b>`; break;
-    case "<": condition = `has dropped below <b>${rule.max}</b>`; break;
-    case "<=": condition = `is at or below <b>${rule.max}</b>`; break;
-    case "between": condition = `is between <b>${rule.min}</b> and <b>${rule.max}</b>`; break;
-    case "outside": condition = `is outside the safe range of <b>${rule.min}</b> to <b>${rule.max}</b>`; break;
-  }
-
-  return `
-    <p><strong>ALERT from ${nickname}</strong></p>
-    <p>${dp} is currently <b>${value}</b>, which ${condition}.</p>
-  `;
-}
-
-
-
-// ======================================================
-// Pretty datapoint names
+// 4️⃣ Pretty datapoint names
 // ======================================================
 function prettyName(dp) {
   const map = {
@@ -157,15 +178,26 @@ function prettyName(dp) {
     hum: "Humidity",
     humidity: "Humidity",
     temperature: "Temperature",
+    temperature_ambient: "Ambient Temperature",
+    temperature_water: "Water Temperature",
     aqi: "Air Quality Index",
     uv: "UV Index",
     lux: "Light Intensity",
+    sound: "Sound Level",
+    pressure: "Pressure",
+    altitude: "Altitude",
+    battery: "Battery Level",
+    voltage: "Voltage",
+    current: "Current",
+
+    eco2_ppm: "eCO₂",
+    tvoc_ppb: "TVOC",
+
     ph: "pH",
     ec: "Electrical Conductivity",
     turbidity: "Turbidity",
+
     waterTemp: "Water Temperature",
-    temperature_water: "Water Temperature",
-    temperature_ambient: "Ambient Temperature",
     soilTemp: "Soil Temperature",
     moisture: "Soil Moisture",
     npk_n: "Nitrogen (N)",
@@ -179,19 +211,126 @@ function prettyName(dp) {
 
 
 // ======================================================
-// 4️⃣ Send Alerts (Email + SMS)
+// 5️⃣ SMS Message (Plain text – NO emojis, NO bold)
+// ======================================================
+function buildSMSMessage(nickname, rule, value) {
+  const dp = prettyName(rule.datapoint);
+  const unit = getUnitForDatapoint(rule.datapoint);
+
+  const valueStr = unit ? `${value} ${unit}` : `${value}`;
+  const minStr = rule.min !== undefined && rule.min !== null
+    ? unit ? `${rule.min} ${unit}` : `${rule.min}`
+    : null;
+  const maxStr = rule.max !== undefined && rule.max !== null
+    ? unit ? `${rule.max} ${unit}` : `${rule.max}`
+    : null;
+
+  let condition = "";
+
+  switch (rule.operator) {
+    case ">":
+      condition = minStr ? `has gone above ${minStr}` : "is higher than your set limit";
+      break;
+    case ">=":
+      condition = minStr ? `has reached or gone above ${minStr}` : "has reached your set limit";
+      break;
+    case "<":
+      condition = maxStr ? `has dropped below ${maxStr}` : "is lower than your set limit";
+      break;
+    case "<=":
+      condition = maxStr ? `is at or below ${maxStr}` : "is at or below your set limit";
+      break;
+    case "between":
+      condition = minStr && maxStr
+        ? `is between ${minStr} and ${maxStr}`
+        : "is within your set range";
+      break;
+    case "outside":
+      condition = minStr && maxStr
+        ? `is outside the safe range of ${minStr} to ${maxStr}`
+        : "is outside your set range";
+      break;
+  }
+
+  return `ALERT from ${nickname}\n${dp} is currently ${valueStr} and ${condition}.`;
+}
+
+
+
+// ======================================================
+// 6️⃣ Email Message (HTML allowed, units included)
+// ======================================================
+function buildEmailMessage(nickname, rule, value) {
+  const dp = prettyName(rule.datapoint);
+  const unit = getUnitForDatapoint(rule.datapoint);
+
+  const valueStr = unit ? `${value} ${unit}` : `${value}`;
+  const minStr = rule.min !== undefined && rule.min !== null
+    ? unit ? `${rule.min} ${unit}` : `${rule.min}`
+    : null;
+  const maxStr = rule.max !== undefined && rule.max !== null
+    ? unit ? `${rule.max} ${unit}` : `${rule.max}`
+    : null;
+
+  let condition = "";
+
+  switch (rule.operator) {
+    case ">":
+      condition = minStr
+        ? `has gone above <b>${minStr}</b>`
+        : "is higher than your set limit";
+      break;
+    case ">=":
+      condition = minStr
+        ? `has reached or gone above <b>${minStr}</b>`
+        : "has reached your set limit";
+      break;
+    case "<":
+      condition = maxStr
+        ? `has dropped below <b>${maxStr}</b>`
+        : "is lower than your set limit";
+      break;
+    case "<=":
+      condition = maxStr
+        ? `is at or below <b>${maxStr}</b>`
+        : "is at or below your set limit";
+      break;
+    case "between":
+      condition = minStr && maxStr
+        ? `is between <b>${minStr}</b> and <b>${maxStr}</b>`
+        : "is within your set range";
+      break;
+    case "outside":
+      condition = minStr && maxStr
+        ? `is outside the safe range of <b>${minStr}</b> to <b>${maxStr}</b>`
+        : "is outside your set range";
+      break;
+  }
+
+  return `
+    <p><strong>ALERT from ${nickname}</strong></p>
+    <p>${dp} is currently <b>${valueStr}</b>, which ${condition}.</p>
+  `;
+}
+
+
+
+// ======================================================
+// 7️⃣ Send Alerts (Email + SMS)
 // ======================================================
 async function sendAlerts(user, rule, smsMessage, emailMessage) {
   try {
     if (rule.alertChannels?.email && user.email) {
+      console.log(`Sending email alert to ${user.email}...`);
       await sendEmail(
         user.email,
-        `ALERT from your CraftedClimate Sensor`,
+        "ALERT from your CraftedClimate Sensor",
         emailMessage
       );
     }
 
     if (rule.alertChannels?.sms && user.contact) {
+      console.log(`Sending SMS alert to ${user.contact}...`);
       await sendSMS(user.contact, smsMessage);
     }
   } catch (err) {
@@ -206,5 +345,9 @@ async function sendAlerts(user, rule, smsMessage, emailMessage) {
 // ======================================================
 module.exports = {
   checkThresholds,
-  getDeviceInfoByAUID
+  getDeviceInfoByAUID,
+  // exporting helpers can be handy for unit tests
+  evaluateRule,
+  prettyName,
+  getUnitForDatapoint,
 };
