@@ -236,7 +236,7 @@ router.post('/', verifyApiKey, authenticateToken, authorizeRoles('admin', 'super
  *                   example: "MongoServerError: E11000 duplicate key error..."
  */
 
-router.patch('/update-note-uuid',  authorizeRoles('admin', 'supervisor'), async (req, res) => {
+router.patch('/update-note-uuid', async (req, res) => {
   const { serial, newNoteDevUuid } = req.body;
 
   if (!serial || !newNoteDevUuid) {

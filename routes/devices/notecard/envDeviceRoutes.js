@@ -1,3 +1,5 @@
+// routes/api/devices/notehubEnvRoutes.js
+
 const express = require('express');
 const axios = require('axios');
 const registerNewDevice = require('../../../model/devices/registerDevice');
@@ -18,12 +20,38 @@ const router = express.Router();
 
 // --- Global Device Configuration ---
 const NOTEHUB_API_KEY = process.env.NOTEHUB_API_KEY;
-const NOTEHUB_PROJECT_UID = process.env.NOTEHUB_PROJECT_UID;
-const NOTEHUB_BASE_URL = process.env.NOTEHUB_BASE_URL || 'https://api.notefile.net';
+const NOTEHUB_PROJECT_UID = process.env.NOTEHUB_PROJECT_UID;   // Default for ENV / TERRA / GAS
+const AQUA_PROJECT_UID  = process.env.AQUA_PROJECT_UID;        // Special project for AQUA devices
+const NOTEHUB_BASE_URL  = process.env.NOTEHUB_BASE_URL || 'https://api.notefile.net';
 
-if (!NOTEHUB_API_KEY || !NOTEHUB_PROJECT_UID) {
-  console.warn('⚠️ Missing Notehub credentials. Please set NOTEHUB_API_KEY and NOTEHUB_PROJECT_UID in your .env.');
+if (!NOTEHUB_API_KEY) {
+  console.warn('⚠️ Missing NOTEHUB_API_KEY. Please set NOTEHUB_API_KEY in your .env.');
 }
+if (!NOTEHUB_PROJECT_UID) {
+  console.warn('⚠️ Missing NOTEHUB_PROJECT_UID (default project for env/terra/gas).');
+}
+if (!AQUA_PROJECT_UID) {
+  console.warn('⚠️ Missing AQUA_PROJECT_UID (project for aqua devices).');
+}
+
+/**
+ * Helper: choose the correct Notehub project UID based on device.model
+ *   - env, terra, gas  -> NOTEHUB_PROJECT_UID
+ *   - aqua             -> AQUA_PROJECT_UID
+ */
+function getProjectUidForDevice(device) {
+  if (!device || !device.model) return null;
+
+  const baseModel = device.model.toLowerCase(); // env, aqua, terra, gas
+
+  if (baseModel === 'aqua') {
+    return AQUA_PROJECT_UID || null;
+  }
+
+  // Default for env, terra, gas
+  return NOTEHUB_PROJECT_UID || null;
+}
+
 
 /**
  * @swagger
@@ -33,8 +61,15 @@ if (!NOTEHUB_API_KEY || !NOTEHUB_PROJECT_UID) {
  *       - Device Config
  *     summary: Update Notehub environment variables for a user's device
  *     description: |
- *       Allows the device owner to update Notecard environment variables (e.g., ANTI_THEFT, DEV_SLP_MIN, NOTE_IN_MIN, NOTE_OUT_MIN).
- *       This request is securely proxied through the server to Notehub.
+ *       Allows the device owner to update Notecard environment variables for a specific device.
+ *       
+ *       The backend will:
+ *       - Look up the device by AUID and userid in the `registerNewDevice` collection  
+ *       - Detect the device model (`env`, `aqua`, `terra`, `gas`)  
+ *       - Route the request to the appropriate Notehub project:
+ *         - `env`, `terra`, `gas` → `NOTEHUB_PROJECT_UID`
+ *         - `aqua` → `AQUA_PROJECT_UID`
+ *       - Forward the environment variable update to Notehub via REST.
  *     parameters:
  *       - name: userid
  *         in: query
@@ -60,18 +95,37 @@ if (!NOTEHUB_API_KEY || !NOTEHUB_PROJECT_UID) {
  *               envVars:
  *                 type: object
  *                 description: Key-value pairs of environment variables to update.
+ *                 additionalProperties:
+ *                   type: string
  *                 example:
  *                   anti_theft_enabled: "true"
  *                   sync_interval_min: "10"
  *                   note_in_min: "10"
+ *                   note_out_min: "10"
  *                   theft_buzzer_duration: "30"
  *     responses:
  *       200:
  *         description: Environment variables updated successfully on Notehub.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 noteDevUuid:
+ *                   type: string
+ *                 projectUid:
+ *                   type: string
+ *                   description: Notehub project UID used for this device.
+ *                 updated:
+ *                   type: object
+ *                 notehubResponse:
+ *                   type: object
  *       400:
- *         description: Missing parameters or invalid request.
+ *         description: Missing parameters or invalid request body.
  *       403:
- *         description: User not authorized to modify this device.
+ *         description: Device not found or not owned by the user.
  *       404:
  *         description: Device not found or missing Notehub UUID.
  *       500:
@@ -89,19 +143,32 @@ router.put('/update-notehub-env', async (req, res) => {
 
   try {
     const device = await registerNewDevice.findOne({ auid, userid });
-    if (!device) return res.status(403).json({ message: 'Device not found or not owned by the provided user.' });
+    if (!device) {
+      return res.status(403).json({ message: 'Device not found or not owned by the provided user.' });
+    }
 
     if (!device.noteDevUuid) {
       return res.status(404).json({ message: 'Device missing associated Notehub UUID (noteDevUuid).' });
     }
 
-    const url = `${NOTEHUB_BASE_URL}/v1/projects/${NOTEHUB_PROJECT_UID}/devices/${device.noteDevUuid}/environment_variables`;
+    const projectUid = getProjectUidForDevice(device);
+    if (!projectUid) {
+      return res.status(500).json({
+        message: 'No Notehub project UID configured for this device model.',
+        model: device.model
+      });
+    }
+
+    const url = `${NOTEHUB_BASE_URL}/v1/projects/${projectUid}/devices/${device.noteDevUuid}/environment_variables`;
 
     const response = await axios.put(
       url,
       { environment_variables: envVars },
       {
-        headers: { 'Content-Type': 'application/json', 'X-Session-Token': NOTEHUB_API_KEY },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Token': NOTEHUB_API_KEY
+        },
         timeout: 10000,
       }
     );
@@ -109,6 +176,7 @@ router.put('/update-notehub-env', async (req, res) => {
     res.status(200).json({
       message: 'Environment variables updated successfully on Notehub.',
       noteDevUuid: device.noteDevUuid,
+      projectUid,
       updated: envVars,
       notehubResponse: response.data,
     });
@@ -121,6 +189,8 @@ router.put('/update-notehub-env', async (req, res) => {
   }
 });
 
+
+
 /**
  * @swagger
  * /api/devices/get-notehub-env/{auid}:
@@ -128,7 +198,16 @@ router.put('/update-notehub-env', async (req, res) => {
  *     tags:
  *       - Device Config
  *     summary: Get Notehub environment variables for a user's device
- *     description: Retrieves the current environment variables for a user's device from Notehub via server proxy.
+ *     description: |
+ *       Retrieves the current Notehub environment variables for a device.
+ *       
+ *       The backend will:
+ *       - Look up the device by `auid` and `userid`  
+ *       - Determine its model (`env`, `aqua`, `terra`, `gas`)  
+ *       - Select the appropriate Notehub project UID:
+ *         - `env`, `terra`, `gas` → `NOTEHUB_PROJECT_UID`
+ *         - `aqua` → `AQUA_PROJECT_UID`
+ *       - Fetch environment variables from Notehub and return them.
  *     parameters:
  *       - name: auid
  *         in: path
@@ -136,7 +215,7 @@ router.put('/update-notehub-env', async (req, res) => {
  *         schema:
  *           type: string
  *         description: The unique AUID of the registered device.
- *         example: "AUID12345"
+ *         example: "GH-Y24SD"
  *       - name: userid
  *         in: query
  *         required: true
@@ -147,10 +226,24 @@ router.put('/update-notehub-env', async (req, res) => {
  *     responses:
  *       200:
  *         description: Successfully retrieved environment variables from Notehub.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 noteDevUuid:
+ *                   type: string
+ *                 projectUid:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   description: Raw data returned from Notehub.
  *       400:
- *         description: Missing or invalid parameters.
+ *         description: Missing "userid" or "auid".
  *       403:
- *         description: User not authorized to access this device.
+ *         description: Device not found or not owned by this user.
  *       404:
  *         description: Device not found or missing Notehub UUID.
  *       500:
@@ -166,13 +259,24 @@ router.get('/get-notehub-env/:auid', async (req, res) => {
 
   try {
     const device = await registerNewDevice.findOne({ auid, userid });
-    if (!device) return res.status(403).json({ message: 'Device not found or not owned by this user.' });
+    if (!device) {
+      return res.status(403).json({ message: 'Device not found or not owned by this user.' });
+    }
 
     if (!device.noteDevUuid) {
       return res.status(404).json({ message: 'Device missing associated Notehub UUID (noteDevUuid).' });
     }
 
-    const url = `${NOTEHUB_BASE_URL}/v1/projects/${NOTEHUB_PROJECT_UID}/devices/${device.noteDevUuid}/environment_variables`;
+    const projectUid = getProjectUidForDevice(device);
+    if (!projectUid) {
+      return res.status(500).json({
+        message: 'No Notehub project UID configured for this device model.',
+        model: device.model
+      });
+    }
+
+    const url = `${NOTEHUB_BASE_URL}/v1/projects/${projectUid}/devices/${device.noteDevUuid}/environment_variables`;
+
     const response = await axios.get(url, {
       headers: { 'X-Session-Token': NOTEHUB_API_KEY },
       timeout: 10000,
@@ -181,6 +285,7 @@ router.get('/get-notehub-env/:auid', async (req, res) => {
     res.status(200).json({
       message: 'Environment variables retrieved successfully.',
       noteDevUuid: device.noteDevUuid,
+      projectUid,
       data: response.data,
     });
   } catch (error) {
@@ -192,6 +297,8 @@ router.get('/get-notehub-env/:auid', async (req, res) => {
   }
 });
 
+
+
 /**
  * @swagger
  * /api/devices/delete-notehub-env/{auid}/{key}:
@@ -199,7 +306,13 @@ router.get('/get-notehub-env/:auid', async (req, res) => {
  *     tags:
  *       - Device Config
  *     summary: Delete a specific Notehub environment variable for a user's device
- *     description: Allows a user to delete a specific environment variable on Notehub for their device.
+ *     description: |
+ *       Deletes a single Notehub environment variable for a device.
+ *       
+ *       The backend will:
+ *       - Verify the device belongs to the user  
+ *       - Determine the correct Notehub project UID based on the model  
+ *       - Issue a DELETE request to Notehub for the selected key.
  *     parameters:
  *       - name: auid
  *         in: path
@@ -207,14 +320,14 @@ router.get('/get-notehub-env/:auid', async (req, res) => {
  *         schema:
  *           type: string
  *         description: Device AUID.
- *         example: "AUID12345"
+ *         example: "GH-Y24SD"
  *       - name: key
  *         in: path
  *         required: true
  *         schema:
  *           type: string
  *         description: Environment variable key to delete.
- *         example: "ANTI_THEFT"
+ *         example: "anti_theft_enabled"
  *       - name: userid
  *         in: query
  *         required: true
@@ -225,10 +338,23 @@ router.get('/get-notehub-env/:auid', async (req, res) => {
  *     responses:
  *       200:
  *         description: Environment variable deleted successfully on Notehub.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 noteDevUuid:
+ *                   type: string
+ *                 projectUid:
+ *                   type: string
+ *                 notehubResponse:
+ *                   type: object
  *       400:
- *         description: Missing or invalid parameters.
+ *         description: Missing "userid", "auid", or "key".
  *       403:
- *         description: User not authorized to access this device.
+ *         description: Device not found or not owned by this user.
  *       404:
  *         description: Device not found or missing Notehub UUID.
  *       500:
@@ -244,13 +370,24 @@ router.delete('/delete-notehub-env/:auid/:key', async (req, res) => {
 
   try {
     const device = await registerNewDevice.findOne({ auid, userid });
-    if (!device) return res.status(403).json({ message: 'Device not found or not owned by this user.' });
+    if (!device) {
+      return res.status(403).json({ message: 'Device not found or not owned by this user.' });
+    }
 
     if (!device.noteDevUuid) {
       return res.status(404).json({ message: 'Device missing associated Notehub UUID (noteDevUuid).' });
     }
 
-    const url = `${NOTEHUB_BASE_URL}/v1/projects/${NOTEHUB_PROJECT_UID}/devices/${device.noteDevUuid}/environment_variables/${key}`;
+    const projectUid = getProjectUidForDevice(device);
+    if (!projectUid) {
+      return res.status(500).json({
+        message: 'No Notehub project UID configured for this device model.',
+        model: device.model
+      });
+    }
+
+    const url = `${NOTEHUB_BASE_URL}/v1/projects/${projectUid}/devices/${device.noteDevUuid}/environment_variables/${key}`;
+
     const response = await axios.delete(url, {
       headers: { 'X-Session-Token': NOTEHUB_API_KEY },
       timeout: 10000,
@@ -259,6 +396,7 @@ router.delete('/delete-notehub-env/:auid/:key', async (req, res) => {
     res.status(200).json({
       message: `Environment variable "${key}" deleted successfully from Notehub.`,
       noteDevUuid: device.noteDevUuid,
+      projectUid,
       notehubResponse: response.data || 'Deleted',
     });
   } catch (error) {
