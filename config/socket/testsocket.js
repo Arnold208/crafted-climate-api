@@ -1,11 +1,11 @@
 const { io } = require("socket.io-client");
 
-const SERVER_URL = "http://localhost:3000";
-const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGUyOWZhMzU2ZmQ4MjUyMGZkYmIxODMiLCJyb2xlIjoidXNlciIsInVzZXJpZCI6IjFWWTZLWEpGQUMiLCJlbWFpbCI6Imdlb3JnaW5hQHZlcnRldG93ZXIuY29tIiwidXNlcm5hbWUiOiJnZW9yZ2luYSIsImlhdCI6MTc2Mjk3NTA5MywiZXhwIjoxNzYyOTc4NjkzfQ.v0SaT_OMh5Fj2qN0a8AYmf_8jLPYJCFoP_1xrlYyJFA"
+const SERVER_URL = "https://cctelemetry-api-prod-c5b7aqawfxeybvbd.eastus-01.azurewebsites.net";
+const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGUyOWZhMzU2ZmQ4MjUyMGZkYmIxODMiLCJyb2xlIjoidXNlciIsInVzZXJpZCI6IjFWWTZLWEpGQUMiLCJlbWFpbCI6Imdlb3JnaW5hQHZlcnRldG93ZXIuY29tIiwidXNlcm5hbWUiOiJnZW9yZ2luYSIsImlhdCI6MTc2MzY4MzE4MCwiZXhwIjoxNzYzNjg2NzgwfQ.8Gt7R94dIRquUxmAEdn8oLvA-VHz2s2GBOHGQ7zAwkI"
 
 const socket = io(SERVER_URL, {
   transports: ["websocket"],
-  auth: { token: TOKEN }, // pass JWT here
+  auth: { token: TOKEN },  
 });
 
 socket.on("connect", () => {

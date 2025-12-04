@@ -121,8 +121,10 @@ const registerNewDeviceSchema = new mongoose.Schema({
     }
   ],
   default: []
-}
-
+},
+noteDevUuid: {
+    type: String
+  }
 }, { versionKey: false });
 
 const registerNewDevice = mongoose.model('registerDevices', registerNewDeviceSchema, 'registeredDevices');

@@ -258,13 +258,15 @@ For more examples and SDKs, visit [craftedclimate.com/docs](https://craftedclima
     ]
   },
   apis: [
+    './routes/devices/manufacturer/**/*.js',
     './routes/user/**/*.js',
     './routes/devices/deployment/**/*.js',
     './routes/devices/user/**/*.js',
     './routes/devices/telemetry/**/*.js',
     './model/user/**/*.js',
     './model/deployment/**/*.js',
-    './model/telemetry/**/*.js'
+    './model/telemetry/**/*.js',
+    './routes/devices/notecard/**/*.js'
   ]
 };
 

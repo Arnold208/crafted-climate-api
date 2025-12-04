@@ -65,6 +65,9 @@ const addDeviceSchema = new mongoose.Schema({
   date: {
     type: Date,
     default: Date.now
+  },
+  noteDevUuid: {
+    type: String
   }
 
 }, { versionKey: false });

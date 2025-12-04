@@ -12,6 +12,7 @@ const authorizeRoles = require('../../../middleware/rbacMiddleware');
 const verifyApiKey = require('../../../middleware/apiKeymiddleware');
 const authenticateToken = require('../../../middleware/bearermiddleware');
 const SensorModel = require('../../../model/devices/deviceModels');
+const registerNewDevice = require('../../../model/devices/registerDevice');
 
 /**
  * @swagger
@@ -32,6 +33,7 @@ const SensorModel = require('../../../model/devices/deviceModels');
  *               - model
  *               - type
  *               - mac
+ *               - noteDevUuid
  *             properties:
  *               devid:
  *                 type: string
@@ -50,6 +52,10 @@ const SensorModel = require('../../../model/devices/deviceModels');
  *                 items:
  *                   type: string
  *                 example: ["temperature", "humidity", "pm2_5", "uv"]
+ *               noteDevUuid:
+ *                 type: string
+ *                 description: The unique Notecard device UID.
+ *                 example: "dev:861059068079643"
  *     responses:
  *       201:
  *         description: Device manufactured successfully.
@@ -61,7 +67,7 @@ const SensorModel = require('../../../model/devices/deviceModels');
 
 router.post('/', verifyApiKey, authenticateToken, authorizeRoles('admin', 'supervisor'), async (req, res) => {
   try {
-    const { devid, model, type, mac, datapoints } = req.body;
+    const { devid, model, type, mac, datapoints, noteDevUuid } = req.body;
 
     // 🔍 Step 1: Validate input
     if (!devid || !model || !type || !mac) {
@@ -76,10 +82,18 @@ router.post('/', verifyApiKey, authenticateToken, authorizeRoles('admin', 'super
 
     // 🔍 Step 3: Prevent duplicate device or MAC
     const existing = await AddDevice.findOne({
-      $or: [{ devid }, { mac }]
+      $or: [{ devid }, { mac }, { noteDevUuid }]
     });
-    if (existing) {
-      return res.status(400).json({ error: 'Device with same devid or mac already exists' });
+    if (existingDevice) {
+      let message = 'A device with this unique identifier already exists.';
+      if (existingDevice.devid === devid) {
+        message = 'Device with this devid already exists.';
+      } else if (existingDevice.mac === mac) {
+        message = 'Device with this MAC address already exists.';
+      } else if (existingDevice.noteDevUuid === noteDevUuid) {
+        message = 'Device with this noteDevUuid already exists.';
+      }
+      return res.status(409).json({ message: message });
     }
 
     // ✅ Step 4: Generate ONLY after all checks pass
@@ -131,7 +145,167 @@ router.post('/', verifyApiKey, authenticateToken, authorizeRoles('admin', 'super
   }
 });
 
+/**
+ * @swagger
+ * /api/devices/manufacturer/update-note-uuid:
+ *   patch:
+ *     tags:
+ *       - Manufacturer
+ *     summary: Update the Notecard device UUID (noteDevUuid)
+ *     description: |
+ *       Allows an authenticated client (via API key) to update the Notecard device UUID (`noteDevUuid`) for a specific device.
+ *       This route ensures that:
+ *         - The new `noteDevUuid` does not already exist for another device.
+ *         - Both manufacturer (`addDevice`) and registered device (`registerNewDevice`) records remain in sync.
+ *     security:
+ *       - ApiKeyAuth: []   #matches your swagger.js configuration
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - serial
+ *               - newNoteDevUuid
+ *             properties:
+ *               serial:
+ *                 type: string
+ *                 description: The serial number of the device to update.
+ *                 example: "12345"
+ *               newNoteDevUuid:
+ *                 type: string
+ *                 description: The new Notecard UUID (noteDevUuid) to assign to the device.
+ *                 example: "dev:861059068079643"
+ *     responses:
+ *       200:
+ *         description: Successfully updated the noteDevUuid in both records.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Manufacturer device record updated successfully. Registered device record was also updated."
+ *                 device:
+ *                   type: object
+ *                   description: The updated manufacturer device record.
+ *       400:
+ *         description: Missing or invalid parameters.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Both serial and newNoteDevUuid are required."
+ *       404:
+ *         description: Device not found in manufacturer or registered records.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Device not found in manufacturer records (addDevice)."
+ *       409:
+ *         description: Conflict — The new noteDevUuid already exists.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "This noteDevUuid is already in use by another device."
+ *       500:
+ *         description: Internal server error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Error updating device."
+ *                 error:
+ *                   type: string
+ *                   example: "MongoServerError: E11000 duplicate key error..."
+ */
 
+router.patch('/update-note-uuid', async (req, res) => {
+  const { serial, newNoteDevUuid } = req.body;
+
+  if (!serial || !newNoteDevUuid) {
+    return res.status(400).json({
+      message: 'Both serial and newNoteDevUuid are required.'
+    });
+  }
+
+  try {
+    // 1️⃣ Ensure the new noteDevUuid isn't used by another device
+    const existingDevice = await AddDevice.findOne({
+      noteDevUuid: newNoteDevUuid,
+      serial: { $ne: serial },
+    });
+
+    if (existingDevice) {
+      return res.status(409).json({
+        message: 'This noteDevUuid is already in use by another device.',
+      });
+    }
+
+    // 2️⃣ Update manufacturer record (addDevice)
+    const updatedAddDevice = await AddDevice.findOneAndUpdate(
+      { serial },
+      { $set: { noteDevUuid: newNoteDevUuid } },
+      { new: true }
+    );
+
+    if (!updatedAddDevice) {
+      return res.status(404).json({
+        message: 'Device not found in manufacturer records (addDevice).',
+      });
+    }
+
+    // 3️⃣ Update registered device record (if it exists)
+    const updatedRegisteredDevice = await registerNewDevice.findOneAndUpdate(
+      { serial },
+      { $set: { noteDevUuid: newNoteDevUuid } },
+      { new: true }
+    );
+
+    let message = 'Manufacturer device record updated successfully.';
+    if (updatedRegisteredDevice) {
+      message += ' Registered device record was also updated.';
+    } else {
+      message += ' No matching registered device found to update (this is OK).';
+    }
+
+    // ✅ 4️⃣ Respond with success
+    return res.status(200).json({
+      message,
+      device: updatedAddDevice,
+    });
+
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        message: 'This noteDevUuid is already in use.',
+        error: error.message,
+      });
+    }
+
+    console.error('Error updating noteDevUuid:', error.message);
+    return res.status(500).json({
+      message: 'Error updating device',
+      error: error.message,
+    });
+  }
+});
 
 /**
  * @swagger

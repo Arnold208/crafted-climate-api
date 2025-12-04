@@ -80,7 +80,7 @@ async function updateRedisDeviceStatusesOnce() {
 
 
 function startUpdateRedisStatusCron() {
-  const schedule = process.env.DEVICE_STATUS_CRON || '* * * * *'; // every 10 minutes
+  const schedule = process.env.DEVICE_STATUS_CRON || '*/10 * * * *'; // every 10 minutes
   cron.schedule(schedule, updateRedisDeviceStatusesOnce, { timezone: 'Africa/Accra' });
   console.log('⏱️ Redis device status cron scheduled');
 }
