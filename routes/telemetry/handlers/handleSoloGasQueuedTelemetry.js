@@ -4,6 +4,7 @@ const gasSoloTelemetry = require("../../../model/telemetry/gasSoloModel");
 const { batteryPercentage } = require("../../../utils/batteryPercentage");
 const { cacheTelemetryToRedis } = require("../../../utils/redisTelemetry");
 const { publishToAUID } = require("../../../config/socket/socketio");
+const { checkThresholds } = require("../../../utils/thresholdEngine");
 
 async function handleGasSoloQueuedTelemetry(messageObj) {
   const body = messageObj.body;
@@ -65,6 +66,7 @@ async function handleGasSoloQueuedTelemetry(messageObj) {
     publishToAUID(auid, formattedData);
     // Optionally: Save to MongoDB
     // await gasSoloTelemetry.create(formattedData);
+    checkThresholds(auid, formattedData);
 
   } catch (err) {
     console.error("❌ handleGasSoloQueuedTelemetry Error:", err.message);

@@ -3,6 +3,7 @@ const deviceTelemetry = require("../../../model/telemetry/aquaModel");
 const { batteryPercentage } = require("../../../utils/batteryPercentage");
 const { cacheTelemetryToRedis } = require('../../../utils/redisTelemetry');
 const { publishToAUID } = require("../../../config/socket/socketio");
+const { checkThresholds } = require("../../../utils/thresholdEngine");
 
 async function handleAquaQueuedTelemetry(messageObj) {
   const body = messageObj.body;
@@ -66,6 +67,7 @@ async function handleAquaQueuedTelemetry(messageObj) {
 
     // 🚀 Real-time broadcast
     publishToAUID(auid, formattedData);
+    checkThresholds(auid, formattedData);
 
 
     // 🗄️ Optional: persist to Mongo

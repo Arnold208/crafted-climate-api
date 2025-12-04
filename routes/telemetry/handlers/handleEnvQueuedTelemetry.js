@@ -4,6 +4,7 @@ const { batteryPercentage } = require("../../../utils/batteryPercentage");
 const { calculateAQI } = require("../../../utils/aqiFunction");
 const { cacheTelemetryToRedis } = require('../../../utils/redisTelemetry');
 const { publishToAUID } = require("../../../config/socket/socketio");
+const { checkThresholds } = require("../../../utils/thresholdEngine");
 
 async function handleEnvQueuedTelemetry(messageObj) {
   const body = messageObj.body;
@@ -76,6 +77,8 @@ async function handleEnvQueuedTelemetry(messageObj) {
     await cacheTelemetryToRedis(auid, formattedData, foundDevice);
     // Real-time push + Redis caching
     publishToAUID(auid, formattedData);
+    checkThresholds(auid, formattedData);
+
 
   } catch (err) {
     console.error("❌ handleEnvQueuedTelemetry Error:", err.message);

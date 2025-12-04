@@ -259,6 +259,7 @@ For more examples and SDKs, visit [craftedclimate.com/docs](https://craftedclima
   },
   apis: [
     './routes/devices/manufacturer/**/*.js',
+    './routes/devices/threshold/**/*.js',
     './routes/user/**/*.js',
     './routes/devices/deployment/**/*.js',
     './routes/devices/user/**/*.js',
