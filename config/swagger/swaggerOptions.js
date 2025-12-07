@@ -260,6 +260,7 @@ For more examples and SDKs, visit [craftedclimate.com/docs](https://craftedclima
   apis: [
     './routes/devices/manufacturer/**/*.js',
     './routes/devices/threshold/**/*.js',
+    './routes/organization/**/*.js',
     './routes/user/**/*.js',
     './routes/subscriptions/**/*.js',
     './routes/devices/deployment/**/*.js',

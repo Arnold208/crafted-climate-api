@@ -1,10 +1,10 @@
 const express = require("express");
 const { containerClient, upload, generateSignedUrl } = require("../../../config/storage/storage");
 const SensorModel = require("../../../model/devices/deviceModels");
-const authenticateToken = require("../../../middleware/bearermiddleware");
+const authenticateToken = require("../../../middleware/user/bearermiddleware");
 const router = express.Router();
-const authorizeRoles = require('../../../middleware/rbacMiddleware');
-const verifyApiKey = require('../../../middleware/apiKeymiddleware');
+const authorizeRoles = require('../../../middleware/user/rbacMiddleware');
+const verifyApiKey = require('../../../middleware/user/apiKeymiddleware');
 
 /**
  * @swagger

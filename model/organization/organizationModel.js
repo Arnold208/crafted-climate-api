@@ -1,43 +1,54 @@
 const mongoose = require('mongoose');
 
 const organizationSchema = new mongoose.Schema({
-  organizationId: {
+  orgid: {
     type: String,
     required: true,
     unique: true
   },
+
   name: {
     type: String,
     required: true
   },
+
   description: {
-    type: String
+    type: String,
+    default: ""
   },
+
+  // user who created the org (probably a superadmin or a normal user)
+  createdBy: {
+    type: String,   // userid
+    required: true
+  },
+
+  // org "owner" – main admin for billing + management
+  ownerUserid: {
+    type: String,   // userid
+    required: true
+  },
+
   createdAt: {
     type: Date,
     default: Date.now
   },
-  deployments: {
-    type: [String],
-    default: []
+
+  // Link to org-level subscription (OrgSubscription.subscriptionId)
+  subscriptionId: {
+    type: String,
+    default: null
   },
-  collaborators: [{
-    userId: {
-      type: String,
-      required: true
-    },
-    accessLevel: {
-      type: String,
-      enum: ['ADMIN', 'MODERATOR'],
-      default: 'MODERATOR'
-    },
-    permissions: {
-      type: [String],
-      default: []
-    }
-  }]
+
+  // Global org settings
+  settings: {
+    timezone: { type: String, default: "UTC" },
+    logo: { type: String, default: "" },
+    language: { type: String, default: "en" },
+    // how many devices they allow inside this org (you can use this + plan)
+    maxDeployments: { type: Number, default: 50 },
+    maxMembers: { type: Number, default: 50 }
+  }
 });
 
-const Organization = mongoose.model('Organization', organizationSchema);
-
-module.exports = Organization;
+module.exports = mongoose.model("Organization", organizationSchema);

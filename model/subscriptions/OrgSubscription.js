@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const { v4: uuidv4 } = require("uuid");
 
-const UserSubscriptionSchema = new mongoose.Schema({
+const OrgSubscriptionSchema = new mongoose.Schema({
 
   subscriptionId: {
     type: String,
@@ -9,22 +9,22 @@ const UserSubscriptionSchema = new mongoose.Schema({
     unique: true
   },
 
-  // PERSONAL subscription → always tied to a user
-  userid: {
-    type: String,  // matches User.userid
+  // Org-level subscription → always tied to an org
+  orgid: {
+    type: String,   // Organization.orgid
     required: true,
-    unique: true   // one personal subscription per user
+    unique: true
   },
 
   planId: {
-    type: String,  // Plan.planId
+    type: String,   // Plan.planId
     required: true
   },
 
   scope: {
     type: String,
-    enum: ['personal'],
-    default: 'personal'
+    enum: ['organization'],
+    default: 'organization'
   },
 
   status: {
@@ -35,14 +35,14 @@ const UserSubscriptionSchema = new mongoose.Schema({
 
   billingCycle: {
     type: String,
-    enum: ["free", "monthly", "yearly"],
-    default: "free"
+    enum: ["monthly", "yearly"],
+    default: "monthly"
   },
 
   startDate: { type: Date, default: Date.now },
   endDate: { type: Date },
 
-  autoRenew: { type: Boolean, default: false },
+  autoRenew: { type: Boolean, default: true },
 
   usage: {
     devicesCount: { type: Number, default: 0 },
@@ -52,4 +52,4 @@ const UserSubscriptionSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-module.exports = mongoose.model("UserSubscription", UserSubscriptionSchema);
+module.exports = mongoose.model("OrgSubscription", OrgSubscriptionSchema);

@@ -8,9 +8,9 @@ const {
   generateSerialNumber,
   generateAUID,
 } = require('../../../utils/idGenerator');
-const authorizeRoles = require('../../../middleware/rbacMiddleware');
-const verifyApiKey = require('../../../middleware/apiKeymiddleware');
-const authenticateToken = require('../../../middleware/bearermiddleware');
+const authorizeRoles = require('../../../middleware/user/rbacMiddleware');
+const verifyApiKey = require('../../../middleware/user/apiKeymiddleware');
+const authenticateToken = require('../../../middleware/user/bearermiddleware');
 const SensorModel = require('../../../model/devices/deviceModels');
 const registerNewDevice = require('../../../model/devices/registerDevice');
 

@@ -2,10 +2,10 @@ const express = require("express");
 const { generateFirmwareId } = require('../../../utils/idGenerator');
 const OTAUpdate = require("../../../model/ota/otaModel");
 const { containerClient, upload, generateSignedUrl } = require("../../../config/storage/storage");
-const authenticateToken = require('../../../middleware/bearermiddleware');
+const authenticateToken = require('../../../middleware/user/bearermiddleware');
 const SensorModel = require("../../../model/devices/deviceModels");
-const authorizeRoles = require('../../../middleware/rbacMiddleware');
-const verifyApiKey = require('../../../middleware/apiKeymiddleware');
+const authorizeRoles = require('../../../middleware/user/rbacMiddleware');
+const verifyApiKey = require('../../../middleware/user/apiKeymiddleware');
 
 const router = express.Router();
 

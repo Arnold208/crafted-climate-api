@@ -35,22 +35,27 @@ const registerNewDeviceSchema = new mongoose.Schema({
     required: true
   },
 
-  location: {
-    type: String,
-    required: true
-  },
-
+  // 🧑 Owner (user)
   userid: {
     type: String,
     required: true
   },
 
-  organization: {
-    type: String
+  // 🏢 Owning organization (optional; personal devices have null)
+  orgid: {
+    type: String,
+    default: null
   },
 
-  deployment: {
-    type: String
+  // 🔗 Optional deployment association
+  deploymentid: {
+    type: String,
+    default: null
+  },
+
+  location: {
+    type: String,
+    required: true   // JSON string as you already had
   },
 
   nickname: {
@@ -65,7 +70,7 @@ const registerNewDeviceSchema = new mongoose.Schema({
 
   image: {
     type: String,
-    default: 'https://craftedclimateota.blob.core.windows.net/images/upload-1733768062669-env.png?sv=2025-01-05&st=2024-12-09T18%3A14%3A26Z&se=2029-12-09T18%3A14%3A26Z&sr=b&sp=r&sig=BsvH4rZBPZWk2HkATZe9bT%2BOyXd9NsPJLXSVowwwRCs%3D'
+    default: 'https://craftedclimateota.blob.core...'
   },
 
   status: {
@@ -75,6 +80,7 @@ const registerNewDeviceSchema = new mongoose.Schema({
 
   availability: {
     type: String,
+    enum: ['private', 'public'],
     default: 'private'
   },
 
@@ -97,36 +103,38 @@ const registerNewDeviceSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+
   collaborators: {
-  type: [
-    {
-      userid: {
-        type: String,
-        required: true
-      },
-      role: {
-        type: String,
-        enum: ['viewer', 'editor', 'admin'],
-        default: 'viewer'
-      },
-      permissions: {
-        type: [String],
-        enum: ['update', 'delete', 'export', 'share'],
-        default: []
-      },
-      addedAt: {
-        type: Date,
-        default: Date.now
+    type: [
+      {
+        userid: {
+          type: String,
+          required: true
+        },
+        role: {
+          type: String,
+          enum: ['viewer', 'editor', 'admin'],
+          default: 'viewer'
+        },
+        permissions: {
+          type: [String],
+          enum: ['update', 'delete', 'export', 'share'],
+          default: []
+        },
+        addedAt: {
+          type: Date,
+          default: Date.now
+        }
       }
-    }
-  ],
-  default: []
-},
-noteDevUuid: {
+    ],
+    default: []
+  },
+
+  noteDevUuid: {
     type: String
   }
+
 }, { versionKey: false });
 
 const registerNewDevice = mongoose.model('registerDevices', registerNewDeviceSchema, 'registeredDevices');
-
 module.exports = registerNewDevice;

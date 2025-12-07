@@ -1,48 +1,52 @@
 // middleware/subscriptions/checkFeatureAccess.js
+
 const UserSubscription = require("../../model/subscriptions/UserSubscription");
+const OrgSubscription = require("../../model/subscriptions/OrgSubscription");
 const Plan = require("../../model/subscriptions/Plan");
 
-/**
- * Checks if user has access to a specific feature
- * 
- * @param {string} featureName - Example: "device_update", "collaboration"
- */
 function checkFeatureAccess(featureName) {
-    return async (req, res, next) => {
-        try {
-            const userid = req.user?.userid || req.body.userid || req.params.userid;
+  return async (req, res, next) => {
+    try {
+      const userid = req.user?.userid;
+      const activeOrg = req.user?.activeOrg;
 
-            if (!userid) {
-                return res.status(401).json({ message: "User ID missing in request." });
-            }
+      if (!userid) return res.status(401).json({ message: "Missing user ID" });
 
-            // Get the user's subscription
-            const subscription = await UserSubscription.findOne({ userid: userid });
-            if (!subscription) {
-                return res.status(403).json({ message: "No active subscription found." });
-            }
+      let subscription;
 
-            const plan = await Plan.findOne({ planId: subscription.planId });
-            if (!plan) {
-                return res.status(403).json({ message: "Subscription plan not found." });
-            }
+      /**
+       * 1️⃣ ORG SUBSCRIPTION (highest priority)
+       */
+      if (activeOrg) {
+        subscription = await OrgSubscription.findOne({ orgid: activeOrg });
+      }
 
-            const featureAllowed = plan.features?.[featureName];
+      /**
+       * 2️⃣ PERSONAL SUBSCRIPTION (fallback)
+       */
+      if (!subscription) {
+        subscription = await UserSubscription.findOne({ userid });
+      }
 
-            if (!featureAllowed) {
-                return res.status(403).json({
-                    message: `Your current plan does not allow the feature: ${featureName}`
-                });
-            }
+      if (!subscription || subscription.status !== "active") {
+        return res.status(403).json({ message: "No active subscription found" });
+      }
 
-            // Allow route to continue
-            next();
+      const plan = await Plan.findOne({ planId: subscription.planId });
+      if (!plan) return res.status(403).json({ message: "Subscription plan not found" });
 
-        } catch (err) {
-            console.error(`Feature check error for ${featureName}:`, err);
-            res.status(500).json({ error: "Server error checking feature permissions." });
-        }
-    };
+      const allowed = plan.features?.[featureName];
+      if (!allowed) {
+        return res.status(403).json({
+          message: `Your plan does not allow feature: ${featureName}`,
+        });
+      }
+
+      next();
+    } catch (err) {
+      res.status(500).json({ error: "Feature access check error", details: err.message });
+    }
+  };
 }
 
 module.exports = checkFeatureAccess;

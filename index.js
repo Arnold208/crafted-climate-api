@@ -12,7 +12,7 @@ const basicAuth = require('express-basic-auth');
 const testRoutes = require('./routes/test');
 const manufacturerRoutes = require('./routes/devices/manufacturer/manufacturer');
 const users = require('./routes/user/user');
-const { globalRateLimiter, swaggerRateLimiter } = require('./middleware/rateLimiter');
+const { globalRateLimiter, swaggerRateLimiter } = require('./middleware/user/rateLimiter');
 const sensorModels = require('./routes/devices/sensorModel/sensorModel');
 const registerSensor = require('./routes/devices/user/userdevice');
 const otaUpdate = require('./routes/devices/ota/ota');
@@ -23,7 +23,7 @@ const notecardDeployment = require('./routes/devices/notecard/envDeploymentRoute
 const threshold = require('./routes/devices/threshold/thresholdRoutes')
 const admin_subscription = require('./routes/subscriptions/subscriptionAdminRoutes')
 const user_subscription = require('./routes/subscriptions/subscriptionUserRoutes')
-
+const organization = require('./routes/organization/organization')
 const secureMqtt = require('./routes/telemetry/mqtt_secure_msg');
 const { setupRealtime } = require("./config/socket/socketio");
 const { startTelemetryWorker } = require('./routes/telemetry/queue_worker/telemetryWorker');
@@ -36,7 +36,7 @@ const app = express();
 app.use(express.static('public'));
 
 // Import auth middleware
-const auth = require('./middleware/docsAuthMiddleware');
+const auth = require('./middleware/user/docsAuthMiddleware');
 
 // Documentation landing page with authentication
 app.get('/docs', auth, (req, res) => {
@@ -236,7 +236,7 @@ app.use('/api/devices',notecardDeployment)
 app.use('/api',threshold)
 app.use('/api/subscriptions/admin',admin_subscription)
 app.use('/api/subscriptions/user',user_subscription)
-
+app.use('/api/orgs/',organization)/
 
 // ✅ Connect Redis before starting server
 connectRedis()

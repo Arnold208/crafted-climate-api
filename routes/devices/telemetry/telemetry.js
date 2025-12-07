@@ -1,22 +1,27 @@
-// routes/telemetry.js
+// routes/api/devices/telemetry.js
 const express = require('express');
 const router = express.Router();
+
 const registerNewDevice = require('../../../model/devices/registerDevice');
 const EnvTelemetry = require('../../../model/telemetry/envModel');
 const AquaTelemetry = require('../../../model/telemetry/aquaModel');
 const GasSoloTelemetry = require('../../../model/telemetry/gasSoloModel');
-const { mapTelemetryData } = require('../../../utils/telemetryMapper');
+
+const Deployment = require('../../../model/deployment/deploymentModel');
+const Organization = require('../../../model/organization/organizationModel');
+const OrgMember = require('../../../model/organization/OrgMember');
+
 const SensorModel = require('../../../model/devices/deviceModels');
+
+const { mapTelemetryData } = require('../../../utils/telemetryMapper');
 const { cacheTelemetryToRedis } = require('../../../utils/redisTelemetry');
 const { client: redisClient } = require('../../../config/redis/redis');
-const modelRegistry = require('../../../utils/modelRegistry');
-const {calculateAQI} = require('../../../utils/aqiFunction')
-const {dbRouteLimiter,csvRouteLimiter} =  require('../../../middleware/rateLimiter');
+const { calculateAQI } = require('../../../utils/aqiFunction');
+
+const { dbRouteLimiter, csvRouteLimiter } = require('../../../middleware/user/rateLimiter');
 const enforceTelemetryIngestion = require('../../../middleware/subscriptions/enforceTelemetryIngestion');
 const enforceTelemetryFeature = require('../../../middleware/subscriptions/enforceTelemetryFeature');
-const authenticateToken = require('../../../middleware/bearermiddleware');
-
-// const csvRouteLimiter
+const authenticateToken = require('../../../middleware/user/bearermiddleware');
 
 const MODEL_MAP = {
   env: EnvTelemetry,
@@ -40,20 +45,153 @@ const CSV_COLUMNS = {
 };
 
 /**
+ * Small helper to decide if the authenticated user
+ * can READ or EXPORT based on:
+ *  - Device owner
+ *  - Org owner/admin
+ *  - Org member permissions
+ *  - Deployment collaborator
+ *  - Public device (for READ only, not export)
+ */
+async function evaluateDeviceAccess({
+  device,
+  authedUserid,
+  requireAdminForExport = false
+}) {
+  // Public device: for *read* access, allow anyone.
+  // NOTE: For EXPORT we still restrict by org/owner.
+  const isPublicDevice = device.availability === 'public';
+
+  // If no auth user and device is not public → no access at all.
+  if (!authedUserid && !isPublicDevice) {
+    return { allowed: false, reason: 'Unauthenticated and device not public' };
+  }
+
+  // Device owner always has READ access (C1).
+  const isOwner = authedUserid && device.userid === authedUserid;
+
+  // If this is a personal device with no orgid:
+  const hasOrg = !!device.orgid;
+
+  let org = null;
+  let orgMember = null;
+  let isOrgOwnerOrAdmin = false;
+  let hasDeviceReadPermission = false;
+
+  if (hasOrg && authedUserid) {
+    org = await Organization.findOne({ orgid: device.orgid }).lean();
+    orgMember = await OrgMember.findOne({ orgid: device.orgid, userid: authedUserid }).lean();
+
+    if (org && org.ownerUserid === authedUserid) {
+      isOrgOwnerOrAdmin = true;
+    }
+
+    if (orgMember) {
+      if (['owner', 'admin'].includes(orgMember.role)) {
+        isOrgOwnerOrAdmin = true;
+      }
+      if (
+        Array.isArray(orgMember.permissions) &&
+        (
+          orgMember.permissions.includes('device_read') ||
+          orgMember.permissions.includes('manage_devices')
+        )
+      ) {
+        hasDeviceReadPermission = true;
+      }
+    }
+  }
+
+  // Deployment collaborator? (any role)
+  let isDeploymentCollaborator = false;
+  if (authedUserid) {
+    const deployments = await Deployment.find({ devices: device.auid }).lean();
+    isDeploymentCollaborator = deployments.some(dep =>
+      Array.isArray(dep.collaborators) &&
+      dep.collaborators.some(c => c.userid === authedUserid)
+    );
+  }
+
+  // EXPORT requires admin-only per B1:
+  // - If device has org → org owner/admin
+  // - If personal device → owner
+  if (requireAdminForExport) {
+    if (hasOrg) {
+      if (isOrgOwnerOrAdmin) {
+        return { allowed: true };
+      }
+      return { allowed: false, reason: 'Export allowed only for org owner/admin' };
+    } else {
+      if (isOwner) {
+        return { allowed: true };
+      }
+      return { allowed: false, reason: 'Export allowed only for device owner' };
+    }
+  }
+
+  // READ access:
+  // - Public device → allow (A1)
+  // - Device owner → allow
+  // - Org owner/admin → allow
+  // - Org member with device_read/manage_devices → allow
+  // - Deployment collaborator → allow
+  if (
+    isPublicDevice ||
+    isOwner ||
+    isOrgOwnerOrAdmin ||
+    hasDeviceReadPermission ||
+    isDeploymentCollaborator
+  ) {
+    return { allowed: true };
+  }
+
+  return { allowed: false, reason: 'Not owner, not org admin, no permissions, not collaborator' };
+}
+
+/**
+ * Build a lightweight metadata object from a device document.
+ */
+function buildDeviceMetadata(device) {
+  if (!device) return null;
+  return {
+    auid: device.auid,
+    devid: device.devid,
+    model: device.model,
+    type: device.type,
+    nickname: device.nickname,
+    orgid: device.orgid || null,
+    deploymentid: device.deploymentid || null,
+    location: device.location || null,
+    availability: device.availability || 'private',
+    battery: device.battery ?? null
+  };
+}
+
+/**
+ * @swagger
+ * tags:
+ *   name: Telemetry
+ *   description: Telemetry ingestion, querying, and export
+ */
+
+/**
  * @swagger
  * /api/telemetry/{model}:
  *   post:
  *     tags:
  *       - Telemetry
  *     summary: Submit short-keyed telemetry data for a specific device model
- *     description: Accepts telemetry data using short keys. Uses the device ID ("i") to verify the registered device and stores only mapped datapoints.
+ *     description: >
+ *       **Device-side ingestion endpoint**.  
+ *       Accepts telemetry data using short keys and a device ID `i` (devid).  
+ *       Validates that the device is registered and that ingestion is allowed by the current subscription.
  *     parameters:
  *       - name: model
  *         in: path
  *         required: true
  *         schema:
  *           type: string
- *         description: The model type of the device (e.g., env, gas, terra).
+ *         description: Device model key (e.g., `env`, `aqua`, `gas-solo`).
  *     requestBody:
  *       required: true
  *       content:
@@ -65,67 +203,56 @@ const CSV_COLUMNS = {
  *             properties:
  *               i:
  *                 type: string
- *                 description: Device ID
+ *                 description: Device ID (`devid`)
  *                 example: "device-id-123"
  *               t:
  *                 type: number
  *                 description: Temperature
- *                 example: 26.4
  *               h:
  *                 type: number
  *                 description: Humidity
- *                 example: 60.1
  *               p:
  *                 type: number
  *                 description: Pressure
- *                 example: 1013.2
  *               p1:
  *                 type: number
  *                 description: PM1
- *                 example: 4.2
  *               p2:
  *                 type: number
  *                 description: PM2.5
- *                 example: 18.7
  *               p10:
  *                 type: number
  *                 description: PM10
- *                 example: 30.3
  *               l:
  *                 type: number
  *                 description: Light (lux)
- *                 example: 430
  *               u:
  *                 type: number
  *                 description: UV index
- *                 example: 1.9
  *               s:
  *                 type: number
  *                 description: Sound level
- *                 example: 60
  *               d:
  *                 type: number
- *                 description: Epoch timestamp
- *                 example: 1721666400
+ *                 description: Epoch timestamp (seconds or ms)
  *               e:
  *                 type: string
  *                 description: Error code
- *                 example: "0000"
  *               b:
  *                 type: number
- *                 description: Battery level
- *                 example: 85
+ *                 description: Battery level (%)
  *     responses:
  *       201:
- *         description: Telemetry stored successfully
+ *         description: Telemetry cached successfully for async processing.
  *       400:
- *         description: Missing or invalid device ID
+ *         description: Missing or invalid device ID.
  *       404:
- *         description: Device not found
+ *         description: Device or model not found.
+ *       429:
+ *         description: Ingestion rate limit or subscription limit exceeded.
  *       500:
- *         description: Server error
+ *         description: Internal server error.
  */
-
 router.post('/:model', enforceTelemetryIngestion, async (req, res) => {
   const model = req.params.model.toLowerCase();
   const { i: devid } = req.body;
@@ -133,27 +260,27 @@ router.post('/:model', enforceTelemetryIngestion, async (req, res) => {
   if (!devid) return res.status(400).json({ message: 'Missing device ID (i)' });
 
   try {
-    // ✅ Check if sensor model exists
+    // Check if sensor model exists
     const modelExists = await SensorModel.findOne({ model });
     if (!modelExists) {
       return res.status(404).json({ message: `Model '${model}' not found` });
     }
 
-    // ✅ Check if device is registered
+    // Check if device is registered
     const device = await registerNewDevice.findOne({ devid });
     if (!device) return res.status(404).json({ message: 'Device not found' });
-        
-    // ✅ Map the telemetry
+
+    // Map the telemetry
     const mappedTelemetry = mapTelemetryData(model, req.body, device.datapoints);
     if (!mappedTelemetry.date) {
       return res.status(400).json({ message: 'Missing timestamp field (d)' });
     }
 
     const aqi = calculateAQI(mappedTelemetry.pm2_5);
-    mappedTelemetry.aqi = aqi
+    mappedTelemetry.aqi = aqi;
     mappedTelemetry.auid = device.auid;
-    console.log(mappedTelemetry)
-    // ✅ Cache telemetry + metadata to Redis
+
+    // Cache telemetry + metadata to Redis
     await cacheTelemetryToRedis(device.auid, mappedTelemetry, device);
 
     return res.status(201).json({ message: 'Telemetry cached successfully' });
@@ -169,21 +296,30 @@ router.post('/:model', enforceTelemetryIngestion, async (req, res) => {
  *   get:
  *     tags:
  *       - Telemetry
- *     summary: Get telemetry and metadata for a device owned by a user
- *     description: Fetches telemetry entries and device metadata from Redis. Falls back to MongoDB if Redis is empty. Validates that the user has access to the device.
+ *     summary: Get latest telemetry for a device
+ *     description: >
+ *       Returns recent telemetry entries and metadata for a device.  
+ *       Access is granted if:
+ *       - The caller is the device owner, OR  
+ *       - The device belongs to an organization and the caller is an org owner/admin or has `device_read` permission, OR  
+ *       - The caller is a collaborator on any deployment that includes this device, OR  
+ *       - The device is public (`availability=public`).  
+ *       The `{userid}` in the path **must** match the authenticated user's `userid`.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - name: userid
  *         in: path
  *         required: true
  *         schema:
  *           type: string
- *         description: User ID requesting telemetry
+ *         description: The authenticated user ID (must match JWT).
  *       - name: auid
  *         in: path
  *         required: true
  *         schema:
  *           type: string
- *         description: Unique AUID of the device
+ *         description: Device AUID.
  *       - name: limit
  *         in: query
  *         required: false
@@ -191,102 +327,114 @@ router.post('/:model', enforceTelemetryIngestion, async (req, res) => {
  *           type: integer
  *           default: 50
  *           maximum: 50
- *         description: Limit the number of telemetry entries returned (max 50)
+ *         description: Maximum number of telemetry points to return (default 50).
+ *       - name: orgid
+ *         in: query
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Optional org context (informational only; access is resolved from device/org records).
  *     responses:
  *       200:
- *         description: Telemetry and metadata retrieved successfully
+ *         description: Telemetry and metadata retrieved successfully.
  *       403:
- *         description: Unauthorized access
+ *         description: Not authorized to view this device's telemetry.
  *       404:
- *         description: Device not found or no telemetry
+ *         description: Device not found or no telemetry.
  *       500:
- *         description: Server error
+ *         description: Internal server error.
  */
+router.get(
+  '/:userid/device/:auid',
+  authenticateToken,
+  enforceTelemetryFeature({ feature: 'device_read' }),
+  async (req, res) => {
+    const { userid, auid } = req.params;
+    let limit = parseInt(req.query.limit, 10);
+    if (isNaN(limit) || limit <= 0) limit = 50;
+    if (limit > 50) limit = 50;
 
-router.get('/:userid/device/:auid',enforceTelemetryFeature({ feature: "device_read" }), async (req, res) => {
-  const { userid, auid } = req.params;
-  let limit = parseInt(req.query.limit, 10);
-  if (isNaN(limit) || limit <= 0) limit = 50;
-  if (limit > 50) limit = 50;
-
-  try {
-    // ✅ Check ownership or access
-    const device = await registerNewDevice.findOne({ auid });
-    if (!device) return res.status(404).json({ message: 'Device not found' });
-
-    const isOwner = device.userid === userid;
-    const isCollaborator = device.collaborators?.some(c => c.userid === userid);
-    if (!isOwner && !isCollaborator) {
-      return res.status(403).json({ message: 'Unauthorized access to device' });
+    // Ensure the path user matches JWT
+    const authedUserid = req.user?.userid;
+    if (!authedUserid || authedUserid !== userid) {
+      return res.status(403).json({ message: 'User mismatch: path userid does not match token' });
     }
 
-    // ✅ Try Redis first
-    const entries = await redisClient.hGetAll(auid);
+    try {
+      // Fetch device
+      const device = await registerNewDevice.findOne({ auid });
+      if (!device) return res.status(404).json({ message: 'Device not found' });
 
-    if (entries && Object.keys(entries).length > 0) {
-      const metadata = entries.metadata ? JSON.parse(entries.metadata) : null;
+      // Evaluate RBAC / org / collaborator access
+      const { allowed, reason } = await evaluateDeviceAccess({
+        device,
+        authedUserid,
+        requireAdminForExport: false
+      });
 
-      const telemetryData = Object.entries(entries)
-        .filter(([key]) => key !== 'metadata' && key !== 'flushed')
-        .map(([key, value]) => {
-          try {
-            const parsed = JSON.parse(value);
-            return { timestamp: key, ...parsed };
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean)
-        .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
-        .slice(0, limit)
-        .reverse();
+      if (!allowed) {
+        return res.status(403).json({ message: 'Unauthorized access to device', detail: reason });
+      }
+
+      // Try Redis first
+      const entries = await redisClient.hGetAll(auid);
+
+      if (entries && Object.keys(entries).length > 0) {
+        const metadataFromRedis = entries.metadata ? JSON.parse(entries.metadata) : null;
+
+        const telemetryData = Object.entries(entries)
+          .filter(([key]) => key !== 'metadata' && key !== 'flushed')
+          .map(([key, value]) => {
+            try {
+              const parsed = JSON.parse(value);
+              return { timestamp: key, ...parsed };
+            } catch {
+              return null;
+            }
+          })
+          .filter(Boolean)
+          .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
+          .slice(0, limit)
+          .reverse();
+
+        return res.status(200).json({
+          source: 'redis',
+          metadata: metadataFromRedis || buildDeviceMetadata(device),
+          count: telemetryData.length,
+          telemetry: telemetryData
+        });
+      }
+
+      // Fallback to MongoDB
+      console.warn(`ℹ️ No Redis data for ${auid}, falling back to MongoDB...`);
+
+      const modelKey = device.model?.toLowerCase();
+      const M = MODEL_MAP[modelKey];
+      if (!M) {
+        return res.status(404).json({ message: `No telemetry model registered for '${modelKey || 'unknown'}'` });
+      }
+
+      const telemetryData = await M.find({ auid })
+        .sort({ transport_time: -1 })
+        .limit(limit)
+        .lean();
+
+      if (!telemetryData.length) {
+        return res.status(404).json({ message: 'No telemetry found for this device.' });
+      }
 
       return res.status(200).json({
-        source: 'redis',
-        metadata,
+        source: 'mongo',
+        metadata: buildDeviceMetadata(device),
         count: telemetryData.length,
-        telemetry: telemetryData
+        telemetry: telemetryData.reverse()
       });
+    } catch (err) {
+      console.error(`❌ Telemetry fetch error for ${auid}:`, err);
+      return res.status(500).json({ message: 'Server error' });
     }
-
-    // ⚠️ If Redis is empty, fall back to MongoDB
-    console.warn(`ℹ️ No Redis data for ${auid}, falling back to MongoDB...`);
-
-    // pick the correct model based on device.model
-    const model = device.model?.toLowerCase();
-    const MODEL_MAP = {
-      env: EnvTelemetry,
-      aqua: AquaTelemetry,
-      'gas-solo': GasSoloTelemetry
-    };
-    const M = MODEL_MAP[model];
-    if (!M) {
-      return res.status(404).json({ message: `No telemetry model found for '${model || 'unknown'}'` });
-    }
-
-    // Fetch last N telemetry entries from MongoDB
-    const telemetryData = await M.find({ auid })
-      .sort({ transport_time: -1 })
-      .limit(limit)
-      .lean();
-
-    if (!telemetryData.length) {
-      return res.status(404).json({ message: 'No telemetry found for this device in Redis or MongoDB.' });
-    }
-
-    return res.status(200).json({
-      source: 'mongo',
-      metadata: device.metadata || null,
-      count: telemetryData.length,
-      telemetry: telemetryData.reverse() // reverse to show oldest → newest
-    });
-
-  } catch (err) {
-    console.error(`❌ Telemetry fetch error for ${auid}:`, err);
-    return res.status(500).json({ message: 'Server error' });
   }
-});
-
+);
 
 /**
  * @swagger
@@ -294,15 +442,17 @@ router.get('/:userid/device/:auid',enforceTelemetryFeature({ feature: "device_re
  *   get:
  *     tags:
  *       - Telemetry
- *     summary: Get telemetry with metadata for public devices
- *     description: Retrieves cached telemetry data (capped per device) with metadata for devices marked public.
+ *     summary: Get telemetry with metadata for public devices (no auth)
+ *     description: >
+ *       Returns cached telemetry and metadata for devices marked as `availability = public`.  
+ *       This endpoint does **not** require authentication (A1).
  *     parameters:
  *       - name: model
  *         in: query
  *         required: false
  *         schema:
  *           type: string
- *         description: Filter devices by model (e.g., "env", "gas-solo")
+ *         description: Filter by device model key (e.g., `env`, `gas-solo`, `aqua`).
  *       - name: limit
  *         in: query
  *         required: false
@@ -310,14 +460,14 @@ router.get('/:userid/device/:auid',enforceTelemetryFeature({ feature: "device_re
  *           type: integer
  *           minimum: 1
  *           maximum: 1000
- *         description: Max telemetry points per device (default 50)
+ *           default: 50
+ *         description: Max telemetry points per device (default 50).
  *     responses:
  *       200:
- *         description: Telemetry and metadata fetched for public devices
+ *         description: Telemetry and metadata fetched for public devices.
  *       500:
- *         description: Server error
+ *         description: Server error.
  */
-
 router.get('/public/telemetry', async (req, res) => {
   const { model } = req.query;
   const limit = Math.min(
@@ -339,15 +489,11 @@ router.get('/public/telemetry', async (req, res) => {
 
           const metadata = all.metadata ? JSON.parse(all.metadata) : null;
 
-          // Collect telemetry fields (skip admin fields)
           const entries = [];
           for (const [field, value] of Object.entries(all)) {
             if (field === 'metadata' || field === 'flushed') continue;
-
-            // Treat hash field name as a timestamp if possible
             const ts = Number(field);
             if (!Number.isFinite(ts)) continue;
-
             try {
               const parsed = JSON.parse(value);
               entries.push([ts, parsed]);
@@ -360,7 +506,6 @@ router.get('/public/telemetry', async (req, res) => {
             return { metadata, telemetry: [] };
           }
 
-          // Sort newest → oldest and take top N
           entries.sort((a, b) => b[0] - a[0]);
           const telemetry = entries.slice(0, limit).map(([_, v]) => v);
 
@@ -376,7 +521,7 @@ router.get('/public/telemetry', async (req, res) => {
     return res.status(200).json({
       count: filtered.length,
       per_device_limit: limit,
-      data: filtered,
+      data: filtered
     });
   } catch (err) {
     console.error('❌ Error getting public telemetry:', err);
@@ -384,115 +529,141 @@ router.get('/public/telemetry', async (req, res) => {
   }
 });
 
-// const GasTelemetry = require('../../../model/telemetry/gasModel'); // future
-// const TerraTelemetry = require('../../../model/telemetry/terraModel'); // future
-
 /**
  * @swagger
  * /api/telemetry/db/{model}/{auid}:
  *   get:
- *     summary: Fetch telemetry data for a device
- *     description: >
- *       Retrieve telemetry data from the database for a given device `auid` and telemetry `model`.
- *       Currently only the **env** model is supported.
  *     tags:
  *       - Telemetry
+ *     summary: Fetch historical telemetry from DB
+ *     description: >
+ *       Retrieves historical telemetry stored in MongoDB for the given device and model.  
+ *       Access rules are the same as `/api/telemetry/{userid}/device/{auid}`.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: model
  *         schema:
  *           type: string
- *           enum: [env, aqua, gasSolo]
+ *           enum: [env, aqua, gas-solo]
  *         required: true
- *         description: Telemetry model (e.g. "env").
+ *         description: Telemetry model key.
  *       - in: path
  *         name: auid
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
- *         description: Device AUID (unique identifier).
+ *         description: Device AUID.
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           default: 2
+ *           default: 10
  *           maximum: 200
- *         description: Maximum number of records to return.
+ *         required: false
+ *         description: Max number of records to return (default 10, max 200).
  *       - in: query
  *         name: start
  *         schema:
  *           type: string
  *           format: date-time
  *         required: false
- *         description: Optional start date/time (ISO string or epoch).
+ *         description: Optional start of time range (applies to `transport_time`).
  *       - in: query
  *         name: end
  *         schema:
  *           type: string
  *           format: date-time
  *         required: false
- *         description: Optional end date/time (ISO string or epoch).
+ *         description: Optional end of time range (applies to `transport_time`).
+ *       - in: query
+ *         name: userid
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Authenticated user ID (must match JWT).
  *     responses:
  *       200:
- *         description: Telemetry data retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 model:
- *                   type: string
- *                 auid:
- *                   type: string
- *                 count:
- *                   type: integer
- *                 telemetry:
- *                   type: array
- *                   items:
- *                     type: object
+ *         description: Telemetry data retrieved successfully.
+ *       403:
+ *         description: Not authorized to view telemetry.
  *       404:
- *         description: No telemetry data found for the given device or model.
+ *         description: No telemetry data found.
  *       500:
  *         description: Server error.
  */
-router.get('/db/:model/:auid', dbRouteLimiter,enforceTelemetryFeature({ feature: "device_read" }),async (req, res) => {
-  const model = String(req.params.model || '').toLowerCase();
-  const auid  = String(req.params.auid || '').trim();
+router.get(
+  '/db/:model/:auid',
+  authenticateToken,
+  dbRouteLimiter,
+  enforceTelemetryFeature({ feature: 'device_read' }),
+  async (req, res) => {
+    const model = String(req.params.model || '').toLowerCase();
+    const auid = String(req.params.auid || '').trim();
+    const requestUserid = String(req.query.userid || '').trim();
 
-  let limit = parseInt(req.query.limit, 10);
-  if (!Number.isFinite(limit) || limit <= 0) limit = 10;
-  if (limit > 200) limit = 200;
-
-  try {
-    let M = null;
-    switch (model) {
-      case 'env':      M = EnvTelemetry; break;
-      case 'aqua':     M = AquaTelemetry; break;
-      case 'gas-solo': M = GasSoloTelemetry; break;
-      default:
-        return res.status(404).json({ message: `Unknown telemetry model '${model}'`, valid: ['env','aqua','gas-solo'] });
+    // make sure JWT and query userid match
+    const authedUserid = req.user?.userid;
+    if (!authedUserid || authedUserid !== requestUserid) {
+      return res.status(403).json({ message: 'User mismatch: query userid does not match token' });
     }
 
-    const query = { auid };
-    const { start, end } = req.query;
-    if (start || end) {
-      query.transport_time = {};
-      if (start) query.transport_time.$gte = new Date(isNaN(start) ? start : Number(start));
-      if (end)   query.transport_time.$lte = new Date(isNaN(end) ? end   : Number(end));
+    let limit = parseInt(req.query.limit, 10);
+    if (!Number.isFinite(limit) || limit <= 0) limit = 10;
+    if (limit > 200) limit = 200;
+
+    try {
+      const M = MODEL_MAP[model];
+      if (!M) {
+        return res.status(404).json({
+          message: `Unknown telemetry model '${model}'`,
+          valid: Object.keys(MODEL_MAP)
+        });
+      }
+
+      // validate device + access
+      const device = await registerNewDevice.findOne({ auid });
+      if (!device) return res.status(404).json({ message: 'Device not found' });
+
+      const { allowed, reason } = await evaluateDeviceAccess({
+        device,
+        authedUserid,
+        requireAdminForExport: false
+      });
+      if (!allowed) {
+        return res.status(403).json({ message: 'Unauthorized to view telemetry', detail: reason });
+      }
+
+      const query = { auid };
+      const { start, end } = req.query;
+      if (start || end) {
+        query.transport_time = {};
+        if (start) query.transport_time.$gte = new Date(isNaN(start) ? start : Number(start));
+        if (end) query.transport_time.$lte = new Date(isNaN(end) ? end : Number(end));
+      }
+
+      const telemetryData = await M.find(query)
+        .sort({ transport_time: -1 })
+        .limit(limit)
+        .lean();
+
+      if (!telemetryData.length) {
+        return res.status(404).json({ message: 'No telemetry data found for this device.' });
+      }
+
+      return res.status(200).json({
+        model,
+        auid,
+        count: telemetryData.length,
+        telemetry: telemetryData
+      });
+    } catch (err) {
+      console.error('❌ DB telemetry fetch error:', err);
+      return res.status(500).json({ message: 'Server error' });
     }
-
-    const telemetryData = await M.find(query).limit(limit).lean();
-
-    if (!telemetryData.length) {
-      return res.status(404).json({ message: 'No telemetry data found for this device.' });
-    }
-
-    return res.status(200).json({ model, auid, count: telemetryData.length, telemetry: telemetryData });
-  } catch (err) {
-    console.error('❌ DB telemetry fetch error:', err);
-    return res.status(500).json({ message: 'Server error' });
   }
-});
+);
 
 /**
  * @swagger
@@ -500,19 +671,23 @@ router.get('/db/:model/:auid', dbRouteLimiter,enforceTelemetryFeature({ feature:
  *   get:
  *     tags:
  *       - Telemetry
- *     summary: Download telemetry as CSV by AUID (descending order)
+ *     summary: Download telemetry as CSV (admin/owner only)
  *     description: >
- *       Streams telemetry rows for the given device AUID as CSV, sorted by `transport_time` **descending** (newest → oldest).
- *       Includes `transport_time`, `telem_time`, and all sensor fields.
- *       Optionally filter by a date range using `start` and/or `end` (applies to `transport_time`).
+ *       Streams telemetry as CSV for a given device.  
+ *       **Export access rules (B1):**  
+ *       - If the device belongs to an org → only org **owner/admin** may export.  
+ *       - If the device is personal (no org) → only the **device owner** may export.  
+ *       Additionally, the caller's subscription must have the `export` feature enabled.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - name: model
  *         in: path
  *         required: true
  *         schema:
  *           type: string
- *           enum: [env, aqua, gasSolo]
- *         description: Telemetry model (currently only "env").
+ *           enum: [env, aqua, gas-solo]
+ *         description: Telemetry model key.
  *       - name: auid
  *         in: path
  *         required: true
@@ -525,105 +700,140 @@ router.get('/db/:model/:auid', dbRouteLimiter,enforceTelemetryFeature({ feature:
  *         schema:
  *           type: string
  *           format: date-time
- *         description: Start of time range (inclusive). ISO 8601 or epoch milliseconds.
+ *         description: Start of time range (inclusive) for `transport_time`.
  *       - name: end
  *         in: query
  *         required: false
  *         schema:
  *           type: string
  *           format: date-time
- *         description: End of time range (inclusive). ISO 8601 or epoch milliseconds.
+ *         description: End of time range (inclusive) for `transport_time`.
+ *       - name: userid
+ *         in: query
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Authenticated user ID (must match JWT).
  *     responses:
  *       200:
- *         description: CSV stream (newest → oldest)
+ *         description: CSV stream (newest → oldest).
  *         content:
  *           text/csv:
  *             schema:
  *               type: string
  *               format: binary
- *             examples:
- *               sample:
- *                 summary: Example CSV content
- *                 value: |
- *                   auid,transport_time,telem_time,temperature,humidity,pressure,altitude,pm1,pm2_5,pm10,pm1s,pm2_5s,pm10s,lux,uv,sound,aqi,battery,error
- *                   GH-XXXX,2025-09-23T18:00:00.000Z,2025-09-23T18:00:00.000Z,28.7,65.9,1009.43,0,0,0,0,0,0,0,15.67,38,0,0,27.5,00001
+ *       403:
+ *         description: Not authorized to export telemetry.
  *       404:
- *         description: Unknown model.
+ *         description: Unknown model or device not found.
+ *       429:
+ *         description: Export rate limit or quota exceeded.
  *       500:
  *         description: Server error.
  */
-
-router.get('/db/:model/:auid/csv',   authenticateToken,
-csvRouteLimiter,enforceTelemetryFeature({
-      feature: "export",
-      quotaKey: "monthlyExports",
-      log: "monthlyExports"
+router.get(
+  '/db/:model/:auid/csv',
+  authenticateToken,
+  csvRouteLimiter,
+  enforceTelemetryFeature({
+    feature: 'export',
+    quotaKey: 'monthlyExports',
+    log: 'monthlyExports'
   }),
   async (req, res) => {
-  const model = String(req.params.model || '').toLowerCase();
-  const auid  = String(req.params.auid || '').trim();
+    const model = String(req.params.model || '').toLowerCase();
+    const auid = String(req.params.auid || '').trim();
+    const requestUserid = String(req.query.userid || '').trim();
+    const authedUserid = req.user?.userid;
 
-  try {
-    const M = MODEL_MAP[model];
-    const columns = CSV_COLUMNS[model];
-    if (!M || !columns) {
-      return res.status(404).json({ message: `Unknown telemetry model '${model}'`, valid: Object.keys(MODEL_MAP) });
+    if (!authedUserid || authedUserid !== requestUserid) {
+      return res.status(403).json({ message: 'User mismatch: query userid does not match token' });
     }
 
-    const safeAuid = auid.replace(/[^A-Za-z0-9._-]/g, '_');
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${model}_${safeAuid}.csv"`);
-
-    const escapeCsv = (v) => {
-      if (v === null || v === undefined) return '';
-      const s = String(v);
-      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-
-    // header
-    res.write(columns.join(',') + '\n');
-
-    // optional time filters (apply to transport_time)
-    const query = { auid };
-    const { start, end } = req.query;
-    if (start || end) {
-      query.transport_time = {};
-      if (start) query.transport_time.$gte = new Date(isNaN(start) ? start : Number(start));
-      if (end)   query.transport_time.$lte = new Date(isNaN(end) ? end   : Number(end));
-    }
-
-    // newest → oldest
-    const cursor = M.find(query).sort({ transport_time: -1 }).select(columns.join(' ')).lean().cursor();
-
-    cursor.on('data', (doc) => {
-      const row = columns.map((key) => {
-        const val = doc[key];
-        if (val instanceof Date) return escapeCsv(val.toISOString());
-        return escapeCsv(val);
-      }).join(',');
-      if (!res.write(row + '\n')) {
-        cursor.pause();
-        res.once('drain', () => cursor.resume());
+    try {
+      const M = MODEL_MAP[model];
+      const columns = CSV_COLUMNS[model];
+      if (!M || !columns) {
+        return res.status(404).json({
+          message: `Unknown telemetry model '${model}'`,
+          valid: Object.keys(MODEL_MAP)
+        });
       }
-    });
 
-    cursor.on('end', () => res.end());
-    cursor.on('error', (err) => {
-      console.error('❌ CSV stream error:', err);
-      if (!res.headersSent) res.status(500).json({ message: 'Server error streaming CSV' });
-      else res.end();
-    });
+      // validate device + export access
+      const device = await registerNewDevice.findOne({ auid });
+      if (!device) return res.status(404).json({ message: 'Device not found' });
 
-    req.on('close', () => {
-      if (cursor && typeof cursor.close === 'function') cursor.close().catch(() => {});
-    });
+      const { allowed, reason } = await evaluateDeviceAccess({
+        device,
+        authedUserid,
+        requireAdminForExport: true // B1
+      });
 
-  } catch (err) {
-    console.error('❌ CSV route error:', err);
-    return res.status(500).json({ message: 'Server error' });
+      if (!allowed) {
+        return res.status(403).json({ message: 'Not authorized to export telemetry', detail: reason });
+      }
+
+      const safeAuid = auid.replace(/[^A-Za-z0-9._-]/g, '_');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${model}_${safeAuid}.csv"`);
+
+      const escapeCsv = (v) => {
+        if (v === null || v === undefined) return '';
+        const s = String(v);
+        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+
+      // header
+      res.write(columns.join(',') + '\n');
+
+      const query = { auid };
+      const { start, end } = req.query;
+      if (start || end) {
+        query.transport_time = {};
+        if (start) query.transport_time.$gte = new Date(isNaN(start) ? start : Number(start));
+        if (end) query.transport_time.$lte = new Date(isNaN(end) ? end : Number(end));
+      }
+
+      // newest → oldest
+      const cursor = M.find(query)
+        .sort({ transport_time: -1 })
+        .select(columns.join(' '))
+        .lean()
+        .cursor();
+
+      cursor.on('data', (doc) => {
+        const row = columns.map((key) => {
+          const val = doc[key];
+          if (val instanceof Date) return escapeCsv(val.toISOString());
+          return escapeCsv(val);
+        }).join(',');
+        if (!res.write(row + '\n')) {
+          cursor.pause();
+          res.once('drain', () => cursor.resume());
+        }
+      });
+
+      cursor.on('end', () => res.end());
+      cursor.on('error', (err) => {
+        console.error('❌ CSV stream error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ message: 'Server error streaming CSV' });
+        } else {
+          res.end();
+        }
+      });
+
+      req.on('close', () => {
+        if (cursor && typeof cursor.close === 'function') {
+          cursor.close().catch(() => {});
+        }
+      });
+    } catch (err) {
+      console.error('❌ CSV route error:', err);
+      return res.status(500).json({ message: 'Server error' });
+    }
   }
-});
-
-
+);
 
 module.exports = router;

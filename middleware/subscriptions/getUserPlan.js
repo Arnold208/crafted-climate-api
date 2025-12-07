@@ -1,29 +1,31 @@
+// middleware/subscriptions/getUserPlan.js
+
 const UserSubscription = require("../../model/subscriptions/UserSubscription");
+const OrgSubscription = require("../../model/subscriptions/OrgSubscription");
 const Plan = require("../../model/subscriptions/Plan");
 
-async function getUserPlan(userid) {
-  const sub = await UserSubscription.findOne({ userid });
+async function getUserPlan(userid, activeOrg = null) {
+  let subscription;
 
-  if (!sub) {
-    throw new Error("No active subscription found for this user.");
+  if (activeOrg) {
+    subscription = await OrgSubscription.findOne({ orgid: activeOrg });
+  }
+  if (!subscription) {
+    subscription = await UserSubscription.findOne({ userid });
   }
 
-  if (sub.status !== "active") {
-    throw new Error("User subscription is inactive. Please upgrade your plan.");
-  }
+  if (!subscription) throw new Error("No active subscription found");
+  if (subscription.status !== "active") throw new Error("Subscription inactive");
 
-  // Fetch plan using UUID planId
-  const plan = await Plan.findOne({ planId: sub.planId });
+  const plan = await Plan.findOne({ planId: subscription.planId });
+  if (!plan) throw new Error("Plan not found");
+  if (!plan.isActive) throw new Error("Plan is inactive");
 
-  if (!plan) {
-    throw new Error("Subscription plan not found.");
-  }
-
-  if (!plan.isActive) {
-    throw new Error("This subscription plan is no longer active.");
-  }
-
-  return { sub, plan };
+  return {
+    source: activeOrg ? "organization" : "personal",
+    subscription,
+    plan,
+  };
 }
 
 module.exports = getUserPlan;

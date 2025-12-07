@@ -9,7 +9,13 @@ const PlanSchema = new mongoose.Schema({
     unique: true
   },
 
-  name: { type: String, required: true, unique: true },
+  name: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true    // "freemium", "premium", "enterprise"
+  },
+
   description: { type: String },
 
   priceMonthly: { type: Number, default: 0 },
@@ -19,7 +25,13 @@ const PlanSchema = new mongoose.Schema({
   maxDataRetentionDays: { type: Number, required: true },
   maxDataExportMonths: { type: Number, default: 0 },
 
+  /**
+   * ============================
+   * CORE SUBSCRIPTION FEATURES
+   * ============================
+   */
   features: {
+    // Sensor data access permissions
     fullSensorAccess: { type: Boolean, default: false },
 
     aiInsightsLevel: {
@@ -41,6 +53,7 @@ const PlanSchema = new mongoose.Schema({
     },
 
     firmwareUpdates: { type: Boolean, default: false },
+
     customerSupportLevel: {
       type: String,
       enum: ["none", "48h", "24/7"],
@@ -48,20 +61,39 @@ const PlanSchema = new mongoose.Schema({
     },
 
     /**
-     * NEW SUBSCRIPTION CAPABILITIES
+     * ---------------------------
+     * CORE CAPABILITIES CHECKED
+     * BY MIDDLEWARE
+     * ---------------------------
      */
-    device_read: { type: Boolean, default: true },       // Freemium allowed
+    device_read: { type: Boolean, default: true },
     device_update: { type: Boolean, default: false },
     collaboration: { type: Boolean, default: false },
     location_access: { type: Boolean, default: false },
-    public_listing: { type: Boolean, default: true },
+    public_listing: { type: Boolean, default: false },
     export: { type: Boolean, default: false }
-},
+  },
 
+  /**
+   * ============================
+   * ENTERPRISE FEATURES
+   * (Only visible on enterprise plans)
+   * ============================
+   */
   enterprise: {
     enableSLAs: { type: Boolean, default: false },
     dedicatedAccountManager: { type: Boolean, default: false },
     customDeployments: { type: Boolean, default: false }
+  },
+
+  /**
+   * ============================
+   * USAGE QUOTAS
+   * ============================
+   */
+  quotas: {
+    monthlyExports: { type: Number, default: 0 },
+    monthlyApiCalls: { type: Number, default: 1000 }
   },
 
   isActive: { type: Boolean, default: true }
