@@ -54,8 +54,8 @@ const ORG_PERMISSIONS = {
     /* Analytics */
     "org.analytics.view",
 
-    /* Audit / Logs (advanced future feature) */
-    "org.audit.view"
+    /* Audit / Logs */
+    "org.logs.view"
   ],
 
 
@@ -79,7 +79,10 @@ const ORG_PERMISSIONS = {
 
     /* Analytics */
     "org.analytics.view",
-    "org.telemetry.read"
+    "org.telemetry.read",
+
+    /* Audit / Logs */
+    "org.logs.view"
   ],
 
 
@@ -99,7 +102,46 @@ const ORG_PERMISSIONS = {
   ]
 };
 
+/**
+ * RBAC Permission Matrix for Platform-Level Access
+ * --------------------------------------------------
+ * Defines platform-wide permissions for system administrators.
+ * Platform-level permissions are checked against user.platformRole.
+ *
+ * Permission categories:
+ * ----------------------
+ * platform.logs.view     → Access system-wide audit logs
+ */
+
+const PLATFORM_PERMISSIONS = {
+
+  /* ============================================================
+   * ROLE: platform-admin
+   * Full platform-wide access.
+   * ============================================================ */
+  "platform-admin": [
+    "platform.logs.view"
+  ],
+
+  /* ============================================================
+   * ROLE: admin (Platform)
+   * Alias for platform-admin for backward compatibility.
+   * ============================================================ */
+  "admin": [
+    "platform.logs.view"
+  ],
+
+  /* ============================================================
+   * ROLE: super-admin
+   * Super admin role CANNOT access org logs (tenant isolation).
+   * Can ONLY access platform logs.
+   * ============================================================ */
+  "super-admin": [
+    "platform.logs.view"
+  ]
+};
 
 module.exports = {
-  ORG_PERMISSIONS
+  ORG_PERMISSIONS,
+  PLATFORM_PERMISSIONS
 };

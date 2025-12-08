@@ -171,7 +171,8 @@ socket.on('telemetry', (data) => console.log(data));
       { name: 'Deployments', description: 'Deployment grouping, device assignment, and organizational hierarchy' },
       { name: 'Telemetry', description: 'Device telemetry ingestion, retrieval, and real-time data streaming' },
       { name: 'Thresholds', description: 'Alert threshold configuration and monitoring' },
-      { name: 'Subscriptions', description: 'Subscription management, billing, and plan feature enforcement' }
+      { name: 'Subscriptions', description: 'Subscription management, billing, and plan feature enforcement' },
+      { name: 'Audit Logs', description: 'Access audit logs for organizations and platform with timestamp filtering' }
     ]
   },
   
@@ -200,6 +201,9 @@ socket.on('telemetry', (data) => console.log(data));
     
     // Subscription Management Routes
     './routes/subscriptions/**/*.js',
+    
+    // Audit Logs Routes
+    './routes/logs/**/*.js',
     
     // Legacy/Test Routes
     './routes/test.js'

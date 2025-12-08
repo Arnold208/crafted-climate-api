@@ -44,11 +44,16 @@ const threshold = require('./routes/devices/threshold/thresholdRoutes');
 const admin_subscription = require('./routes/subscriptions/subscriptionAdminRoutes');
 const user_subscription = require('./routes/subscriptions/subscriptionUserRoutes');
 
+// Audit Log Routes
+const auditLogRoutes = require('./routes/logs/auditLogRoutes');
+
 // ============================================
 // MIDDLEWARE IMPORTS
 // ============================================
 
 const { globalRateLimiter, swaggerRateLimiter } = require('./middleware/rateLimiter');
+const authenticateToken = require('./middleware/bearermiddleware');
+const auditLogger = require('./middleware/auditLogger');
 const secureMqtt = require('./routes/telemetry/mqtt_secure_msg');
 const { setupRealtime } = require("./config/socket/socketio");
 const { startTelemetryWorker } = require('./routes/telemetry/queue_worker/telemetryWorker');
@@ -117,6 +122,14 @@ app.use(globalRateLimiter);
 
 // Parse incoming JSON
 app.use(express.json());
+
+// ============================================
+// AUDIT MIDDLEWARE
+// ============================================
+
+// Register global audit logger middleware (after json parser, before routes)
+// Note: auditLogger internally skips auth routes
+app.use(auditLogger);
 
 // Swagger docs route (protected)
 // Serve OpenAPI spec
@@ -281,6 +294,10 @@ app.use('/api', threshold);
 // Subscription Management Routes
 app.use('/api/subscriptions/admin', admin_subscription);
 app.use('/api/subscriptions/user', user_subscription);
+
+// Audit Log Routes
+app.use('/api/org', auditLogRoutes);
+app.use('/api/platform', auditLogRoutes);
 
 
 // ✅ Connect Redis before starting server
