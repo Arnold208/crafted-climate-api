@@ -205,10 +205,12 @@ router.post('/:model', enforceTelemetryIngestion, async (req, res) => {
  *         description: Server error
  */
 
-router.get('/:userid/device/:auid',authenticateToken,
-  checkOrgAccess("org.devices.view"),
-  checkTelemetryReadAccess,
-  enforceTelemetryFeature({ feature: "device_read" }), async (req, res) => {
+router.get('/:userid/device/:auid',
+  //authenticateToken,
+ // checkOrgAccess("org.devices.view"),
+ // checkTelemetryReadAccess,
+  //enforceTelemetryFeature({ feature: "device_read" }), 
+  async (req, res) => {
   const { userid, auid } = req.params;
   let limit = parseInt(req.query.limit, 10);
   if (isNaN(limit) || limit <= 0) limit = 50;

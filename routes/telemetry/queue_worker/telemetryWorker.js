@@ -51,7 +51,7 @@ dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
       }
 
       if (devmod === 'AQUA') {
-        console.log('🌿 Processing ENV telemetry');
+        console.log('🌿 Processing AQUA telemetry');
         await handleAquaQueuedTelemetry(data)
         return;
       }
