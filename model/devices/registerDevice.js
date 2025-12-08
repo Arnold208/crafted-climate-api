@@ -1,132 +1,107 @@
 const mongoose = require('mongoose');
 
 const registerNewDeviceSchema = new mongoose.Schema({
-  auid: {
+
+  auid: { type: String, unique: true, required: true },
+  serial: { type: String, unique: true, required: true },
+  devid: { type: String, unique: true, required: true },
+  mac: { type: String, unique: true, required: true },
+
+  model: { type: String, required: true },
+  type: { type: String, required: true },
+
+  location: { type: String, required: true },
+
+  /**
+   * OLD FIELD — must stay for backward compatibility.
+   * Represents the device owner in the old system.
+   */
+  userid: { type: String, required: true },
+
+  /**
+   * NEW FIELD — future device owner field.
+   * During transition, populate both userid + ownerUserId.
+   */
+  ownerUserId: {
     type: String,
-    unique: true,
-    required: true
+    default: null
   },
 
-  serial: {
-    type: String,
-    unique: true,
-    required: true
-  },
-
-  devid: {
-    type: String,
-    unique: true,
-    required: true
-  },
-
-  mac: {
-    type: String,
-    unique: true,
-    required: true
-  },
-
-  model: {
-    type: String,
-    required: true
-  },
-
-  type: {
-    type: String,
-    required: true
-  },
-
-  location: {
-    type: String,
-    required: true
-  },
-
-  userid: {
-    type: String,
-    required: true
-  },
-
+  /**
+   * OLD FIELD — single organization, old system
+   */
   organization: {
-    type: String
+    type: String,
+    default: null
   },
 
+  /**
+   * NEW MULTITENANCY FIELD (will replace organization)
+   */
+  organizationId: {
+    type: String,
+    default: null,
+    index: true
+  },
+
+  /**
+   * OLD FIELD — stores deployment string
+   * Keep it alive until migration
+   */
   deployment: {
-    type: String
-  },
-
-  nickname: {
     type: String,
-    default: 'CrowdSense'
+    default: null
   },
 
-  battery: {
-    type: Number,
-    default: 0
-  },
-
-  image: {
+  /**
+   * NEW FIELD — canonical deployment reference going forward
+   */
+  deploymentId: {
     type: String,
-    default: 'https://craftedclimateota.blob.core.windows.net/images/upload-1733768062669-env.png?sv=2025-01-05&st=2024-12-09T18%3A14%3A26Z&se=2029-12-09T18%3A14%3A26Z&sr=b&sp=r&sig=BsvH4rZBPZWk2HkATZe9bT%2BOyXd9NsPJLXSVowwwRCs%3D'
+    default: null
   },
 
-  status: {
-    type: String,
-    default: 'offline'
-  },
+  nickname: { type: String, default: 'CrowdSense' },
+  battery: { type: Number, default: 0 },
+  image: { type: String },
 
-  availability: {
-    type: String,
-    default: 'private'
-  },
+  status: { type: String, default: 'offline' },
+  availability: { type: String, default: 'private' },
 
-  datapoints: {
-    type: [String],
-    default: []
-  },
+  datapoints: { type: [String], default: [] },
+  subscription: { type: [String], default: [] },
 
-  subscription: {
-    type: [String],
-    default: []
-  },
+  manufacturingId: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
 
-  manufacturingId: {
-    type: String,
-    required: true
-  },
+  collaborators: [
+    new mongoose.Schema(
+      {
+        userid: { type: String, required: true },
 
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  collaborators: {
-  type: [
-    {
-      userid: {
-        type: String,
-        required: true
+        role: {
+          type: String,
+          enum: ["device-admin", "device-support", "device-user"],
+          default: "device-user"
+        },
+
+        permissions: {
+          type: [String],
+          default: []
+        },
+
+        addedAt: { type: Date, default: Date.now }
       },
-      role: {
-        type: String,
-        enum: ['viewer', 'editor', 'admin'],
-        default: 'viewer'
-      },
-      permissions: {
-        type: [String],
-        enum: ['update', 'delete', 'export', 'share'],
-        default: []
-      },
-      addedAt: {
-        type: Date,
-        default: Date.now
-      }
-    }
+      { _id: false } // Disable _id for subdocuments
+    )
   ],
-  default: []
-},
-noteDevUuid: {
-    type: String
-  }
+
+  noteDevUuid: { type: String }
+
 }, { versionKey: false });
 
-const registerNewDevice = mongoose.model('registerDevices', registerNewDeviceSchema, 'registeredDevices');
-
-module.exports = registerNewDevice;
+module.exports = mongoose.model(
+  'registerDevices',
+  registerNewDeviceSchema,
+  'registeredDevices'
+);

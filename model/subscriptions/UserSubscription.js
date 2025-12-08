@@ -1,49 +1,87 @@
+// model/subscriptions/UserSubscription.js
 const mongoose = require("mongoose");
 const { v4: uuidv4 } = require("uuid");
 
-const UserSubscriptionSchema = new mongoose.Schema({
+/**
+ * UserSubscription Schema
+ * -------------------------
+ * A user may have:
+ *  - 1 personal subscription (scope: personal)
+ *  - many organization subscriptions (scope: organization)
+ *
+ * DO NOT disable _id — top-level documents MUST have _id.
+ */
 
-  subscriptionId: {
-    type: String,
-    default: uuidv4,
-    unique: true
+const UserSubscriptionSchema = new mongoose.Schema(
+  {
+    /** PRIMARY KEY */
+    subscriptionId: {
+      type: String,
+      default: uuidv4,
+      // NOTE: Removed unique: true to prevent duplicate key errors during org creation
+      // Use business logic validation instead (check if subscriptionId exists before create)
+    },
+
+    /** USER UUID (NOT UNIQUE — user can have MANY subscriptions) */
+    userid: {
+      type: String,
+      required: true,
+    },
+
+    /** ORG UUID (null for personal subscriptions) */
+    organizationId: {
+      type: String,
+      default: null,
+    },
+
+    /** Subscription Scope */
+    subscriptionScope: {
+      type: String,
+      enum: ["personal", "organization"],
+      default: "personal",
+    },
+
+    /** PLAN UUID */
+    planId: {
+      type: String,
+      required: true,
+    },
+
+    /** Subscription State */
+    status: {
+      type: String,
+      enum: ["active", "inactive", "expired", "cancelled"],
+      default: "active",
+    },
+
+    /** Billing Cycle */
+    billingCycle: {
+      type: String,
+      enum: ["free", "monthly", "yearly"],
+      default: "free",
+    },
+
+    /** Dates */
+    startDate: { type: Date, default: Date.now },
+    endDate: { type: Date },
+
+    /** Auto-Renewal */
+    autoRenew: { type: Boolean, default: false },
+
+    /** Usage Metrics */
+    usage: {
+      devicesCount: { type: Number, default: 0 },
+      exportsThisMonth: { type: Number, default: 0 },
+      apiCallsThisMonth: { type: Number, default: 0 },
+    },
   },
 
-  userid: {
-    type: String,  // matches your User.userid (string)
-    required: true,
-    unique: true
-  },
+  { timestamps: true } // KEEP _id ENABLED
+);
 
-  // reference by UUID string, not ObjectId
-  planId: {
-    type: String,
-    required: true
-  },
-
-  status: {
-    type: String,
-    enum: ["active", "inactive", "expired", "cancelled"],
-    default: "active"
-  },
-
-  billingCycle: {
-    type: String,
-    enum: ["free", "monthly", "yearly"],
-    default: "free"
-  },
-
-  startDate: { type: Date, default: Date.now },
-  endDate: { type: Date },
-
-  autoRenew: { type: Boolean, default: false },
-
-  usage: {
-    devicesCount: { type: Number, default: 0 },
-    exportsThisMonth: { type: Number, default: 0 },
-    apiCallsThisMonth: { type: Number, default: 0 }
-  }
-
-}, { timestamps: true });
+/** Indexes for performance */
+UserSubscriptionSchema.index({ userid: 1 });
+UserSubscriptionSchema.index({ organizationId: 1 });
+UserSubscriptionSchema.index({ subscriptionScope: 1 });
 
 module.exports = mongoose.model("UserSubscription", UserSubscriptionSchema);

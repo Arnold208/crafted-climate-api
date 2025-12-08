@@ -8,7 +8,7 @@
 const authorizeRoles = (...allowedRoles) => {
   return (req, res, next) => {
     try {
-      const userRole = req.user?.role;
+      const userRole = req.user?.platformRole;
 
       if (!userRole) {
         return res.status(403).json({ message: 'No role assigned. Access denied.' });

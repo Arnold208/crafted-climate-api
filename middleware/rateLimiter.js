@@ -35,7 +35,7 @@ const otpLimiter = rateLimit({
  */
 const perDeviceKeyGen = (req) => {
   const ip    = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-  const uid   = req.user?.id || 'anon';
+  const uid   = req.user?.userid || 'anon'; // JWT uses 'userid', not 'id'
   const model = String(req.params.model || 'unknown').toLowerCase();
   const auid  = String(req.params.auid || 'unknown').toUpperCase();
   return `${uid}:${ip}:${model}:${auid}`;

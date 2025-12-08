@@ -26,17 +26,17 @@ function setupRealtime(server) {
       // Verify and decode token
       const decoded = jwt.verify(token, JWT_SECRET);
 
-      const userId = decoded.userId;
+      const userId = decoded.userid; // JWT uses 'userid', not 'userId'
       const email = decoded.email;
       const username = decoded.username || "Unknown";
-      const role = decoded.role || "user";
+      const platformRole = decoded.platformRole || "user";
 
       if (!userId || !email) {
-        return next(new Error("Invalid token payload: missing userId or email."));
+        return next(new Error("Invalid token payload: missing userid or email."));
       }
 
       // Attach limited user context (no sensitive info)
-      socket.user = { username, role };
+      socket.user = { username, platformRole, userId };
       next();
     } catch (err) {
       console.error("JWT verification failed:", err.message);

@@ -21,11 +21,14 @@ function authenticateToken(req, res, next) {
         .json({ error: "Forbidden: Invalid or expired token" });
     }
 
-    // 🔥 This is the CORRECT mapping:
+    // 🔥 Map JWT payload to req.user with all necessary fields
     req.user = {
-      userid: decoded.userid, // <-- THIS is what all routes expect
+      userid: decoded.userid,
       email: decoded.email,
-      role: decoded.role,
+      username: decoded.username,
+      platformRole: decoded.platformRole, // RBAC uses this field
+      organizations: decoded.organizations || [],
+      currentOrganizationId: decoded.currentOrganizationId || null,
     };
 
     next();

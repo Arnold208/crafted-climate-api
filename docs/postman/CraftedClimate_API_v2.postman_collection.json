@@ -1,0 +1,1372 @@
+{
+  "info": {
+    "_postman_id": "crafted-climate-api-v2",
+    "name": "CraftedClimate API v2.0",
+    "description": "Complete API collection for CraftedClimate - Multi-tenant Climate Monitoring Platform\n\n### Architecture\n- Multi-Tenant (Organization-Based)\n- Role-Based Access Control (RBAC)\n- JWT Authentication\n- API Key for Telemetry Devices\n- WebSocket Real-Time Telemetry\n\n### Required Headers\nMost endpoints need:\n- Authorization: Bearer <jwt-token>\n- x-org-id: org_xxx (for org-scoped routes)\n\n### Base URL\n- Development: http://localhost:3000\n- Production: {{PROD_URL}}\n\n### Collection Variables\nSet these in the Collection Variables tab:\n- base_url: http://localhost:3000\n- jwt_token: (obtained from login)\n- org_id: (obtained from create-org)\n- device_id: (obtained from register-device)\n- api_key: (from device settings)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "🔐 Authentication",
+      "description": "User authentication, registration, and profile management",
+      "item": [
+        {
+          "name": "POST - Sign Up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "username",
+                  "value": "john_doe",
+                  "type": "text"
+                },
+                {
+                  "key": "email",
+                  "value": "john@example.com",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "SecurePass123!",
+                  "type": "text"
+                },
+                {
+                  "key": "contact",
+                  "value": "0556123456",
+                  "type": "text"
+                },
+                {
+                  "key": "firstName",
+                  "value": "John",
+                  "type": "text"
+                },
+                {
+                  "key": "lastName",
+                  "value": "Doe",
+                  "type": "text"
+                },
+                {
+                  "key": "profilePicture",
+                  "type": "file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/signup",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "signup"]
+            },
+            "description": "Register a new user. Sends OTP to phone for verification."
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"otp\": 123456\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/verify-otp",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "verify-otp"]
+            },
+            "description": "Verify OTP sent to user's phone number"
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Login with email and password. Returns JWT access token and refresh token."
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/refresh-token",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "refresh-token"]
+            },
+            "description": "Refresh access token using refresh token"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Get User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/profile",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "profile"]
+            },
+            "description": "Get authenticated user's profile information"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT - Update User Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"john_doe_updated\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"contact\": \"0556123457\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/user/profile",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "profile"]
+            },
+            "description": "Update user profile information"
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"SecurePass123!\",\n  \"newPassword\": \"NewSecurePass456!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/user/change-password",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "change-password"]
+            },
+            "description": "Change user password"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🏢 Organizations",
+      "description": "Organization management, RBAC, and collaboration",
+      "item": [
+        {
+          "name": "POST - Create Organization (Admin Only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Accra Climate Lab\",\n  \"description\": \"Research and monitoring organization\",\n  \"ownerUserId\": \"usr_9f2h29f2\",\n  \"planName\": \"enterprise\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/org/create",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "org", "create"]
+            },
+            "description": "Create a new enterprise organization (Platform Admin only)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - List My Organizations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/org/my-organizations",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "org", "my-organizations"]
+            },
+            "description": "Get all organizations user is member of"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Get Organization Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/org/{{org_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "org", "{{org_id}}"]
+            },
+            "description": "Get organization details including collaborators and subscription"
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Add User to Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userid\": \"usr_newuser123\",\n  \"role\": \"org-user\",\n  \"permissions\": [\"telemetry.read\", \"devices.read\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/org/{{org_id}}/add-user",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "org", "{{org_id}}", "add-user"]
+            },
+            "description": "Add a user to organization with specified role\n\n**Roles:**\n- org-admin (17 permissions)\n- org-support (8 permissions)\n- org-user (5 permissions)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT - Update User Role in Organization",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userid\": \"usr_newuser123\",\n  \"role\": \"org-support\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/org/{{org_id}}/update-user-role",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "org", "{{org_id}}", "update-user-role"]
+            },
+            "description": "Update user role in organization"
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE - Remove User from Organization",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/org/{{org_id}}/remove-user/usr_newuser123",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "org", "{{org_id}}", "remove-user", "usr_newuser123"]
+            },
+            "description": "Remove user from organization"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - List Organization Members",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/org/{{org_id}}/members",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "org", "{{org_id}}", "members"]
+            },
+            "description": "List all members of organization with their roles"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📱 Devices",
+      "description": "Device registration, management, and monitoring",
+      "item": [
+        {
+          "name": "POST - Register Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"auid\": \"GH-YV91YJL2DIN_TWBS9W7AR\",\n  \"serial\": \"DEVICE-001-SERIAL\",\n  \"nickname\": \"Main Lab Sensor\",\n  \"location\": [5.5605, -0.2057]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/devices/register-device",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "devices", "register-device"]
+            },
+            "description": "Register a new device under organization. Device must exist in manufacturing records."
+          },
+          "response": []
+        },
+        {
+          "name": "GET - List Registered Devices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/devices/user/{{user_id}}/registered-devices",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "devices", "user", "{{user_id}}", "registered-devices"]
+            },
+            "description": "Get all registered and shared devices for a user"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Get Device Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/devices/{{device_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "devices", "{{device_id}}"]
+            },
+            "description": "Get device details including location, status, battery"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT - Update Device",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nickname\": \"Updated Lab Sensor\",\n  \"availability\": \"private\",\n  \"status\": \"online\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/devices/{{device_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "devices", "{{device_id}}"]
+            },
+            "description": "Update device nickname, availability, or status"
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE - Delete Device",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/devices/{{device_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "devices", "{{device_id}}"]
+            },
+            "description": "Delete device from organization"
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Share Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userid\": \"usr_newuser123\",\n  \"role\": \"device-viewer\",\n  \"permissions\": [\"telemetry.read\", \"export\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/devices/{{device_id}}/share",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "devices", "{{device_id}}", "share"]
+            },
+            "description": "Share device with another user as collaborator"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - List Sensor Models",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/devices/sensor-models",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "devices", "sensor-models"]
+            },
+            "description": "List all available sensor models"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - List Manufacturers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/devices/manufacturers",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "devices", "manufacturers"]
+            },
+            "description": "List all device manufacturers"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📊 Telemetry",
+      "description": "Device telemetry ingestion, retrieval, and analytics",
+      "item": [
+        {
+          "name": "POST - Submit Short-Key Telemetry (Device)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-KEY",
+                "value": "{{api_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"i\": \"device-id-123\",\n  \"t\": 26.4,\n  \"h\": 60.1,\n  \"p\": 1013.2,\n  \"p1\": 4.2,\n  \"p2\": 18.7,\n  \"p10\": 30.3,\n  \"l\": 430,\n  \"u\": 1.9,\n  \"s\": 60,\n  \"d\": 1721666400,\n  \"e\": \"0000\",\n  \"b\": 85\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/telemetry/env",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "telemetry", "env"]
+            },
+            "description": "Submit telemetry using short keys. Model can be: env, aqua, gas-solo\n\n**Short Key Mapping:**\n- i: Device ID (required)\n- t: Temperature\n- h: Humidity\n- p: Pressure\n- p1: PM1\n- p2: PM2.5\n- p10: PM10\n- l: Light (lux)\n- u: UV index\n- s: Sound\n- d: Timestamp (epoch)\n- e: Error code\n- b: Battery level"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Get Device Telemetry History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/telemetry/{{device_id}}?limit=100&offset=0&startDate=2024-01-01&endDate=2024-12-31",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "telemetry", "{{device_id}}"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-12-31"
+                }
+              ]
+            },
+            "description": "Get paginated telemetry history for device with optional date filtering"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Get Organization Telemetry Aggregate",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/telemetry/organization/aggregate?startDate=2024-01-01&endDate=2024-12-31",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "telemetry", "organization", "aggregate"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-12-31"
+                }
+              ]
+            },
+            "description": "Get aggregated telemetry data for all devices in organization"
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Export Telemetry to CSV",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceIds\": [\"{{device_id}}\"],\n  \"startDate\": \"2024-01-01\",\n  \"endDate\": \"2024-12-31\",\n  \"format\": \"csv\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/telemetry/export",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "telemetry", "export"]
+            },
+            "description": "Export telemetry data to CSV format"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🎯 Deployments",
+      "description": "Group devices into deployments for organizational hierarchy",
+      "item": [
+        {
+          "name": "POST - Create Deployment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lab Building A\",\n  \"description\": \"Main laboratory building deployment\",\n  \"location\": [5.5605, -0.2057],\n  \"deviceIds\": [\"{{device_id}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/deployments",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "deployments"]
+            },
+            "description": "Create a deployment to group devices"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - List Deployments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/deployments",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "deployments"]
+            },
+            "description": "Get all deployments in organization"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Get Deployment Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/deployments/{{deployment_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "deployments", "{{deployment_id}}"]
+            },
+            "description": "Get deployment details with all assigned devices"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT - Update Deployment",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lab Building A - Updated\",\n  \"description\": \"Updated deployment description\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/deployments/{{deployment_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "deployments", "{{deployment_id}}"]
+            },
+            "description": "Update deployment details"
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Add Device to Deployment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceId\": \"{{device_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/deployments/{{deployment_id}}/add-device",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "deployments", "{{deployment_id}}", "add-device"]
+            },
+            "description": "Add device to deployment"
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE - Remove Device from Deployment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/deployments/{{deployment_id}}/remove-device/{{device_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "deployments", "{{deployment_id}}", "remove-device", "{{device_id}}"]
+            },
+            "description": "Remove device from deployment"
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE - Delete Deployment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/deployments/{{deployment_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "deployments", "{{deployment_id}}"]
+            },
+            "description": "Delete deployment"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "⚠️ Thresholds",
+      "description": "Configure alert thresholds for device data",
+      "item": [
+        {
+          "name": "POST - Create Threshold",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceId\": \"{{device_id}}\",\n  \"parameter\": \"temperature\",\n  \"minValue\": 15,\n  \"maxValue\": 35,\n  \"enabled\": true,\n  \"alertEmail\": \"admin@example.com\",\n  \"alertSMS\": \"0556123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/thresholds",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "thresholds"]
+            },
+            "description": "Create alert threshold for device parameter"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - List Thresholds",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/thresholds?deviceId={{device_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "thresholds"],
+              "query": [
+                {
+                  "key": "deviceId",
+                  "value": "{{device_id}}"
+                }
+              ]
+            },
+            "description": "Get all thresholds for device"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Get Threshold Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/thresholds/{{threshold_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "thresholds", "{{threshold_id}}"]
+            },
+            "description": "Get threshold configuration"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT - Update Threshold",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minValue\": 12,\n  \"maxValue\": 38,\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/thresholds/{{threshold_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "thresholds", "{{threshold_id}}"]
+            },
+            "description": "Update threshold configuration"
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE - Delete Threshold",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/thresholds/{{threshold_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "thresholds", "{{threshold_id}}"]
+            },
+            "description": "Delete threshold"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "💳 Subscriptions",
+      "description": "Manage subscription plans, billing, and features",
+      "item": [
+        {
+          "name": "GET - List Available Plans",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/subscriptions/plans",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subscriptions", "plans"]
+            },
+            "description": "List all subscription plans with features and pricing"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Get User Subscription",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/subscriptions/my-subscription",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subscriptions", "my-subscription"]
+            },
+            "description": "Get current user's subscription status"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Get Organization Subscription",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{org_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/subscriptions/organization/{{org_id}}",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subscriptions", "organization", "{{org_id}}"]
+            },
+            "description": "Get organization's subscription status and usage"
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Subscribe to Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"plan_pro_001\",\n  \"billingCycle\": \"monthly\",\n  \"scope\": \"user\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/subscriptions/subscribe",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subscriptions", "subscribe"]
+            },
+            "description": "Subscribe user to a plan"
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Upgrade Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"plan_enterprise_001\",\n  \"billingCycle\": \"annual\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/subscriptions/upgrade",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subscriptions", "upgrade"]
+            },
+            "description": "Upgrade subscription to higher tier"
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Cancel Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Too expensive\",\n  \"feedback\": \"Need more affordable option\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/subscriptions/cancel",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subscriptions", "cancel"]
+            },
+            "description": "Cancel subscription"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Get Usage Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/subscriptions/usage",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subscriptions", "usage"]
+            },
+            "description": "Get current usage against plan limits"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🧪 Test Routes",
+      "description": "Debugging and testing endpoints",
+      "item": [
+        {
+          "name": "GET - Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/test/health",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test", "health"]
+            },
+            "description": "Check API health and connectivity"
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Get Server Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/test/status",
+              "protocol": "http",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test", "status"]
+            },
+            "description": "Get server status and configuration"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "org_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "device_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "deployment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "threshold_id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

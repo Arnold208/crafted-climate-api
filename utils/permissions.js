@@ -1,0 +1,105 @@
+/**
+ * RBAC Permission Matrix for Organization-Level Access
+ * ----------------------------------------------------
+ * Defines the authorization capabilities for each role within an organization.
+ * Each route requiring organization-level access uses this matrix through the
+ * checkOrgAccess(permission) middleware.
+ *
+ * Permission categories:
+ * ----------------------
+ * org.manage             → Full organization settings access
+ * org.users.*            → Invite/remove/modify organization members
+ * org.deployments.*      → Manage deployments
+ * org.devices.*          → Register/manage devices
+ * org.billing.*          → View & update billing/subscriptions
+ * org.analytics.*        → Access org dashboards, reports
+ * org.audit.*            → Access logs and system events (optional future use)
+ */
+
+const ORG_PERMISSIONS = {
+
+  /* ============================================================
+   * ROLE: ORG-ADMIN
+   * Full administrative access inside the organization.
+   * Equivalent to "admin" but scoped to the org only.
+   * ============================================================ */
+  "org-admin": [
+
+    /* Organization Management */
+    "org.manage",
+
+    /* User Management */
+    "org.users.invite",
+    "org.users.remove",
+    "org.users.change-role",
+    "org.users.view",
+
+    /* Deployments */
+    "org.deployments.create",
+    "org.deployments.view",
+    "org.deployments.edit",
+    "org.deployments.delete",
+
+    /* Devices */
+    "org.devices.add",
+    "org.devices.view",
+    "org.devices.edit",
+    "org.devices.remove",
+    "org.telemetry.read",
+
+    /* Billing */
+    "org.billing.view",
+    "org.billing.update",
+
+    /* Analytics */
+    "org.analytics.view",
+
+    /* Audit / Logs (advanced future feature) */
+    "org.audit.view"
+  ],
+
+
+  /* ============================================================
+   * ROLE: ORG-SUPPORT
+   * Operational support role. Can NOT manage users or billing.
+   * Has limited write access.
+   * ============================================================ */
+  "org-support": [
+
+    /* View Only Org Users */
+    "org.users.view",
+
+    /* Deployments */
+    "org.deployments.view",
+    "org.deployments.edit",     // can adjust, not delete or create
+
+    /* Devices */
+    "org.devices.view",
+    "org.devices.edit",         // can update alias, location, not remove
+
+    /* Analytics */
+    "org.analytics.view",
+    "org.telemetry.read"
+  ],
+
+
+  /* ============================================================
+   * ROLE: ORG-USER
+   * Regular user with read-only permissions.
+   * ============================================================ */
+  "org-user": [
+
+    "org.users.view",
+
+    /* Read-only Access */
+    "org.deployments.view",
+    "org.devices.view",
+    "org.analytics.view",
+    "org.telemetry.read"
+  ]
+};
+
+
+module.exports = {
+  ORG_PERMISSIONS
+};

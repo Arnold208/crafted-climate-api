@@ -1,88 +1,141 @@
-const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const path = require('path');
+const multer = require("multer");
+const { 
+  BlobServiceClient, 
+  BlobSASPermissions, 
+  StorageSharedKeyCredential,
+  generateBlobSASQueryParameters 
+} = require("@azure/storage-blob");
 
-let envFile;
+const {
+  TableClient,
+  AzureNamedKeyCredential
+} = require("@azure/data-tables");
 
-if (process.env.NODE_ENV === 'development') {
-  envFile = '.env.development';
-} else {
-  envFile = '.env';   // default for production or if NODE_ENV not set
-}
+// --------------------------------------------------
+// ENV LOADING
+// --------------------------------------------------
+let envFile = process.env.NODE_ENV === 'development'
+  ? '.env.development'
+  : '.env';
 
 dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
 
-const multer = require("multer");
-const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential } = require("@azure/storage-blob");
-
-// Azure Blob Storage setup
 const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
-
 if (!AZURE_STORAGE_CONNECTION_STRING) {
-  console.error("Azure Storage Connection String is not set in .env file.");
-  process.exit(1); // Exit if connection string is missing
+  console.error("Azure Storage Connection String missing");
+  process.exit(1);
 }
 
+// --------------------------------------------------
+// BLOB STORAGE SETUP
+// --------------------------------------------------
 const CONTAINER_NAME = "images";
 
-let containerClient;
-let blobServiceClient;
+let blobServiceClient, containerClient;
 
 try {
-  blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
+  blobServiceClient = BlobServiceClient.fromConnectionString(
+    AZURE_STORAGE_CONNECTION_STRING
+  );
+
   containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
 
-  // Ensure container exists
   (async () => {
-    try {
-      await containerClient.createIfNotExists();
-      console.log(`Azure Blob Storage Container "${CONTAINER_NAME}" is ready.`);
-    } catch (err) {
-      console.error("Error ensuring container exists:", err.message);
-    }
+    await containerClient.createIfNotExists();
+    console.log(`Blob Container "${CONTAINER_NAME}" is ready.`);
   })();
 
 } catch (err) {
-  console.error("Error initializing BlobServiceClient:", err.message);
-  process.exit(1); // Exit if BlobServiceClient cannot be initialized
+  console.error("Blob init error:", err.message);
+  process.exit(1);
 }
 
-// Multer setup for file uploads
+// --------------------------------------------------
+// MULTER for uploads
+// --------------------------------------------------
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB limit
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-// Generate Signed URL
+// --------------------------------------------------
+// SIGNED URL GENERATOR
+// --------------------------------------------------
 const generateSignedUrl = (fileName) => {
   const blobClient = containerClient.getBlobClient(fileName);
   const now = new Date();
   const expires = new Date(now);
-  expires.setFullYear(expires.getFullYear() + 5); // 5 years expiry
+  expires.setFullYear(expires.getFullYear() + 5);
 
-  // Extract account name and account key from the connection string
-  const accountName = process.env.AZURE_STORAGE_CONNECTION_STRING.match(/AccountName=([^;]+)/)[1];
-  const accountKey = process.env.AZURE_STORAGE_CONNECTION_STRING.match(/AccountKey=([^;]+)/)[1];
+  const accountName = AZURE_STORAGE_CONNECTION_STRING.match(/AccountName=([^;]+)/)[1];
+  const accountKey = AZURE_STORAGE_CONNECTION_STRING.match(/AccountKey=([^;]+)/)[1];
 
-  const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
+  const credential = new StorageSharedKeyCredential(accountName, accountKey);
 
-  const sasToken = generateBlobSASQueryParameters(
+  const sas = generateBlobSASQueryParameters(
     {
       containerName: CONTAINER_NAME,
       blobName: fileName,
-      permissions: BlobSASPermissions.parse("r"), // Read-only access
+      permissions: BlobSASPermissions.parse("r"),
       startsOn: now,
-      expiresOn: expires,
+      expiresOn: expires
     },
-    sharedKeyCredential
+    credential
   ).toString();
 
-  return `${blobClient.url}?${sasToken}`;
+  return `${blobClient.url}?${sas}`;
 };
 
-// Export the configured container client and multer upload middleware
+// --------------------------------------------------
+// TABLE STORAGE SETUP (Same storage account)
+// --------------------------------------------------
+const TABLE_NAME = process.env.AZURE_TABLE_NAME || "AuditLogs";
+const STORAGE_ACCOUNT_NAME = AZURE_STORAGE_CONNECTION_STRING.match(/AccountName=([^;]+)/)[1];
+const STORAGE_ACCOUNT_KEY = AZURE_STORAGE_CONNECTION_STRING.match(/AccountKey=([^;]+)/)[1];
+
+const tableCredential = new AzureNamedKeyCredential(
+  STORAGE_ACCOUNT_NAME,
+  STORAGE_ACCOUNT_KEY
+);
+
+const tableClient = new TableClient(
+  `https://${STORAGE_ACCOUNT_NAME}.table.core.windows.net`,
+  TABLE_NAME,
+  tableCredential
+);
+
+// Ensure table exists
+(async () => {
+  try {
+    await tableClient.createTable();
+    console.log(`Azure Table "${TABLE_NAME}" ready.`);
+  } catch (err) {
+    if (!err.message.includes("TableAlreadyExists")) {
+      console.error("Table init error:", err.message);
+    }
+  }
+})();
+
+// --------------------------------------------------
+// WRITE LOG FUNCTION
+// --------------------------------------------------
+async function writeAuditLog(log) {
+  try {
+    await tableClient.createEntity(log);
+  } catch (err) {
+    console.error("Audit Log Write Error:", err.message);
+  }
+}
+
+// --------------------------------------------------
+// EXPORTS
+// --------------------------------------------------
 module.exports = {
-  containerClient,
   upload,
+  containerClient,
   generateSignedUrl,
+  tableClient,
+  writeAuditLog
 };

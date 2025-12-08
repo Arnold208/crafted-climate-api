@@ -2,28 +2,53 @@ const express = require('express');
 const dotenv = require('dotenv');
 const path = require('path');
 const connectDB = require('./config/database/mongodb');
-const { connectRedis } = require('./config/redis/redis'); // ✅ Add this line
+const { connectRedis } = require('./config/redis/redis');
 
 const redoc = require('redoc-express');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger/swaggerOptions');
 const basicAuth = require('express-basic-auth');
 
+// ============================================
+// ROUTE IMPORTS
+// ============================================
+
+// Test Routes
 const testRoutes = require('./routes/test');
+
+// Authentication & User Routes
+const userRoutes = require('./routes/user/user');
+
+// Organization Routes (RBAC + Multi-tenant)
+const organizationRoutes = require('./routes/organizations/organizationRoutes');
+const orgDeviceRoutes = require('./routes/organizations/orgDeviceRoutes');
+
+// Device Routes
 const manufacturerRoutes = require('./routes/devices/manufacturer/manufacturer');
-const users = require('./routes/user/user');
-const { globalRateLimiter, swaggerRateLimiter } = require('./middleware/rateLimiter');
 const sensorModels = require('./routes/devices/sensorModel/sensorModel');
 const registerSensor = require('./routes/devices/user/userdevice');
 const otaUpdate = require('./routes/devices/ota/ota');
-const deployment = require('./routes/devices/deployment/deployment');
-const telemetry = require('./routes/devices/telemetry/telemetry');
-const notecard = require('./routes/devices/notecard/envDeviceRoutes')
-const notecardDeployment = require('./routes/devices/notecard/envDeploymentRoutes')
-const threshold = require('./routes/devices/threshold/thresholdRoutes')
-const admin_subscription = require('./routes/subscriptions/subscriptionAdminRoutes')
-const user_subscription = require('./routes/subscriptions/subscriptionUserRoutes')
+const notecard = require('./routes/devices/notecard/envDeviceRoutes');
+const notecardDeployment = require('./routes/devices/notecard/envDeploymentRoutes');
 
+// Deployment Routes
+const deployment = require('./routes/devices/deployment/deployment');
+
+// Telemetry Routes
+const telemetry = require('./routes/devices/telemetry/telemetry');
+
+// Threshold Routes
+const threshold = require('./routes/devices/threshold/thresholdRoutes');
+
+// Subscription Routes
+const admin_subscription = require('./routes/subscriptions/subscriptionAdminRoutes');
+const user_subscription = require('./routes/subscriptions/subscriptionUserRoutes');
+
+// ============================================
+// MIDDLEWARE IMPORTS
+// ============================================
+
+const { globalRateLimiter, swaggerRateLimiter } = require('./middleware/rateLimiter');
 const secureMqtt = require('./routes/telemetry/mqtt_secure_msg');
 const { setupRealtime } = require("./config/socket/socketio");
 const { startTelemetryWorker } = require('./routes/telemetry/queue_worker/telemetryWorker');
@@ -221,21 +246,41 @@ app.use('/climate-docs', swaggerRateLimiter, docsAuth, (req, res, next) => {
 });
 
 
-// API Routes
+// ============================================
+// API ROUTES REGISTRATION
+// ============================================
+
+// Test Routes
 app.use('/api', testRoutes);
+
+// Authentication & User Routes
+app.use('/api/auth', userRoutes);
+app.use('/api/user', userRoutes);
+
+// Organization Routes (RBAC + Multi-tenant)
+app.use('/api/org', organizationRoutes);
+app.use('/api/org', orgDeviceRoutes);
+
+// Device Routes
 app.use('/api/devices/manufacturer', manufacturerRoutes);
-app.use('/api/auth', users);
-app.use('/api/user', users);
 app.use('/api/devices', sensorModels);
 app.use('/api/devices', registerSensor);
 app.use('/api/devices', otaUpdate);
+app.use('/api/devices', notecard);
+app.use('/api/devices', notecardDeployment);
+
+// Deployment Routes
 app.use('/api/devices', deployment);
+
+// Telemetry Routes
 app.use('/api/telemetry', telemetry);
-app.use('/api/devices',notecard)
-app.use('/api/devices',notecardDeployment)
-app.use('/api',threshold)
-app.use('/api/subscriptions/admin',admin_subscription)
-app.use('/api/subscriptions/user',user_subscription)
+
+// Threshold & Monitoring Routes
+app.use('/api', threshold);
+
+// Subscription Management Routes
+app.use('/api/subscriptions/admin', admin_subscription);
+app.use('/api/subscriptions/user', user_subscription);
 
 
 // ✅ Connect Redis before starting server

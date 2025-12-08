@@ -1,14 +1,21 @@
 const express = require('express');
 const axios = require('axios');
-const addDevice = require('../../../model/devices/addDevice')
-const registerNewDevice = require('../../../model/devices/registerDevice')
-const SensorModel= require('../../../model/devices/deviceModels')
+const addDevice = require('../../../model/devices/addDevice');
+const registerNewDevice = require('../../../model/devices/registerDevice');
+const SensorModel = require('../../../model/devices/deviceModels');
 const User = require('../../../model/user/userModel');
 const Deployment = require('../../../model/deployment/deploymentModel');
 const { sendEmail } = require('../../../config/mail/nodemailer');
+
+const authenticateToken = require('../../../middleware/bearermiddleware');
+const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess');
+
 const enforceDeviceLimit = require('../../../middleware/subscriptions/enforceDeviceLimit');
+const checkFeatureAccess = require('../../../middleware/subscriptions/checkFeatureAccess');
+const { checkDeviceAccessCompatibility } = require('../../../middleware/devices/checkDeviceAccessCompatibility');
+const Organization = require('../../../model/organization/organizationModel');
+
 const UserSubscription = require('../../../model/subscriptions/UserSubscription');
-const checkFeatureAccess = require("../../../middleware/subscriptions/checkFeatureAccess");
 
 // const CardSubscription = require("../../model/subscriptions/cardSubscription");
 // const authenticateToken = require('../../middleware/apiKeymiddleware');
@@ -32,167 +39,189 @@ dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
 
 const AZURE_KEY = process.env.AZURE_MAPS_SUBSCRIPTION_KEY;
 
+
 /**
  * @swagger
  * /api/devices/register-device:
  *   post:
- *     summary: Register a new device
+ *     summary: Register a new device under the specified organization
  *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     description: |
+ *       Registers a new device under a specific **organization**.  
+ *       The organization ID **must be supplied as a query parameter**:
+ *       
+ *       ```
+ *       POST /api/devices/register-device?orgId=org-123
+ *       ```
+ *
+ *       Enforces RBAC permissions (`org.devices.add`), device limits,
+ *       and ownership constraints.
+ *
+ *     parameters:
+ *       - in: query
+ *         name: orgId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Organization ID (e.g., org-xxxx)
+ *
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [auid, serial, location, userid, nickname]
+ *             required: [auid, serial, location, nickname]
  *             properties:
  *               auid:
  *                 type: string
- *                 example: "AU-001-CCENV-01"
+ *                 example: "GH-L9O4-VEG7G_ICUPIJ48TB"
  *               serial:
  *                 type: string
- *                 example: "SN123456789"
+ *                 example: "GH-QITZ629NPT"
  *               location:
  *                 type: array
  *                 items:
  *                   type: number
+ *                 description: Latitude & longitude
  *                 example: [5.5605, -0.2057]
- *               userid:
- *                 type: string
- *                 example: "user-123"
  *               nickname:
  *                 type: string
- *                 example: "Lab Sensor"
+ *                 example: "Main Lab Sensor"
+ *
  *     responses:
  *       201:
  *         description: Device registered successfully
  *       400:
- *         description: Bad request
+ *         description: Missing required fields
+ *       403:
+ *         description: User lacks permission (org.devices.add)
  *       404:
- *         description: Device not found
+ *         description: Device not found in manufacturing database
+ *       409:
+ *         description: Device already registered
+ *       500:
+ *         description: Internal server error
  */
-router.post('/register-device', async (req, res) => {
-  const { auid, serial, location, userid, nickname } = req.body;
+router.post(
+  '/register-device',
+  authenticateToken,
+  checkOrgAccess("org.devices.add"),
+  async (req, res) => {
+    try {
+      const { auid, serial, location, nickname } = req.body;
+      const userid = req.user.userid;
 
-  try {
-   
-    await enforceDeviceLimit(userid);
+      // 🔥 orgId MUST come from query param
+      const organizationId = req.query.orgId;
 
-
-    const existing = await registerNewDevice.findOne({ serial });
-    if (existing) {
-      const message = existing.userid === userid
-        ? 'Device is already registered to this user.'
-        : 'Device is already registered by another user.';
-      return res.status(409).json({ message });
-    }
-
-
-    const manufactured = await addDevice.findOne({ serial });
-    if (!manufactured) {
-      return res.status(404).json({ message: 'Device not found in manufacturing records.' });
-    }
-
-
-    const [latitude, longitude] = location;
-
-    const geoRes = await axios.get(`https://atlas.microsoft.com/search/address/reverse/json`, {
-      params: {
-        'api-version': '1.0',
-        'subscription-key': AZURE_KEY,
-        query: `${latitude},${longitude}`
+      if (!organizationId) {
+        return res.status(400).json({
+          message: "organizationId (orgId) is required in query param"
+        });
       }
-    });
 
-    const address = geoRes?.data?.addresses?.[0]?.address || {};
+      // 1 — Device limit enforcement
+      await enforceDeviceLimit(userid);
 
-    const locationInfo = {
-      country: address.country,
-      region: address.countrySubdivision,
-      city: address.municipality,
-      postalCode: address.postalCode,
-      street: address.street,
-      municipality: address.municipality,
-      municipalitySubdivision: address.municipalitySubdivision,
-      latitude,
-      longitude
-    };
+      // 2 — Check if device already exists
+      const existing = await registerNewDevice.findOne({ serial });
+      if (existing) {
+        return res.status(409).json({
+          message: existing.organization === organizationId
+            ? "Device already registered in this organization."
+            : "Device belongs to another organization."
+        });
+      }
 
+      // 3 — Verify from manufacturing DB
+      const manufactured = await addDevice.findOne({ serial });
+      if (!manufactured) {
+        return res.status(404).json({ message: 'Device not found in manufacturing records.' });
+      }
 
+      const [latitude, longitude] = location;
 
-    const modelEntry = await SensorModel.findOne({ model: manufactured.model.toLowerCase() });
-    const imageUrl = modelEntry?.imageUrl || process.env.DEFAULT_IMAGE_URL;
+      // 4 — Reverse geocode location
+      const geoRes = await axios.get('https://atlas.microsoft.com/search/address/reverse/json', {
+        params: {
+          'api-version': '1.0',
+          'subscription-key': process.env.AZURE_MAPS_SUBSCRIPTION_KEY,
+          query: `${latitude},${longitude}`,
+        },
+      });
 
+      const address = geoRes?.data?.addresses?.[0]?.address || {};
+      const locationInfo = {
+        country: address.country,
+        region: address.countrySubdivision,
+        city: address.municipality,
+        postalCode: address.postalCode,
+        street: address.street,
+        municipality: address.municipality,
+        municipalitySubdivision: address.municipalitySubdivision,
+        latitude,
+        longitude,
+      };
 
-    const newDevice = new registerNewDevice({
-      auid,
-      serial,
-      devid: manufactured.devid,
-      mac: manufactured.mac,
-      model: manufactured.model,
-      type: manufactured.type,
-      datapoints: manufactured.datapoints,
-      userid,
-      nickname,
-      location: JSON.stringify(locationInfo),
-      battery: 100,
-      subscription: [],
-      image: imageUrl,
-      status: 'offline',
-      availability: 'private',
-      manufacturingId: manufactured.manufacturingId
-    });
+      // 5 — Image based on device model
+      const modelEntry = await SensorModel.findOne({ model: manufactured.model.toLowerCase() });
+      const imageUrl = modelEntry?.imageUrl || process.env.DEFAULT_IMAGE_URL;
 
-    await newDevice.save();
-    console.log('Device registered:', newDevice);
+      // 6 — Save device
+      const newDevice = new registerNewDevice({
+        auid,
+        serial,
+        devid: manufactured.devid,
+        mac: manufactured.mac,
+        model: manufactured.model,
+        type: manufactured.type,
+        datapoints: manufactured.datapoints,
 
+        // Owner
+        userid,
+        ownerUserId: userid,
 
-    await UserSubscription.updateOne(
-      { userId: userid },
-      { $inc: { "usage.devicesCount": 1 } }
-    );
+        // ORG + Deployment
+        organization: organizationId,
+        organizationId,
 
+        collaborators: [{
+          userid,
+          role: "device-admin",
+          permissions: ["update", "delete", "export", "share"],
+          addedAt: new Date(),
+        }],
 
-    return res.status(201).json(newDevice);
+        nickname,
+        location: JSON.stringify(locationInfo),
+        battery: 100,
+        subscription: [],
+        image: imageUrl,
+        status: 'offline',
+        availability: 'private',
+        manufacturingId: manufactured.manufacturingId,
+      });
 
-  } catch (error) {
-    console.error('Error registering device:', error);
-    return res.status(500).json({ error: error.message });
+      await newDevice.save();
+
+      // 7 — Add device to organization.devices[]
+      await Organization.updateOne(
+        { organizationId },
+        { $addToSet: { devices: auid } }
+      );
+
+      return res.status(201).json(newDevice);
+
+    } catch (error) {
+      console.error('Error registering device:', error);
+      return res.status(500).json({ error: error.message });
+    }
   }
-});
+);
 
-
-// /**
-//  * @swagger
-//  * /api/devices/all-registered-devices:
-//  *   get:
-//  *     tags:
-//  *       - Devices
-//  *     summary: Get all registered devices
-//  *     description: Retrieve a list of all registered devices.
-//  *     responses:
-//  *       200:
-//  *         description: Successfully retrieved all registered devices.
-//  *       404:
-//  *         description: No devices found.
-//  *       500:
-//  *         description: Error retrieving registered devices.
-//  */
-
-
-// router.get('/all-registered-devices', async (req, res) => {
-//   try {
-//     const devices = await registerNewDevice.find();
-
-//     if (devices && devices.length > 0) {
-//       res.json(devices);
-//     } else {
-//       res.status(404).json({ message: 'No devices found' });
-//     }
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
 
 
 /**
@@ -215,11 +244,18 @@ router.post('/register-device', async (req, res) => {
  *       500:
  *         description: Error retrieving devices.
  */
-router.get('/user/:userid/registered-devices', async (req, res) => {
+
+// LEGACY: GET /user/:userid/registered-devices
+// ✅ SECURITY UPGRADED: Now uses authenticateToken + checkDeviceAccessCompatibility
+// Access controlled via: direct ownership, legacy ownership, collaborator list, org-level RBAC, or fallback
+router.get('/user/:userid/registered-devices', authenticateToken, async (req, res) => {
   const { userid } = req.params;
+  const requestingUserId = req.user.userid;
 
   try {
+    // Query for owned and shared devices
     const ownedDevices = await registerNewDevice.find({ userid });
+    console.log(ownedDevices)
     const ownedDeviceDevids = new Set(ownedDevices.map(d => d.devid));
 
     const collaboratorDevices = await registerNewDevice.find({ 'collaborators.userid': userid });
@@ -234,7 +270,16 @@ router.get('/user/:userid/registered-devices', async (req, res) => {
       ...sharedDevicesWithFlag
     ];
 
-    res.status(200).json(allDevices);
+    // Filter devices based on RBAC + legacy compatibility
+    const accessibleDevices = [];
+    for (const device of allDevices) {
+      const allowed = await checkDeviceAccessCompatibility(req, device, 'view');
+      if (allowed) {
+        accessibleDevices.push(device);
+      }
+    }
+
+    res.status(200).json(accessibleDevices);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -262,81 +307,33 @@ router.get('/user/:userid/registered-devices', async (req, res) => {
  *         description: Error finding registered device.
  */
 
-
-router.get('/find-registered-device/:auid', async (req, res) => {
+// LEGACY: GET /find-registered-device/:auid
+// ✅ SECURITY UPGRADED: Now uses authenticateToken + checkDeviceAccessCompatibility
+// Access controlled via: direct ownership, legacy ownership, collaborator list, org-level RBAC, or fallback
+router.get('/find-registered-device/:auid', authenticateToken, async (req, res) => {
   const auid = req.params.auid;
 
   try {
     const device = await registerNewDevice.findOne({ auid: auid });
 
-    if (device) {
-      res.status(200).json(device);
-    } else {
-      res.status(404).json({ message: 'Device not found' });
+    if (!device) {
+      return res.status(404).json({ message: 'Device not found' });
     }
+
+    // Check device access
+    const allowed = await checkDeviceAccessCompatibility(req, device, 'view');
+    if (!allowed) {
+      return res.status(403).json({ message: 'Forbidden: You do not have access to this device.' });
+    }
+
+    res.status(200).json(device);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 
-// /**
-//  * @swagger
-//  * /api/devices/delete-device/{auid}:
-//  *   delete:
-//  *     tags:
-//  *       - Devices
-//  *     summary: Delete a device
-//  *     description: Deletes a device from the system using its AUID. Also removes the device from any deployments and clears its collaborators before deletion.
-//  *     parameters:
-//  *       - name: auid
-//  *         in: path
-//  *         required: true
-//  *         type: string
-//  *     responses:
-//  *       200:
-//  *         description: Device successfully deleted from all records.
-//  *       404:
-//  *         description: Device not found in registration records.
-//  *       500:
-//  *         description: Error deleting device.
-//  */
-// router.delete('/delete-device/:auid', async (req, res) => {
-//   const { auid } = req.params;
-
-//   try {
-//     // Get the registered device
-//     const device = await registerNewDevice.findOne({ auid });
-//     if (!device) {
-//       return res.status(404).json({ message: 'Device not found in registration records' });
-//     }
-
-//     const { devid } = device;
-
-//     // Remove this device from all deployments it's part of
-//     await Deployment.updateMany(
-//       { devices: devid },
-//       { $pull: { devices: devid } }
-//     );
-
-//     // Clear collaborators from the device
-//     device.collaborators = [];
-//     await device.save();
-
-//     // Delete from addDevice collection (if applicable)
-//     // await addDevice.findOneAndDelete({ devid });
-
-//     // Delete from registerNewDevice collection
-//     await registerNewDevice.findOneAndDelete({ auid });
-
-//     console.log("Device and its associated data removed from deployments and database.");
-//     return res.status(200).json({ message: 'Device successfully deleted from all records' });
-//   } catch (error) {
-//     console.error("Error during device deletion:", error);
-//     return res.status(500).json({ error: error.message });
-//   }
-// });
-
+ 
 /**
  * @swagger
  * /api/devices/delete-device/{userid}/{auid}:
@@ -366,7 +363,11 @@ router.get('/find-registered-device/:auid', async (req, res) => {
  *       500:
  *         description: Error deleting device.
  */
-router.delete('/delete-device/:userid/:auid', async (req, res) => {
+
+// LEGACY: DELETE /delete-device/:userid/:auid
+// ✅ SECURITY UPGRADED: Now uses authenticateToken + checkDeviceAccessCompatibility
+// Access controlled via: direct ownership, legacy ownership, collaborator list, org-level RBAC, or fallback
+router.delete('/delete-device/:userid/:auid', authenticateToken, async (req, res) => {
   const { userid, auid } = req.params;
 
   try {
@@ -376,10 +377,10 @@ router.delete('/delete-device/:userid/:auid', async (req, res) => {
       return res.status(404).json({ message: 'Device not found in registration records' });
     }
 
-    // Ensure the requester is the owner of the device
-    // device.userid may be ObjectId or string -> normalize to string
-    if (device.userid.toString() !== userid.toString()) {
-      return res.status(403).json({ message: 'Forbidden: only the device owner can delete this device.' });
+    // Check device access - delete requires 'delete' permission
+    const allowed = await checkDeviceAccessCompatibility(req, device, 'delete');
+    if (!allowed) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to delete this device.' });
     }
 
     const { devid } = device;
@@ -399,6 +400,14 @@ router.delete('/delete-device/:userid/:auid', async (req, res) => {
 
     // Delete from registerNewDevice collection
     await registerNewDevice.findOneAndDelete({ auid });
+
+    // Remove device from organization
+    const Organization = require('../../../model/organization/organizationModel');
+    await Organization.findByIdAndUpdate(
+      device.organizationId,
+      { $pull: { devices: auid } },
+      { new: true }
+    );
 
     console.log("Device and its associated data removed from deployments and database.");
     return res.status(200).json({ message: 'Device successfully deleted from all records' });
@@ -450,7 +459,11 @@ router.delete('/delete-device/:userid/:auid', async (req, res) => {
  *       500:
  *         description: Error retrieving device information.
  */
-router.get('/user/:userid/device-locations', async (req, res) => {
+
+// LEGACY: GET /user/:userid/device-locations
+// ✅ SECURITY UPGRADED: Now uses authenticateToken + checkDeviceAccessCompatibility
+// Access controlled via: direct ownership, legacy ownership, collaborator list, org-level RBAC, or fallback
+router.get('/user/:userid/device-locations', authenticateToken, async (req, res) => {
   const userid = req.params.userid;
 
   try {
@@ -461,15 +474,25 @@ router.get('/user/:userid/device-locations', async (req, res) => {
       return res.status(404).json({ message: 'No devices found for this user' });
     }
 
-    // Format the response to include auid, location, status, and battery
-    const deviceInfo = devices.map(device => ({
-      auid: device.auid,
-      location: device.location,
-      status: device.status,
-      battery: device.battery
-    }));
+    // Filter devices based on RBAC + legacy compatibility
+    const accessibleDeviceInfo = [];
+    for (const device of devices) {
+      const allowed = await checkDeviceAccessCompatibility(req, device, 'view');
+      if (allowed) {
+        accessibleDeviceInfo.push({
+          auid: device.auid,
+          location: device.location,
+          status: device.status,
+          battery: device.battery
+        });
+      }
+    }
 
-    res.status(200).json(deviceInfo);
+    if (accessibleDeviceInfo.length === 0) {
+      return res.status(404).json({ message: 'No devices found for this user' });
+    }
+
+    res.status(200).json(accessibleDeviceInfo);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -521,7 +544,7 @@ router.get('/user/:userid/device-locations', async (req, res) => {
  *       500:
  *         description: Error retrieving the device information.
  */
-router.get('/user/:userid/device/:auid/location', checkFeatureAccess("location_access"),async (req, res) => {
+router.get('/user/:userid/device/:auid/location', authenticateToken, checkFeatureAccess("location_access"), async (req, res) => {
   const { userid, auid } = req.params;
 
   try {
@@ -530,6 +553,12 @@ router.get('/user/:userid/device/:auid/location', checkFeatureAccess("location_a
 
     if (!device) {
       return res.status(404).json({ message: 'Device not found' });
+    }
+
+    // Check device access
+    const allowed = await checkDeviceAccessCompatibility(req, device, 'view');
+    if (!allowed) {
+      return res.status(403).json({ message: 'Forbidden: You do not have access to this device.' });
     }
 
     // Format the response to include auid, location, status, and battery
@@ -591,7 +620,7 @@ router.get('/user/:userid/device/:auid/location', checkFeatureAccess("location_a
  *       500:
  *         description: Server error while updating device.
  */
-router.put('/user/:userid/device/:auid/update', checkFeatureAccess("device_update"),async (req, res) => {
+router.put('/user/:userid/device/:auid/update', authenticateToken, checkFeatureAccess("device_update"), async (req, res) => {
   const { userid, auid } = req.params;
   const { nickname, location } = req.body;
 
@@ -604,6 +633,12 @@ router.put('/user/:userid/device/:auid/update', checkFeatureAccess("device_updat
   try {
     const device = await registerNewDevice.findOne({ userid, auid });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
+
+    // Check device access - update requires 'edit' permission
+    const allowed = await checkDeviceAccessCompatibility(req, device, 'edit');
+    if (!allowed) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to update this device.' });
+    }
 
     if (nickname) device.nickname = nickname;
 
@@ -697,17 +732,50 @@ router.put('/user/:userid/device/:auid/update', checkFeatureAccess("device_updat
  *       404:
  *         description: Device or user not found.
  */
-router.post('/:userid/device/:auid/collaborators', checkFeatureAccess("collaboration"), async (req, res) => {
+router.post('/:userid/device/:auid/collaborators', authenticateToken, checkFeatureAccess("collaboration"), async (req, res) => {
   const { userid, auid } = req.params;
   const { email, role, permissions = [] } = req.body;
 
   try {
     const device = await registerNewDevice.findOne({ auid });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
-    if (device.userid !== userid) return res.status(403).json({ message: 'Only the owner can add collaborators.' });
+
+    // Check device access - adding collaborators requires 'share' permission
+    const allowed = await checkDeviceAccessCompatibility(req, device, 'share');
+    if (!allowed) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to add collaborators to this device.' });
+    }
 
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'Target user not found.' });
+
+    // 🔗 REFERENTIAL INTEGRITY: Verify collaborator is in the organization
+    const Organization = require('../../../model/organization/organizationModel');
+    const org = await Organization.findOne({
+      organizationId: device.organizationId,
+      "collaborators.userid": user.userid
+    });
+
+    if (!org) {
+      return res.status(403).json({
+        message: 'Target user must be a member of the organization to collaborate on devices.',
+        requiredAction: 'Add user to organization first'
+      });
+    }
+
+    // 🔗 REFERENTIAL INTEGRITY: If device in deployment, verify collaborator is in deployment too
+    if (device.deploymentId) {
+      const Deployment = require('../../../model/deployment/deploymentModel');
+      const deployment = await Deployment.findOne({
+        deploymentid: device.deploymentId,
+        "collaborators.userid": user.userid
+      });
+
+      if (!deployment) {
+        // User can still be added to device, but note deployment restriction
+        console.warn(`ℹ️ User ${user.userid} not in deployment ${device.deploymentId}, device access may be limited`);
+      }
+    }
 
     const exists = device.collaborators.find(c => c.userid === user.userid.toString());
     if (exists) return res.status(409).json({ message: 'Collaborator already exists.' });
@@ -769,65 +837,28 @@ router.post('/:userid/device/:auid/collaborators', checkFeatureAccess("collabora
  *       404:
  *         description: Device or user not found.
  */
-router.delete('/:userid/device/:auid/collaborators', async (req, res) => {
+
+// LEGACY: DELETE /:userid/device/:auid/collaborators
+// ✅ SECURITY UPGRADED: Now uses authenticateToken + checkDeviceAccessCompatibility
+// Access controlled via: direct ownership, legacy ownership, collaborator list, org-level RBAC, or fallback
+router.delete('/:userid/device/:auid/collaborators', authenticateToken, async (req, res) => {
   const { userid, auid } = req.params;
   const { email } = req.body;
 
   try {
     const device = await registerNewDevice.findOne({ auid });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
-    if (device.userid !== userid) return res.status(403).json({ message: 'Only the owner can remove collaborators.' });
+
+    // Check device access - removing collaborators requires 'share' permission
+    const allowed = await checkDeviceAccessCompatibility(req, device, 'share');
+    if (!allowed) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to remove collaborators from this device.' });
+    }
 
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'Target user not found.' });
 
-    device.collaborators = device.collaborators.filter(c => c.userid !== user._id.toString());
-    await device.save();
-    res.status(200).json({ message: 'Collaborator removed.', collaborators: device.collaborators });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-/**
- * @swagger
- * /api/devices/{userid}/device/{auid}/collaborators:
- *   delete:
- *     tags: [Devices]
- *     summary: Remove a collaborator from a device
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *             properties:
- *               email:
- *                 type: string
- *     responses:
- *       200:
- *         description: Collaborator removed.
- *       403:
- *         description: Unauthorized.
- *       404:
- *         description: Device or user not found.
- */
-router.delete('/:userid/device/:auid/collaborators', async (req, res) => {
-  const { userid, auid } = req.params;
-  const { email } = req.body;
-
-  try {
-    const device = await registerNewDevice.findOne({ auid });
-    if (!device) return res.status(404).json({ message: 'Device not found.' });
-    if (device.userid !== userid) return res.status(403).json({ message: 'Only the owner can remove collaborators.' });
-
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: 'Target user not found.' });
-
-    device.collaborators = device.collaborators.filter(c => c.userid !== user._id.toString());
+    device.collaborators = device.collaborators.filter(c => c.userid !== user.userid.toString());
     await device.save();
     res.status(200).json({ message: 'Collaborator removed.', collaborators: device.collaborators });
   } catch (err) {
@@ -871,13 +902,23 @@ router.delete('/:userid/device/:auid/collaborators', async (req, res) => {
  *       404:
  *         description: Device or user not found.
  */
-router.post('/:userid/device/:auid/collaborators/permissions', async (req, res) => {
+
+// LEGACY: POST /:userid/device/:auid/collaborators/permissions
+// ✅ SECURITY UPGRADED: Now uses authenticateToken + checkDeviceAccessCompatibility
+// Access controlled via: direct ownership, legacy ownership, collaborator list, org-level RBAC, or fallback
+router.post('/:userid/device/:auid/collaborators/permissions', authenticateToken, async (req, res) => {
   const { userid, auid } = req.params;
   const { email } = req.body;
 
   try {
     const device = await registerNewDevice.findOne({ auid });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
+
+    // Check device access - viewing permissions requires 'view' permission
+    const allowed = await checkDeviceAccessCompatibility(req, device, 'view');
+    if (!allowed) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to view this device information.' });
+    }
 
     const ownerUser = await User.findById(device.userid);
     const targetUser = await User.findOne({ email });
@@ -888,7 +929,7 @@ router.post('/:userid/device/:auid/collaborators/permissions', async (req, res) 
       return res.status(200).json({ role: 'owner', permissions: ['*'] });
     }
 
-    const collab = device.collaborators.find(c => c.userid === targetUser._id.toString());
+    const collab = device.collaborators.find(c => c.userid === targetUser.userid.toString());
     if (!collab) return res.status(404).json({ message: 'Collaborator not found on this device.' });
 
     return res.status(200).json({ role: collab.role, permissions: collab.permissions });
@@ -950,15 +991,23 @@ router.post('/:userid/device/:auid/collaborators/permissions', async (req, res) 
  *         description: Server error
  */
 
+// LEGACY: POST /:userid/device/:auid/collaborators/batch
+// ✅ SECURITY UPGRADED: Now uses authenticateToken + checkDeviceAccessCompatibility
+// Access controlled via: direct ownership, legacy ownership, collaborator list, org-level RBAC, or fallback
 // Batch Add Collaborators to One Device
-router.post('/:userid/device/:auid/collaborators/batch', async (req, res) => {
+router.post('/:userid/device/:auid/collaborators/batch', authenticateToken, async (req, res) => {
   const { userid, auid } = req.params;
   const { collaborators } = req.body; // [{ email, role, permissions }]
 
   try {
     const device = await registerNewDevice.findOne({ auid });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
-    if (device.userid !== userid) return res.status(403).json({ message: 'Only the owner can add collaborators.' });
+
+    // Check device access - batch adding collaborators requires 'share' permission
+    const allowed = await checkDeviceAccessCompatibility(req, device, 'share');
+    if (!allowed) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to add collaborators to this device.' });
+    }
 
     const added = [];
     for (const collab of collaborators) {
@@ -1029,8 +1078,11 @@ router.post('/:userid/device/:auid/collaborators/batch', async (req, res) => {
  *         description: Server error
  */
 
+// LEGACY: POST /collaborator/:email/devices/batch
+// ✅ SECURITY UPGRADED: Now uses authenticateToken + checkDeviceAccessCompatibility
+// Access controlled via: direct ownership, legacy ownership, collaborator list, org-level RBAC, or fallback
 // Batch Add One Collaborator to Multiple Devices
-router.post('/collaborator/:email/devices/batch', async (req, res) => {
+router.post('/collaborator/:email/devices/batch', authenticateToken, async (req, res) => {
   const { email } = req.params;
   const { devices } = req.body; // [{ auid, role, permissions }]
 
@@ -1041,8 +1093,16 @@ router.post('/collaborator/:email/devices/batch', async (req, res) => {
     const added = [];
     for (const item of devices) {
       const device = await registerNewDevice.findOne({ auid: item.auid });
-      if (device && device.userid !== user.userid.toString() && !device.collaborators.find(c => c.userid === user.userid.toString())) {
-        device.collaborators.push({ userid: user.userid.toString(), role: item.role, permissions: item.permissions });
+
+      // Check device access for each device - adding collaborators requires 'share' permission
+      if (device) {
+        const allowed = await checkDeviceAccessCompatibility(req, device, 'share');
+        if (!allowed) {
+          continue; // Skip devices user doesn't have permission to modify
+        }
+
+        if (device.userid !== user.userid.toString() && !device.collaborators.find(c => c.userid === user.userid.toString())) {
+          device.collaborators.push({ userid: user.userid.toString(), role: item.role, permissions: item.permissions });
         await device.save();
         added.push(item.auid);
 
@@ -1053,7 +1113,8 @@ router.post('/collaborator/:email/devices/batch', async (req, res) => {
           <p><a href="https://console.craftedclimate.co" target="_blank">Access the Dashboard</a></p>
           <p>CraftedClimate Team</p>
         `;
-        await sendEmail(user.email, `You've been added as a collaborator on ${device.nickname}`, emailContent);
+          await sendEmail(user.email, `You've been added as a collaborator on ${device.nickname}`, emailContent);
+        }
       }
     }
 
@@ -1107,7 +1168,7 @@ router.post('/collaborator/:email/devices/batch', async (req, res) => {
  *       500:
  *         description: Server error.
  */
-router.put('/user/:userid/device/:auid/availability', checkFeatureAccess("public_listing"),async (req, res) => {
+router.put('/user/:userid/device/:auid/availability', authenticateToken, checkFeatureAccess("public_listing"), async (req, res) => {
   const { userid, auid } = req.params;
   const { availability } = req.body;
 
@@ -1122,6 +1183,12 @@ router.put('/user/:userid/device/:auid/availability', checkFeatureAccess("public
       return res.status(404).json({ message: 'Device not found or does not belong to this user.' });
     }
 
+    // Check device access - updating availability requires 'edit' permission
+    const allowed = await checkDeviceAccessCompatibility(req, device, 'edit');
+    if (!allowed) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to update this device.' });
+    }
+
     device.availability = availability;
     await device.save();
 
@@ -1132,4 +1199,7 @@ router.put('/user/:userid/device/:auid/availability', checkFeatureAccess("public
   }
 });
 
+
+// 🔗 ORG-SCOPED DEVICE ROUTES MOVED TO /routes/organizations/orgDeviceRoutes.js
+// See orgDeviceRoutes.js for routes: GET/PUT/DELETE /:orgId/devices and device operations
 module.exports = router;

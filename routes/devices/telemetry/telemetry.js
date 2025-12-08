@@ -15,6 +15,8 @@ const {dbRouteLimiter,csvRouteLimiter} =  require('../../../middleware/rateLimit
 const enforceTelemetryIngestion = require('../../../middleware/subscriptions/enforceTelemetryIngestion');
 const enforceTelemetryFeature = require('../../../middleware/subscriptions/enforceTelemetryFeature');
 const authenticateToken = require('../../../middleware/bearermiddleware');
+const checkOrgAccess = require("../../../middleware/organization/checkOrgAccess");
+const checkTelemetryReadAccess = require("../../../middleware/organization/checkTelemetryReadAccess");
 
 // const csvRouteLimiter
 
@@ -203,7 +205,10 @@ router.post('/:model', enforceTelemetryIngestion, async (req, res) => {
  *         description: Server error
  */
 
-router.get('/:userid/device/:auid',enforceTelemetryFeature({ feature: "device_read" }), async (req, res) => {
+router.get('/:userid/device/:auid',authenticateToken,
+  checkOrgAccess("org.devices.view"),
+  checkTelemetryReadAccess,
+  enforceTelemetryFeature({ feature: "device_read" }), async (req, res) => {
   const { userid, auid } = req.params;
   let limit = parseInt(req.query.limit, 10);
   if (isNaN(limit) || limit <= 0) limit = 50;
@@ -455,7 +460,11 @@ router.get('/public/telemetry', async (req, res) => {
  *       500:
  *         description: Server error.
  */
-router.get('/db/:model/:auid', dbRouteLimiter,enforceTelemetryFeature({ feature: "device_read" }),async (req, res) => {
+router.get('/db/:model/:auid', authenticateToken,
+  checkOrgAccess("org.devices.view"),
+  checkTelemetryReadAccess,
+  enforceTelemetryFeature({ feature: "device_read" }),
+  dbRouteLimiter,async (req, res) => {
   const model = String(req.params.model || '').toLowerCase();
   const auid  = String(req.params.auid || '').trim();
 
@@ -553,8 +562,11 @@ router.get('/db/:model/:auid', dbRouteLimiter,enforceTelemetryFeature({ feature:
  *         description: Server error.
  */
 
-router.get('/db/:model/:auid/csv',   authenticateToken,
-csvRouteLimiter,enforceTelemetryFeature({
+router.get('/db/:model/:auid/csv',  authenticateToken,
+  checkOrgAccess("org.devices.view"),
+  checkTelemetryReadAccess,
+  csvRouteLimiter,
+  enforceTelemetryFeature({
       feature: "export",
       quotaKey: "monthlyExports",
       log: "monthlyExports"

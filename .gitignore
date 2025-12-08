@@ -3,3 +3,19 @@ config/certificates/*
 .env
 .env.development
 .env.production
+
+# Documentation and reports
+*.md
+prompt.txt
+PROMPT*.md
+*_REPORT.md
+*_SUMMARY.md
+*_AUDIT*.md
+*_COMPLETION.md
+*_GUIDE.md
+*_CHECKLIST.md
+*_QUICK*.md
+*_INDEX.md
+*_FINDINGS.md
+CHANGES.md
+QA_*.md

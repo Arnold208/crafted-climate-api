@@ -8,7 +8,7 @@ const options = {
     openapi: '3.0.0',
     info: {
       title: 'CraftedClimate API',
-      version: '1.0.0',
+      version: '2.0.0',
       description: `
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -22,140 +22,47 @@ const options = {
     margin: 0 auto;
     padding: 0 24px;
   }
-  .markdown-body code {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.9em;
-    background: #f6f8fa;
-    border-radius: 4px;
-    padding: 0.2em 0.4em;
-  }
-  .markdown-body pre {
-    background: #f6f8fa;
-    border-radius: 8px;
-    padding: 16px;
-    margin: 16px 0;
-  }
-  .markdown-body table {
-    border-collapse: separate;
-    border-spacing: 0;
-    width: 100%;
-    margin: 16px 0;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  }
-  .markdown-body th {
-    background: #f6f8fa;
-    padding: 12px 16px;
-    text-align: left;
-    font-weight: 600;
-  }
-  .markdown-body td {
-    padding: 12px 16px;
-    border-top: 1px solid #eaecef;
-  }
-  .markdown-body h1, .markdown-body h2, .markdown-body h3 {
-    font-weight: 600;
-    margin-top: 32px;
-    margin-bottom: 16px;
-  }
-  .markdown-body h1 {
-    border-bottom: 1px solid #eaecef;
-    padding-bottom: 0.3em;
-  }
-  .trademark {
-    font-size: 0.8em;
-    color: #6e7681;
-    text-align: right;
-    margin-top: 48px;
-    padding-top: 16px;
-    border-top: 1px solid #eaecef;
-  }
 </style>
 
-<img src="/climate-docs/logo" alt="CraftedClimate Logo" style="display: block; margin: 20px auto; max-width: 300px;">
+<img src="/climate-docs/logo" alt="CraftedClimate Logo" style="display:block;margin:20px auto;max-width:300px;">
 
 # CraftedClimate API Documentation
 
-Welcome to the CraftedClimate API documentation. This API provides endpoints for:
+This API provides tenant-isolated, multi-organizational access for climate sensor deployments and data analytics.
 
-- User Authentication & Management
-- Device Telemetry Management
-- Deployment Configuration
-- Real-time Data Collection
-
-## Key Features
-
-- **Authentication**: Secure user registration and login with JWT tokens  
-- **Device Management**: Register and manage IoT devices with real-time updates  
-- **Telemetry**: Submit and retrieve device telemetry data with efficient caching  
-- **Deployments**: Organize devices into deployments with access control  
-
-## Security
-
-This API implements multiple layers of protection:
-
-- **JWT Authentication** – required for user operations  
-- **API Key Authentication** – required for device telemetry submissions  
-- **Rate Limiting** – prevents abuse of endpoints  
-- **Role-Based Access Control** – user roles define privileges  
+### **Architecture**
+- Multi-Tenant (Organization-Based)
+- Role-Based Access Control (RBAC)
+- JWT Authentication
+- API Key for Telemetry Devices
+- WebSocket Real-Time Telemetry
 
 ---
 
-## Real-time Data with WebSocket
+## **Required Headers for Organization APIs**
+Most endpoints need:
 
-Crafted Climate provides a secure JWT-authenticated WebSocket service for real-time telemetry access.
+\`\`\`
+Authorization: Bearer <jwt-token>
+x-org-id: org_xxx   ← required for org-scoped routes
+\`\`\`
+
+---
+
+## Real-Time WebSocket Example
 
 \`\`\`javascript
-// Initialize Socket.IO client
 const socket = io('https://api.craftedclimate.org', {
   transports: ['websocket'],
-  auth: {
-    token: 'your-jwt-access-token' // obtained from /api/auth/login
-  }
+  auth: { token: JWT_ACCESS_TOKEN }
 });
-
-// Join a device telemetry channel (AUID)
-socket.emit('join', 'device-auid', (ack) => {
-  if (ack?.ok) {
-    console.log(\`Joined telemetry channel: \${ack.room}\`);
-  } else {
-    console.error('Join failed:', ack?.error);
-  }
-});
-
-// Receive live telemetry
-socket.on('telemetry', (data) => {
-  console.log('Received telemetry:', data);
-});
-
-// Handle disconnects
-socket.on('disconnect', (reason) => {
-  console.warn('Disconnected:', reason);
-});
+socket.emit('join', 'device-auid');
+socket.on('telemetry', (data) => console.log(data));
 \`\`\`
 
-### WebSocket Events
+---
 
-| Event | Description |
-|-------|-------------|
-| \`join\` | Join a device’s telemetry channel using its AUID |
-| \`leave\` | Leave a previously joined telemetry channel |
-| \`telemetry\` | Receive real-time sensor telemetry updates |
-| \`disconnect\` | Fired when the connection closes or times out |
-
-### Authentication
-
-All realtime connections require a **JWT access token**.  
-Tokens are obtained from:
-
-\`\`\`
-POST /api/auth/login
-\`\`\`
-
-Include the token in the \`auth\` property when connecting.
-
-### Example Telemetry Payload
+## Example Telemetry Payload
 
 \`\`\`json
 {
@@ -169,106 +76,133 @@ Include the token in the \`auth\` property when connecting.
 }
 \`\`\`
 
-### Error Responses
-
-| Error | Cause |
-|-------|-------|
-| \`Missing authentication token.\` | JWT token not provided |
-| \`Authentication failed.\` | Token invalid or expired |
-| \`Invalid AUID\` | AUID missing or malformed |
-| \`Socket.IO not initialized\` | Server not active |
-
-For more examples and SDKs, visit [craftedclimate.com/docs](https://craftedclimate.com/docs).
-
-<div class="trademark">© CraftedClimate 2025. All rights reserved.</div>
+---
 `,
       contact: {
         name: 'CraftedClimate Support',
         email: 'support@craftedclimate.com',
         url: 'https://craftedclimate.com/support'
-      },
-      license: {
-        name: 'Proprietary',
-        url: 'https://craftedclimate.com/terms'
       }
     },
+
     servers: [
       {
         url: isProd ? prodUrl : 'http://localhost:3000',
         description: isProd ? 'Production Server' : 'Development Server'
       }
     ],
+
     components: {
-      schemas: {
-        Error: {
-          type: 'object',
-          properties: {
-            message: { type: 'string', description: 'Error message' },
-            error: { type: 'string', description: 'Detailed error information' }
-          }
-        },
-        User: {
-          type: 'object',
-          properties: {
-            userid: { type: 'string', description: 'Unique user identifier' },
-            username: { type: 'string', description: 'User name' },
-            email: { type: 'string', description: 'User email address' }
-          }
-        },
-        Device: {
-          type: 'object',
-          properties: {
-            devid: { type: 'string', description: 'Device identifier' },
-            model: { type: 'string', description: 'Device model' },
-            type: { type: 'string', description: 'Device type' }
-          }
-        },
-        Deployment: {
-          type: 'object',
-          properties: {
-            deploymentid: { type: 'string', description: 'Deployment identifier' },
-            name: { type: 'string', description: 'Deployment name' },
-            devices: {
-              type: 'array',
-              items: { $ref: '#/components/schemas/Device' }
-            }
-          }
-        }
-      },
       securitySchemes: {
         bearerAuth: {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          description: 'JWT token obtained from login endpoint'
+          description: 'Access token from login endpoint'
         },
+
+        // NEW — Required for all multi-tenant org-scoped routes
+        orgIdHeader: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'x-org-id',
+          description: 'Active Organization Context'
+        },
+
         apiKeyAuth: {
           type: 'apiKey',
           in: 'header',
           name: 'X-API-KEY',
-          description: 'API key for device telemetry operations'
+          description: 'API key for device telemetry'
+        }
+      },
+
+      schemas: {
+        User: {
+          type: 'object',
+          properties: {
+            userid: { type: 'string' },
+            email: { type: 'string' },
+            role: { type: 'string', example: 'admin' },
+            organizations: { type: 'array', items: { type: 'string' } }
+          }
+        },
+
+        Organization: {
+          type: 'object',
+          properties: {
+            organizationId: { type: 'string' },
+            name: { type: 'string' },
+            collaborators: { type: 'array' }
+          }
+        },
+
+        Device: {
+          type: 'object',
+          properties: {
+            auid: { type: 'string' },
+            devid: { type: 'string' },
+            model: { type: 'string' },
+            organization: { type: 'string' }
+          }
+        },
+
+        Deployment: {
+          type: 'object',
+          properties: {
+            deploymentid: { type: 'string' },
+            organizationId: { type: 'string' },
+            devices: { type: 'array', items: { $ref: '#/components/schemas/Device' } }
+          }
         }
       }
     },
-    security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
+
+    // Default security
+    security: [
+      { bearerAuth: [] },
+      { orgIdHeader: [] }
+    ],
+
     tags: [
-      { name: 'Authentication', description: 'User registration and login' },
-      { name: 'Telemetry', description: 'Device telemetry submission and retrieval' },
-      { name: 'Deployments', description: 'Deployment configuration and management' }
+      { name: 'Authentication', description: 'User signup, login, and profile management' },
+      { name: 'Organizations', description: 'Multi-tenant organization management with RBAC and membership' },
+      { name: 'Devices', description: 'Device registration, management, and control (manufacturer, sensor models, OTA updates, notecard)' },
+      { name: 'Deployments', description: 'Deployment grouping, device assignment, and organizational hierarchy' },
+      { name: 'Telemetry', description: 'Device telemetry ingestion, retrieval, and real-time data streaming' },
+      { name: 'Thresholds', description: 'Alert threshold configuration and monitoring' },
+      { name: 'Subscriptions', description: 'Subscription management, billing, and plan feature enforcement' }
     ]
   },
+  
   apis: [
-    './routes/devices/manufacturer/**/*.js',
-    './routes/devices/threshold/**/*.js',
+    // Authentication & User Routes
     './routes/user/**/*.js',
-    './routes/subscriptions/**/*.js',
-    './routes/devices/deployment/**/*.js',
+    
+    // Organization Routes (RBAC + Multi-tenant)
+    './routes/organizations/**/*.js',
+    
+    // Device Routes (Registration, RBAC, Management)
     './routes/devices/user/**/*.js',
+    './routes/devices/manufacturer/**/*.js',
+    './routes/devices/sensorModel/**/*.js',
+    './routes/devices/ota/**/*.js',
+    './routes/devices/notecard/**/*.js',
+    
+    // Deployment Routes (Grouping & RBAC)
+    './routes/devices/deployment/**/*.js',
+    
+    // Telemetry Routes (Ingest & Read)
     './routes/devices/telemetry/**/*.js',
-    './model/user/**/*.js',
-    './model/deployment/**/*.js',
-    './model/telemetry/**/*.js',
-    './routes/devices/notecard/**/*.js'
+    
+    // Threshold & Monitoring Routes
+    './routes/devices/threshold/**/*.js',
+    
+    // Subscription Management Routes
+    './routes/subscriptions/**/*.js',
+    
+    // Legacy/Test Routes
+    './routes/test.js'
   ]
 };
 

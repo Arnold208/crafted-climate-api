@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const nanoid = require('nanoid')
+const { nanoid } = require('nanoid');
+const { v4: uuidv4 } = require('uuid');
+
 const User = require('../../model/user/userModel');
+const Organization = require('../../model/organization/organizationModel');
 const jwt = require('jsonwebtoken');
 const authenticateToken = require('../../middleware/bearermiddleware');
 const Invitation = require('../../model/invitation/invitationModel');
@@ -16,7 +19,7 @@ const { sendEmail } = require('../../config/mail/nodemailer');
 
 const { upload, containerClient, generateSignedUrl } = require('../../config/storage/storage');
 const { otpLimiter } = require('../../middleware/rateLimiter');
-const { generateuserid } = require('../../utils/idGenerator');
+const { generateUserId } = require('../../utils/idGenerator');
 const authorizeRoles = require('../../middleware/rbacMiddleware');
 const verifyApiKey = require('../../middleware/apiKeymiddleware');
 
@@ -88,6 +91,9 @@ router.post('/signup', otpLimiter, upload.single('profilePicture'), async (req, 
     contact = normalizeContact(contact);
 
     try {
+        // -------------------------------------------------------
+        // 1. PRE-CHECKS
+        // -------------------------------------------------------
         const existingEmailUser = await User.findOne({ email });
         if (existingEmailUser) {
             return res.status(400).send({ message: 'User with this email already exists' });
@@ -98,9 +104,9 @@ router.post('/signup', otpLimiter, upload.single('profilePicture'), async (req, 
             return res.status(400).send({ message: 'User with this contact number already exists' });
         }
 
-        let invitation;
-        let role = 'user';
+        let invitation = null;
         let devices = [];
+        let role = "user";
 
         if (invitationId) {
             invitation = await Invitation.findOne({
@@ -109,26 +115,35 @@ router.post('/signup', otpLimiter, upload.single('profilePicture'), async (req, 
                 accepted: false,
                 expiresAt: { $gt: new Date() }
             });
+
             if (!invitation) {
                 return res.status(400).send({ message: 'Invalid or expired invitation' });
             }
-            role = 'supervisor';
+
+            role = "supervisor";
             if (invitation.deviceId) {
-                devices.push({ deviceId: invitsation.deviceId, accessType: 'invited' });
+                devices.push({ deviceId: invitation.deviceId, accessType: "invited" });
             }
         }
 
-        const otpCode = Math.floor(100000 + Math.random() * 900000);
+        // -------------------------------------------------------
+        // 2. CREATE USER RECORD
+        // -------------------------------------------------------
+        const userid = generateUserId();
+;
         const hashedPassword = await bcrypt.hash(password, 10);
-        const userid = generateuserid();
+        const otpCode = Math.floor(100000 + Math.random() * 900000);
 
-        let profilePictureUrl = '';
+        // Upload profile picture if included
+        let profilePictureUrl = "";
         if (req.file) {
             const fileName = `profile-${Date.now()}-${req.file.originalname}`;
             const blockBlobClient = containerClient.getBlockBlobClient(fileName);
+
             await blockBlobClient.upload(req.file.buffer, req.file.buffer.length, {
                 blobHTTPHeaders: { blobContentType: req.file.mimetype },
             });
+
             profilePictureUrl = generateSignedUrl(fileName);
         }
 
@@ -140,76 +155,116 @@ router.post('/signup', otpLimiter, upload.single('profilePicture'), async (req, 
             contact,
             firstName,
             lastName,
-            role,
-            devices,
             profilePicture: profilePictureUrl,
+            role, // legacy role system
+            devices,
             otp: otpCode,
             otpExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
             lastOtpSentAt: new Date(),
+            platformRole: "user",
         });
 
         await newUser.save();
 
-       try {
-    const freemiumPlan = await Plan.findOne({ name: "freemium", isActive: true });
+        // -------------------------------------------------------
+        // 3. CREATE PERSONAL ORGANIZATION
+        // -------------------------------------------------------
+        const personalOrgId = `org-${uuidv4()}`;
 
-    if (!freemiumPlan) {
-        console.error("❌ Freemium plan not found.");
-    } else {
-
-        // Create subscription with UUID-based identifiers
-        const subscription = await UserSubscription.create({
-            subscriptionId: uuidv4(),    // explicitly assign if you want to override default
-            userid: userid,
-            planId: freemiumPlan.planId, // UUID string from Plan
-            billingCycle: "free",
-            status: "active",
-            startDate: new Date(),
-            endDate: null,
-            autoRenew: false,
-            usage: {
-                devicesCount: 0,
-                exportsThisMonth: 0,
-                apiCallsThisMonth: 0
-            }
+        const personalOrg = new Organization({
+            organizationId: personalOrgId,
+            name: `${firstName || username}'s Workspace`,
+            description: "Personal organization workspace",
+            planType: "personal",
+            collaborators: [
+                {
+                    userid: userid,
+                    role: "org-admin",
+                    permissions: []
+                }
+            ],
+            createdBy: userid
         });
 
-        // Store the UUID subscriptionId inside User model
-        newUser.subscription = subscription.subscriptionId;
+        await personalOrg.save();
+
+        // Link user → org
+        newUser.personalOrganizationId = personalOrgId;
+        newUser.currentOrganizationId = personalOrgId;
+        newUser.organization = [personalOrgId];
         await newUser.save();
 
-        console.log(`✔ Auto-assigned freemium plan to user: ${userid}`);
-    }
+        // -------------------------------------------------------
+        // 4. ASSIGN FREEMIUM SUBSCRIPTION (UUID ONLY)
+        // -------------------------------------------------------
+        const freemiumPlan = await Plan.findOne({ name: "freemium", isActive: true });
 
-} catch (subErr) {
-    console.error("❌ Error auto-assigning freemium plan:", subErr);
-}
+        if (!freemiumPlan) {
+            console.error("❌ Freemium plan not found.");
+        } else {
+            const subscription = await UserSubscription.create({
+                subscriptionId: uuidv4(),         // UUID primary key
+                userid: userid,                   // user UUID
+                organizationId: personalOrgId,    // org UUID
+                subscriptionScope: "personal",
+                planId: freemiumPlan.planId,      // plan UUID
+                status: "active",
+                billingCycle: "free",
+                autoRenew: false,
+                usage: {
+                    devicesCount: 0,
+                    exportsThisMonth: 0,
+                    apiCallsThisMonth: 0
+                }
+            });
 
+            newUser.subscription = subscription.subscriptionId; // UUID string ONLY
+            await newUser.save();
+        }
+
+        // -------------------------------------------------------
+        // 5. INVITATION HANDLING (ENTERPRISE ONBOARDING)
+        // -------------------------------------------------------
         if (invitation) {
             invitation.accepted = true;
             await invitation.save();
 
-            const organization = await Organization.findOne({ organizationId: invitation.organizationId });
-            if (organization) {
-                organization.collaborators.push({
+            const org = await Organization.findOne({ organizationId: invitation.organizationId });
+
+            if (org) {
+                org.collaborators.push({
                     userid: userid,
-                    accessLevel: invitation.accessLevel || 'MODERATOR',
+                    role: invitation.accessLevel || "org-support",
                     permissions: []
                 });
-                await organization.save();
+                await org.save();
 
-                newUser.organization.push(organization.organizationId);
-                newUser.deployments = [...new Set([...newUser.deployments, ...organization.deployments])];
+                newUser.organization.push(org.organizationId);
+                // 🔗 REFERENTIAL INTEGRITY: DO NOT DENORMALIZE DEPLOYMENTS
+                // Users should query deployments from organizations they belong to
+                // This prevents stale data when org adds new deployments
+                // Removed: newUser.deployments = [...new Set([...newUser.deployments, ...org.deployments])];
                 await newUser.save();
             }
         }
 
+        // -------------------------------------------------------
+        // 6. SEND OTP
+        // -------------------------------------------------------
         await sendSMS(contact, `Your CraftedClimate OTP is ${otpCode}. It expires in 15 minutes.`);
 
-        res.status(201).send({ message: 'User registered successfully', userid, verified: newUser.verified });
+        return res.status(201).send({
+            message: 'User registered successfully',
+            userid,
+            personalOrganizationId: newUser.personalOrganizationId,
+            currentOrganizationId: newUser.currentOrganizationId,
+            subscriptionId: newUser.subscription,
+            verified: newUser.verified
+        });
+
     } catch (error) {
-        console.log(error);
-        res.status(500).send({ message: 'Internal server error', error: error.message });
+        console.error(error);
+        return res.status(500).send({ message: 'Internal server error', error: error.message });
     }
 });
 
@@ -316,10 +371,12 @@ router.post('/login', async (req, res) => {
         }
 
         const payload = {
-            role: user.role,
             userid: user.userid,
             email: user.email,
             username: user.username,
+            platformRole: user.role,
+            organizations: user.organization,
+            currentOrganizationId: user.currentOrganizationId || null
         };
 
         const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
@@ -330,10 +387,18 @@ router.post('/login', async (req, res) => {
         res.status(200).send({
             accessToken,
             refreshToken,
+            // New multi-tenant return structure:
             userid: user.userid,
             email: user.email,
             username: user.username,
-            role: user.role,
+            platformRole: user.role,
+
+            organizations: user.organization,
+            currentOrganizationId: user.currentOrganizationId || null,
+
+            personalOrganizationId: user.personalOrganizationId || null,
+
+            subscriptionId: UserSubscription ? UserSubscription.subscriptionId : null
         });
     } catch (error) {
         res.status(500).send({ message: 'Internal server error', error: error.message });
@@ -393,15 +458,16 @@ router.post('/refresh-token', async (req, res) => {
 
         // Build new payload (keep same claims as login)
         const newPayload = {
-            userid: user._id,
-            role: user.role,
             userid: user.userid,
             email: user.email,
             username: user.username,
+            platformRole: user.role,
+            organizations: user.organization,
+            currentOrganizationId: user.currentOrganizationId || null
         };
 
         // Issue new tokens — keep the same expiry rules used in /login
-        const accessToken = jwt.sign(newPayload, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '60m' });
+        const accessToken = jwt.sign(newPayload, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '5h' });
         const newRefreshToken = jwt.sign(newPayload, process.env.REFRESH_TOKEN_SECRET); // no expiresIn to match your login
 
         // Optional: if storing refresh tokens server-side, replace the old token with the new one here
@@ -411,12 +477,16 @@ router.post('/refresh-token', async (req, res) => {
         // await user.save();
 
         return res.status(200).send({
-            accessToken,
+            message: "Token refreshed",
+            accessToken: newAccessToken,
             refreshToken: newRefreshToken,
+
             userid: user.userid,
-            email: user.email,
-            username: user.username,
-            role: user.role,
+            organizations: user.organization,
+            currentOrganizationId: user.currentOrganizationId || null,
+            personalOrganizationId: user.personalOrganizationId || null,
+            platformRole: user.role,
+            subscriptionId: subscription ? subscription.subscriptionId : null
         });
     } catch (err) {
         // jwt.verify throws on invalid/expired tokens
@@ -876,13 +946,37 @@ router.delete('/delete-user/:userid', authorizeRoles('admin'), async (req, res) 
     const { userid } = req.params;
 
     try {
-        // Optionally, check if the user has the right to delete this profile
         const deletedUser = await User.findOneAndDelete({ userid: userid });
         if (!deletedUser) {
             return res.status(404).send({ message: 'User not found' });
         }
 
-        res.status(200).send({ message: 'User deleted successfully' });
+        // 🔗 REFERENTIAL INTEGRITY: Clean up user from all related models
+        
+        // 1. Remove userid from all Organization collaborators
+        await Organization.updateMany(
+            { "collaborators.userid": userid },
+            { $pull: { collaborators: { userid } } }
+        );
+
+        // 2. Remove userid from all Deployment collaborators
+        const Deployment = require('../../model/deployment/deploymentModel');
+        await Deployment.updateMany(
+            { "collaborators.userid": userid },
+            { $pull: { collaborators: { userid } } }
+        );
+
+        // 3. Remove userid from all RegisteredDevice collaborators
+        const RegisteredDevice = require('../../model/devices/registerDevice');
+        await RegisteredDevice.updateMany(
+            { "collaborators.userid": userid },
+            { $pull: { collaborators: { userid } } }
+        );
+
+        // 4. Delete all UserSubscription records for this user
+        await UserSubscription.deleteMany({ userid });
+
+        res.status(200).send({ message: 'User deleted successfully with all referential cleanup' });
     } catch (error) {
         res.status(500).send({ message: 'Internal server error', error: error.message });
     }
