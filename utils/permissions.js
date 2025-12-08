@@ -47,6 +47,18 @@ const ORG_PERMISSIONS = {
     "org.devices.remove",
     "org.telemetry.read",
 
+    /* Thresholds */
+    "org.thresholds.create",
+    "org.thresholds.view",
+    "org.thresholds.edit",
+    "org.thresholds.delete",
+
+    /* Notecard Configuration */
+    "org.notecard.create",
+    "org.notecard.view",
+    "org.notecard.edit",
+    "org.notecard.delete",
+
     /* Billing */
     "org.billing.view",
     "org.billing.update",
@@ -77,6 +89,18 @@ const ORG_PERMISSIONS = {
     "org.devices.view",
     "org.devices.edit",         // can update alias, location, not remove
 
+    /* Thresholds */
+    "org.thresholds.view",
+    "org.thresholds.edit",
+    "org.thresholds.create",
+    "org.thresholds.delete",
+
+    /* Notecard Configuration */
+    "org.notecard.view",
+    "org.notecard.edit",
+    "org.notecard.create",
+    "org.notecard.delete",
+
     /* Analytics */
     "org.analytics.view",
     "org.telemetry.read",
@@ -88,7 +112,8 @@ const ORG_PERMISSIONS = {
 
   /* ============================================================
    * ROLE: ORG-USER
-   * Regular user with read-only permissions.
+   * Regular user with read-only permissions + threshold/notecard update.
+   * Can view and update thresholds/notecard, but not create/delete.
    * ============================================================ */
   "org-user": [
 
@@ -98,7 +123,15 @@ const ORG_PERMISSIONS = {
     "org.deployments.view",
     "org.devices.view",
     "org.analytics.view",
-    "org.telemetry.read"
+    "org.telemetry.read",
+
+    /* Thresholds - Read & Update only */
+    "org.thresholds.view",
+    "org.thresholds.edit",
+
+    /* Notecard Configuration - Read & Update only */
+    "org.notecard.view",
+    "org.notecard.edit"
   ]
 };
 

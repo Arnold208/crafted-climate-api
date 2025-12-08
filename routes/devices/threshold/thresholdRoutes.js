@@ -5,6 +5,97 @@ const Threshold = require('../../../model/threshold/threshold');
 const Device = require('../../../model/devices/registerDevice');
 const sensorMetadata = require('../../../utils/sensorMetadata');
 
+// Middleware imports
+const authenticateToken = require('../../../middleware/bearermiddleware');
+const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess');
+
+/**
+ * @swagger
+ * /api/thresholds/{id}/status:
+ *   patch:
+ *     tags:
+ *       - Thresholds
+ *     summary: Enable or disable a threshold rule
+ *     description: >
+ *       Updates the **enabled** status of a threshold rule without modifying any other field.  
+ *       This is used to temporarily turn alerts ON or OFF for a device datapoint.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the threshold rule
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [enabled]
+ *             properties:
+ *               enabled:
+ *                 type: boolean
+ *                 example: true
+ *                 description: Set to true to enable alerts, or false to disable alerts
+ *     responses:
+ *       200:
+ *         description: Threshold status updated successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Threshold enabled successfully"
+ *               threshold:
+ *                 _id: "674df9b29e3"
+ *                 deviceAuid: "ENV001ABC"
+ *                 datapoint: "pm2_5"
+ *                 operator: ">"
+ *                 min: 50
+ *                 max: null
+ *                 enabled: true
+ *                 cooldownMinutes: 10
+ *                 alertChannels:
+ *                   email: true
+ *                   sms: false
+ *                   push: true
+ *       400:
+ *         description: Missing or invalid parameters
+ *       404:
+ *         description: Threshold not found
+ *       500:
+ *         description: Server error
+ */
+router.patch('/thresholds/:id/status', 
+  authenticateToken,
+  checkOrgAccess('org.thresholds.edit'),
+  async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { enabled } = req.body;
+
+    if (enabled === undefined) {
+      return res.status(400).json({ message: "enabled (true/false) is required" });
+    }
+
+    const threshold = await Threshold.findById(id);
+    if (!threshold) {
+      return res.status(404).json({ message: "Threshold not found" });
+    }
+
+    threshold.enabled = enabled;
+    await threshold.save();
+
+    res.status(200).json({
+      message: `Threshold ${enabled ? "enabled" : "disabled"} successfully`,
+      threshold
+    });
+
+  } catch (err) {
+    console.error("Error updating threshold status:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
 /**
  * @swagger
@@ -32,7 +123,10 @@ const sensorMetadata = require('../../../utils/sensorMetadata');
  *       500:
  *         description: Server error
  */
-router.get('/devices/:auid/metadata', async (req, res) => {
+router.get('/devices/:auid/metadata',
+  authenticateToken,
+  checkOrgAccess('org.thresholds.view'),
+  async (req, res) => {
   try {
     const { auid } = req.params;
 
@@ -82,7 +176,10 @@ router.get('/devices/:auid/metadata', async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.get('/devices/:auid/thresholds', async (req, res) => {
+router.get('/devices/:auid/thresholds',
+  authenticateToken,
+  checkOrgAccess('org.thresholds.view'),
+  async (req, res) => {
   try {
     const { auid } = req.params;
 
@@ -153,7 +250,10 @@ router.get('/devices/:auid/thresholds', async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.post('/devices/:auid/thresholds', async (req, res) => {
+router.post('/devices/:auid/thresholds',
+  authenticateToken,
+  checkOrgAccess('org.thresholds.create'),
+  async (req, res) => {
   try {
     const { auid } = req.params;
     let { datapoint, operator, min, max, alertChannels, cooldownMinutes } = req.body;
@@ -267,7 +367,10 @@ router.post('/devices/:auid/thresholds', async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.put('/thresholds/:id', async (req, res) => {
+router.put('/thresholds/:id',
+  authenticateToken,
+  checkOrgAccess('org.thresholds.edit'),
+  async (req, res) => {
   try {
     const { id } = req.params;
     let updates = req.body;
@@ -357,7 +460,10 @@ router.put('/thresholds/:id', async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.delete('/thresholds/:id', async (req, res) => {
+router.delete('/thresholds/:id',
+  authenticateToken,
+  checkOrgAccess('org.thresholds.delete'),
+  async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -400,7 +506,10 @@ router.delete('/thresholds/:id', async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.get('/devices/:auid/threshold-parameters', async (req, res) => {
+router.get('/devices/:auid/threshold-parameters',
+  authenticateToken,
+  checkOrgAccess('org.thresholds.view'),
+  async (req, res) => {
   try {
     const { auid } = req.params;
 

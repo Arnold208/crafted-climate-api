@@ -6,9 +6,14 @@ const axios = require('axios');
 const Deployment = require('../../../model/deployment/deploymentModel');
 const RegisteredDevice = require('../../../model/devices/registerDevice');
 const SensorModel = require('../../../model/devices/deviceModels');
+const Organization = require('../../../model/organization/organizationModel');
 
 const dotenv = require('dotenv');
 const path = require('path');
+
+// Middleware imports
+const authenticateToken = require('../../../middleware/bearermiddleware');
+const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess');
 
 let envFile;
 envFile = process.env.NODE_ENV === 'development' ? '.env.development' : '.env';
@@ -42,6 +47,28 @@ function resolveProjectUid(model) {
 /** Build Notehub API URL */
 function buildNotehubUrl(projectUid, devUuid) {
     return `${NOTEHUB_BASE_URL}/v1/projects/${projectUid}/devices/${devUuid}/environment_variables`;
+}
+
+/**
+ * Validate that deployment belongs to the organization
+ * Returns { valid: boolean, message?: string }
+ */
+async function validateDeploymentInOrg(deploymentId, orgId) {
+    try {
+        const deployment = await Deployment.findOne({ deploymentid: deploymentId });
+        if (!deployment) {
+            return { valid: false, message: 'Deployment not found' };
+        }
+
+        // Check if deployment belongs to the organization
+        if (deployment.organizationId && deployment.organizationId !== orgId) {
+            return { valid: false, message: 'Deployment does not belong to this organization' };
+        }
+
+        return { valid: true, deployment };
+    } catch (err) {
+        return { valid: false, message: 'Error validating deployment' };
+    }
 }
 
 //
@@ -113,39 +140,50 @@ function buildNotehubUrl(projectUid, devUuid) {
  *       500:
  *         description: Server or Notehub communication error
  */
-router.put('/deployments/:deploymentId/update-env', async (req, res) => {
-    const { deploymentId } = req.params;
-    const { userid, model } = req.query;
-    const envVars = req.body.envVars || req.body;
+router.put(
+    '/deployments/:deploymentId/update-env',
+    authenticateToken,
+    checkOrgAccess('org.notecard.edit'),
+    async (req, res) => {
+        const { deploymentId } = req.params;
+        const { userid, model } = req.query;
+        const envVars = req.body.envVars || req.body;
+        const orgId = req.user.organizationId;
 
-    if (!userid || !deploymentId || !model) {
-        return res.status(400).json({
-            message: 'Missing required: userid, deploymentId, model'
-        });
-    }
-
-    if (!envVars || typeof envVars !== 'object' || Object.keys(envVars).length === 0) {
-        return res.status(400).json({
-            message: 'envVars must be a non-empty object'
-        });
-    }
-
-    try {
-        const cleanModel = model.trim().toLowerCase();
-        const validModel = await SensorModel.findOne({ model: cleanModel });
-
-        if (!validModel) {
-            return res.status(404).json({
-                message: `Model "${cleanModel}" does not exist`
+        if (!userid || !deploymentId || !model) {
+            return res.status(400).json({
+                message: 'Missing required: userid, deploymentId, model'
             });
         }
 
-        const deployment = await Deployment.findOne({ deploymentid: deploymentId, userid });
-        if (!deployment) {
-            return res.status(403).json({
-                message: 'Deployment not found or not owned by user'
+        if (!envVars || typeof envVars !== 'object' || Object.keys(envVars).length === 0) {
+            return res.status(400).json({
+                message: 'envVars must be a non-empty object'
             });
         }
+
+        try {
+            // Validate deployment belongs to organization
+            const validation = await validateDeploymentInOrg(deploymentId, orgId);
+            if (!validation.valid) {
+                return res.status(403).json({ error: validation.message });
+            }
+
+            const cleanModel = model.trim().toLowerCase();
+            const validModel = await SensorModel.findOne({ model: cleanModel });
+
+            if (!validModel) {
+                return res.status(404).json({
+                    message: `Model "${cleanModel}" does not exist`
+                });
+            }
+
+            const deployment = await Deployment.findOne({ deploymentid: deploymentId, userid });
+            if (!deployment) {
+                return res.status(403).json({
+                    message: 'Deployment not found or not owned by user'
+                });
+            }
 
         const devices = [];
         for (const auid of deployment.devices) {
@@ -267,20 +305,31 @@ router.put('/deployments/:deploymentId/update-env', async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.get('/deployments/:deploymentId/models', async (req, res) => {
-    const { deploymentId } = req.params;
-    const { userid } = req.query;
+router.get(
+    '/deployments/:deploymentId/models',
+    authenticateToken,
+    checkOrgAccess('org.notecard.view'),
+    async (req, res) => {
+        const { deploymentId } = req.params;
+        const { userid } = req.query;
+        const orgId = req.user.organizationId;
 
-    if (!userid) {
-        return res.status(400).json({ message: 'userid is required' });
-    }
-
-    try {
-        const deployment = await Deployment.findOne({ deploymentid: deploymentId, userid });
-
-        if (!deployment) {
-            return res.status(403).json({ message: 'Deployment not found or not owned by user' });
+        if (!userid) {
+            return res.status(400).json({ message: 'userid is required' });
         }
+
+        try {
+            // Validate deployment belongs to organization
+            const validation = await validateDeploymentInOrg(deploymentId, orgId);
+            if (!validation.valid) {
+                return res.status(403).json({ error: validation.message });
+            }
+
+            const deployment = await Deployment.findOne({ deploymentid: deploymentId, userid });
+
+            if (!deployment) {
+                return res.status(403).json({ message: 'Deployment not found or not owned by user' });
+            }
 
         const models = new Set();
 
@@ -340,17 +389,28 @@ router.get('/deployments/:deploymentId/models', async (req, res) => {
  *       500:
  *         description: Error fetching Notehub data
  */
-router.get('/deployments/:deploymentId/notehub-env', async (req, res) => {
-    const { deploymentId } = req.params;
-    const { userid } = req.query;
+router.get(
+    '/deployments/:deploymentId/notehub-env',
+    authenticateToken,
+    checkOrgAccess('org.notecard.view'),
+    async (req, res) => {
+        const { deploymentId } = req.params;
+        const { userid } = req.query;
+        const orgId = req.user.organizationId;
 
-    if (!userid) return res.status(400).json({ message: "userid required" });
+        if (!userid) return res.status(400).json({ message: "userid required" });
 
-    try {
-        const deployment = await Deployment.findOne({ deploymentid: deploymentId, userid });
-        if (!deployment) {
-            return res.status(403).json({ message: "Deployment not found or not owned" });
-        }
+        try {
+            // Validate deployment belongs to organization
+            const validation = await validateDeploymentInOrg(deploymentId, orgId);
+            if (!validation.valid) {
+                return res.status(403).json({ error: validation.message });
+            }
+
+            const deployment = await Deployment.findOne({ deploymentid: deploymentId, userid });
+            if (!deployment) {
+                return res.status(403).json({ message: "Deployment not found or not owned" });
+            }
 
         const devices = await RegisteredDevice.find({ auid: { $in: deployment.devices } });
 
@@ -452,19 +512,30 @@ router.get('/deployments/:deploymentId/notehub-env', async (req, res) => {
  *       500:
  *         description: Error deleting Notehub key
  */
-router.delete('/deployments/:deploymentId/notehub-env/:key', async (req, res) => {
-    const { deploymentId, key } = req.params;
-    const { userid } = req.query;
+router.delete(
+    '/deployments/:deploymentId/notehub-env/:key',
+    authenticateToken,
+    checkOrgAccess('org.notecard.delete'),
+    async (req, res) => {
+        const { deploymentId, key } = req.params;
+        const { userid } = req.query;
+        const orgId = req.user.organizationId;
 
-    if (!userid || !key) {
-        return res.status(400).json({ message: "userid and key required" });
-    }
-
-    try {
-        const deployment = await Deployment.findOne({ deploymentid: deploymentId, userid });
-        if (!deployment) {
-            return res.status(403).json({ message: "Deployment not found or not owned" });
+        if (!userid || !key) {
+            return res.status(400).json({ message: "userid and key required" });
         }
+
+        try {
+            // Validate deployment belongs to organization
+            const validation = await validateDeploymentInOrg(deploymentId, orgId);
+            if (!validation.valid) {
+                return res.status(403).json({ error: validation.message });
+            }
+
+            const deployment = await Deployment.findOne({ deploymentid: deploymentId, userid });
+            if (!deployment) {
+                return res.status(403).json({ message: "Deployment not found or not owned" });
+            }
 
         const devices = await RegisteredDevice.find({ auid: { $in: deployment.devices } });
 
