@@ -16,7 +16,7 @@ const { sendEmail } = require('../../config/mail/nodemailer');
 
 const { upload, containerClient, generateSignedUrl } = require('../../config/storage/storage');
 const { otpLimiter } = require('../../middleware/rateLimiter');
-const { generateuserid } = require('../../utils/idGenerator');
+const { generateUserId } = require('../../utils/idGenerator');
 const authorizeRoles = require('../../middleware/rbacMiddleware');
 const verifyApiKey = require('../../middleware/apiKeymiddleware');
 
@@ -120,7 +120,7 @@ router.post('/signup', otpLimiter, upload.single('profilePicture'), async (req, 
 
         const otpCode = Math.floor(100000 + Math.random() * 900000);
         const hashedPassword = await bcrypt.hash(password, 10);
-        const userid = generateuserid();
+        const userid = generateUserId();
 
         let profilePictureUrl = '';
         if (req.file) {
@@ -150,40 +150,40 @@ router.post('/signup', otpLimiter, upload.single('profilePicture'), async (req, 
 
         await newUser.save();
 
-       try {
-    const freemiumPlan = await Plan.findOne({ name: "freemium", isActive: true });
+        try {
+            const freemiumPlan = await Plan.findOne({ name: "freemium", isActive: true });
 
-    if (!freemiumPlan) {
-        console.error("❌ Freemium plan not found.");
-    } else {
+            if (!freemiumPlan) {
+                console.error("❌ Freemium plan not found.");
+            } else {
 
-        // Create subscription with UUID-based identifiers
-        const subscription = await UserSubscription.create({
-            subscriptionId: uuidv4(),    // explicitly assign if you want to override default
-            userid: userid,
-            planId: freemiumPlan.planId, // UUID string from Plan
-            billingCycle: "free",
-            status: "active",
-            startDate: new Date(),
-            endDate: null,
-            autoRenew: false,
-            usage: {
-                devicesCount: 0,
-                exportsThisMonth: 0,
-                apiCallsThisMonth: 0
+                // Create subscription with UUID-based identifiers
+                const subscription = await UserSubscription.create({
+                    subscriptionId: uuidv4(),    // explicitly assign if you want to override default
+                    userid: userid,
+                    planId: freemiumPlan.planId, // UUID string from Plan
+                    billingCycle: "free",
+                    status: "active",
+                    startDate: new Date(),
+                    endDate: null,
+                    autoRenew: false,
+                    usage: {
+                        devicesCount: 0,
+                        exportsThisMonth: 0,
+                        apiCallsThisMonth: 0
+                    }
+                });
+
+                // Store the UUID subscriptionId inside User model
+                newUser.subscription = subscription.subscriptionId;
+                await newUser.save();
+
+                console.log(`✔ Auto-assigned freemium plan to user: ${userid}`);
             }
-        });
 
-        // Store the UUID subscriptionId inside User model
-        newUser.subscription = subscription.subscriptionId;
-        await newUser.save();
-
-        console.log(`✔ Auto-assigned freemium plan to user: ${userid}`);
-    }
-
-} catch (subErr) {
-    console.error("❌ Error auto-assigning freemium plan:", subErr);
-}
+        } catch (subErr) {
+            console.error("❌ Error auto-assigning freemium plan:", subErr);
+        }
 
         if (invitation) {
             invitation.accepted = true;

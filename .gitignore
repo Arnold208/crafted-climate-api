@@ -1,5 +1,45 @@
+# Dependencies
 node_modules
-config/certificates/*
+.pnp
+.pnp.js
+
+# Environment variables
 .env
 .env.development
 .env.production
+.env.*
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+startup_error.txt
+frontend
+# Testing
+coverage
+.nyc_output
+
+# Build & Runtime
+build
+dist
+jspm_packages
+
+# Security & Credentials
+config/certificates/*
+
+# IDE & System
+.DS_Store
+.vscode
+.idea
+*.swp
+*.swo
+
+# Project Specific / Temporary
+prompt.txt
+ai_summary/
+oldProd/
+tmp/
+scripts/verify-fix.js

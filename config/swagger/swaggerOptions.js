@@ -233,6 +233,16 @@ For more examples and SDKs, visit [craftedclimate.com/docs](https://craftedclima
               items: { $ref: '#/components/schemas/Device' }
             }
           }
+        },
+        SensorModel: {
+          type: 'object',
+          properties: {
+            uuid: { type: 'string', description: 'Unique model identifier' },
+            model: { type: 'string', description: 'Model name' },
+            description: { type: 'string', description: 'Model description' },
+            version: { type: 'number', description: 'Model version' },
+            imageUrl: { type: 'string', description: 'URL of the model image' }
+          }
         }
       },
       securitySchemes: {
@@ -268,7 +278,11 @@ For more examples and SDKs, visit [craftedclimate.com/docs](https://craftedclima
     './model/user/**/*.js',
     './model/deployment/**/*.js',
     './model/telemetry/**/*.js',
-    './routes/devices/notecard/**/*.js'
+    './routes/devices/notecard/**/*.js',
+    './routes/devices/sensorModel/**/*.js',
+    './routes/devices/ota/**/*.js',
+    './routes/test.js',
+    './model/devices/**/*.js'
   ]
 };
 

@@ -36,7 +36,7 @@ const verifyApiKey = require('../../../middleware/apiKeymiddleware');
  *       201:
  *         description: Model created with image successfully.
  */
-router.post("/models", authenticateToken, authorizeRoles('admin','supervisor'),upload.single("image"), async (req, res) => {
+router.post("/models", authenticateToken, authorizeRoles('admin', 'supervisor'), upload.single("image"), async (req, res) => {
   const { model, description, version } = req.body;
 
   if (!req.file || !model || !description) {
@@ -79,8 +79,10 @@ router.post("/models", authenticateToken, authorizeRoles('admin','supervisor'),u
  *     tags:
  *       - Sensor Models
  *     summary: Get all sensor models
+ *     security:
+ *       - bearerAuth: []
  */
-router.get("/models", verifyApiKey,authenticateToken,authorizeRoles('admin'),async (req, res) => {
+router.get("/models", authenticateToken, authorizeRoles('admin', 'supervisor', 'user'), async (req, res) => {
   try {
     const models = await SensorModel.find();
     res.status(200).send({ message: "Sensor models retrieved", data: models });
@@ -96,8 +98,26 @@ router.get("/models", verifyApiKey,authenticateToken,authorizeRoles('admin'),asy
  *     tags:
  *       - Sensor Models
  *     summary: Search and filter sensor models
+ *     parameters:
+ *       - in: query
+ *         name: query
+ *         schema:
+ *           type: string
+ *         description: Search term for model name or description
+ *       - in: query
+ *         name: version
+ *         schema:
+ *           type: number
+ *         description: Filter by version number
+ *     responses:
+ *       200:
+ *         description: List of matching models
+ *       500:
+ *         description: Search failed
+ *     security:
+ *       - bearerAuth: []
  */
-router.get("/models/search", verifyApiKey,authenticateToken,authorizeRoles('admin'), async (req, res) => {
+router.get("/models/search", authenticateToken, authorizeRoles('admin', 'supervisor', 'user'), async (req, res) => {
   const { query, version } = req.query;
   try {
     const filter = {};
@@ -124,8 +144,24 @@ router.get("/models/search", verifyApiKey,authenticateToken,authorizeRoles('admi
  *     tags:
  *       - Sensor Models
  *     summary: Get model by UUID
+ *     parameters:
+ *       - in: path
+ *         name: uuid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The UUID of the sensor model
+ *     responses:
+ *       200:
+ *         description: Model details
+ *       404:
+ *         description: Model not found
+ *       500:
+ *         description: Server error
+ *     security:
+ *       - bearerAuth: []
  */
-router.get("/models/uuid/:uuid", verifyApiKey,authenticateToken,authorizeRoles('admin'),async (req, res) => {
+router.get("/models/uuid/:uuid", authenticateToken, authorizeRoles('admin', 'supervisor', 'user'), async (req, res) => {
   try {
     const model = await SensorModel.findOne({ uuid: req.params.uuid });
     if (!model) {
@@ -144,8 +180,24 @@ router.get("/models/uuid/:uuid", verifyApiKey,authenticateToken,authorizeRoles('
  *     tags:
  *       - Sensor Models
  *     summary: Get a specific sensor model by name
+ *     parameters:
+ *       - in: path
+ *         name: model
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The name of the model (case-insensitive)
+ *     responses:
+ *       200:
+ *         description: Model details
+ *       404:
+ *         description: Model not found
+ *       500:
+ *         description: Server error
+ *     security:
+ *       - bearerAuth: []
  */
-router.get("/models/:model", verifyApiKey,authenticateToken,authorizeRoles('admin'), async (req, res) => {
+router.get("/models/:model", authenticateToken, authorizeRoles('admin', 'supervisor', 'user'), async (req, res) => {
   const { model } = req.params;
   try {
     const data = await SensorModel.findOne({ model: model.toLowerCase() });
@@ -165,8 +217,35 @@ router.get("/models/:model", verifyApiKey,authenticateToken,authorizeRoles('admi
  *     tags:
  *       - Sensor Models
  *     summary: Update a model's image or description
+ *     parameters:
+ *       - in: path
+ *         name: model
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The name of the model to update
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               description:
+ *                 type: string
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Model updated successfully
+ *       404:
+ *         description: Model not found
+ *       500:
+ *         description: Update failed
+ *     security:
+ *       - bearerAuth: []
  */
-router.put("/models/:model", verifyApiKey,authenticateToken,authorizeRoles('admin'), upload.single("image"), async (req, res) => {
+router.put("/models/:model", authenticateToken, authorizeRoles('admin'), upload.single("image"), async (req, res) => {
   const { model } = req.params;
   const { description } = req.body;
 
@@ -204,8 +283,24 @@ router.put("/models/:model", verifyApiKey,authenticateToken,authorizeRoles('admi
  *     tags:
  *       - Sensor Models
  *     summary: Delete a model
+ *     parameters:
+ *       - in: path
+ *         name: model
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The name of the model to delete
+ *     responses:
+ *       200:
+ *         description: Model deleted successfully
+ *       404:
+ *         description: Model not found
+ *       500:
+ *         description: Delete failed
+ *     security:
+ *       - bearerAuth: []
  */
-router.delete("/models/:model", verifyApiKey,authenticateToken,authorizeRoles('admin'), async (req, res) => {
+router.delete("/models/:model", authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const { model } = req.params;
   try {
     const deleted = await SensorModel.findOneAndDelete({ model: model.toLowerCase() });
