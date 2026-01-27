@@ -1,4 +1,10 @@
-const app = require('./app');
+const dotenv = require('dotenv');
+const path = require('path');
+
+// LOAD ENV FIRST
+let envFile = process.env.NODE_ENV === 'development' ? '.env.development' : '.env';
+dotenv.config({ path: path.resolve(__dirname, `../${envFile}`) });
+
 const { setupRealtime } = require("./config/socket/socketio");
 const connectDB = require('./config/database/mongodb');
 const { connectRedis } = require('./config/redis/redis');
@@ -13,11 +19,6 @@ const emailWorker = require('./workers/emailWorker');
 
 // 🔥 PRODUCTION HARDENING: Queue monitoring for error visibility
 const { QueueEvents } = require('bullmq');
-const dotenv = require('dotenv');
-const path = require('path');
-
-let envFile = process.env.NODE_ENV === 'development' ? '.env.development' : '.env';
-dotenv.config({ path: path.resolve(__dirname, `../${envFile}`) });
 
 // Crons (Moved to src/cron)
 const { startFlushDirectCron } = require('./cron/flushEnqueueCron');
@@ -47,6 +48,9 @@ connectDB();
 
 connectRedis()
     .then(() => {
+        // 🔥 LAZY LOAD APP: Ensure Redis is connected before loading app (and rate limiters)
+        const app = require('./app');
+
         startTelemetryWorker();
         startStatusWorker();       // 🆕 Start status worker for heartbeats
         startSubscriptionWorker(); // 🆕 Start subscription worker

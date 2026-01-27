@@ -247,6 +247,30 @@ class RegistryService {
         return device.collaborators;
     }
 
+    async getCollaboratorPermissions(req, auid, email) {
+        const device = await registerNewDevice.findOne({ auid });
+        if (!device) throw new Error('Device not found');
+
+        const { checkDeviceAccessCompatibility } = require('../../../middleware/devices/checkDeviceAccessCompatibility');
+        const allowed = await checkDeviceAccessCompatibility(req, device, 'view');
+        if (!allowed) throw new Error('Forbidden: You do not have permission to view this device information.');
+
+        const targetUser = await User.findOne({ email });
+        if (!targetUser) throw new Error('Target user not found');
+
+        // FIX: Use findOne({ userid: ... }) instead of findById to handle custom string IDs logic
+        const ownerUser = await User.findOne({ userid: device.userid });
+
+        if (ownerUser && ownerUser.email === email) {
+            return { role: 'owner', permissions: ['*'] };
+        }
+
+        const collab = device.collaborators.find(c => c.userid === targetUser.userid.toString());
+        if (!collab) throw new Error('Collaborator not found on this device');
+
+        return { role: collab.role, permissions: collab.permissions };
+    }
+
     async setAvailability(auid, availability) {
         const device = await registerNewDevice.findOne({ auid });
         if (!device) throw new Error('Device not found');

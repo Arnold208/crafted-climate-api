@@ -20,3 +20,6 @@ PROMPT*.md
 CHANGES.md
 QA_*.md
 *.txt
+scripts/verify-fix.js
+logs/combined-2026-01-27.log
+logs/error-2026-01-27.log

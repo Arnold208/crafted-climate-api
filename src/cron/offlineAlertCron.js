@@ -162,7 +162,11 @@ async function checkOfflineDevices() {
 
             // G. SEND & LOCK
             if (recipients.size > 0) {
-                await sendOfflineAlert(device, Array.from(recipients));
+                // Fix: 'device' might be undefined if we used cache metadata. Fetch fresh details for email.
+                const deviceDetails = await RegisterDevice.findOne({ auid });
+                if (deviceDetails) {
+                    await sendOfflineAlert(deviceDetails, Array.from(recipients));
+                }
             }
 
             // Mark as sent for 24h (or until online again)

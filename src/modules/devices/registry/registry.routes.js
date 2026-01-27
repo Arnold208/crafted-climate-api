@@ -201,6 +201,43 @@ router.delete('/:userid/device/:auid/collaborators',
 
 /**
  * @swagger
+ * /api/devices/{userid}/device/{auid}/collaborators/permissions:
+ *   post:
+ *     tags: [Device Registry]
+ *     summary: Get role and permissions of a user on a device
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userid
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email: { type: string }
+ *     responses:
+ *       200:
+ *         description: Role and permissions returned
+ *       404:
+ *         description: Device found
+ */
+router.post('/:userid/device/:auid/collaborators/permissions',
+    authenticateToken,
+    registryController.getCollaboratorPermissions
+);
+
+/**
+ * @swagger
  * /api/devices/user/{userid}/device/{auid}/availability:
  *   put:
  *     tags: [Device Registry]

@@ -34,6 +34,9 @@ const auth = require('./middleware/docsAuthMiddleware');
 const passport = require('./config/passport');
 const googleRoutes = require('./modules/auth/google.routes');
 
+const authenticateToken = require('./middleware/bearermiddleware');
+const { getCsrfToken } = require('./middleware/csrfProtection');
+
 const app = express();
 
 app.use(passport.initialize());

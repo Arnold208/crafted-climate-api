@@ -197,6 +197,20 @@ class RegistryController {
         }
     }
 
+    async getCollaboratorPermissions(req, res) {
+        try {
+            const { auid } = req.params;
+            const { email } = req.body;
+
+            const result = await registryService.getCollaboratorPermissions(req, auid, email);
+            res.json(result);
+        } catch (error) {
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
+            if (error.message.includes('Forbidden')) return res.status(403).json({ message: error.message });
+            res.status(500).json({ error: error.message });
+        }
+    }
+
     async setAvailability(req, res) {
         try {
             const { auid } = req.params;
