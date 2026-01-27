@@ -1,10 +1,13 @@
 {
   "name": "crafted-climate-api",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "cross-env NODE_ENV=development nodemon index.js"
+    "start": "node src/server.js",
+    "dev": "cross-env NODE_ENV=development nodemon src/server.js",
+    "migrate": "migrate-mongo up",
+    "migrate:create": "migrate-mongo create",
+    "migrate:down": "migrate-mongo down"
   },
   "keywords": [],
   "author": "",
@@ -15,16 +18,19 @@
     "@azure/storage-blob": "^12.27.0",
     "@azure/web-pubsub-socket.io": "^1.2.0",
     "@sentry/node": "^10.8.0",
+    "@socket.io/redis-adapter": "^8.3.0",
     "axios": "^1.13.2",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.56.8",
     "chalk": "^4.1.2",
+    "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-basic-auth": "^1.2.1",
     "express-rate-limit": "^8.0.1",
+    "helmet": "^8.1.0",
     "ioredis": "^5.6.1",
     "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.2",
@@ -35,16 +41,25 @@
     "nanoid": "^5.1.5",
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.5",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "rate-limit-redis": "^4.3.1",
     "redis": "^5.6.0",
     "redoc-express": "^2.1.2",
     "serve-favicon": "^2.5.1",
     "socket.io-client": "^4.8.1",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "winston": "^3.19.0",
+    "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
+    "autoprefixer": "^10.4.23",
     "cross-env": "^7.0.3",
+    "migrate-mongo": "^11.0.0",
     "nodemon": "^3.1.10",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
     "unimported": "^1.31.0"
   }
 }

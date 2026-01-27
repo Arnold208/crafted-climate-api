@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --glass: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+}
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+}
+
+.btn-primary {
+  @apply bg-primary hover:bg-emerald-500 text-dark font-semibold py-2 px-6 rounded-lg transition-all transform hover:scale-[1.02] active:scale-[0.98];
+}
+
+.input-field {
+  @apply bg-slate-800/50 border border-slate-700/50 rounded-lg py-2 px-4 focus:outline-none focus:border-primary/50 transition-colors;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
