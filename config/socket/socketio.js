@@ -7,7 +7,7 @@
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.ACCESS_TOKEN_SECRET ;
+const JWT_SECRET = process.env.ACCESS_TOKEN_SECRET;
 let io;
 
 function setupRealtime(server) {
@@ -26,13 +26,14 @@ function setupRealtime(server) {
       // Verify and decode token
       const decoded = jwt.verify(token, JWT_SECRET);
 
-      const userId = decoded.userId;
+      // Support both 'userid' (app standard) and 'userId' (legacy/convention)
+      const userId = decoded.userid || decoded.userId;
       const email = decoded.email;
       const username = decoded.username || "Unknown";
       const role = decoded.role || "user";
 
       if (!userId || !email) {
-        return next(new Error("Invalid token payload: missing userId or email."));
+        return next(new Error(`Invalid token payload: missing userId/userid (${!!userId}) or email (${!!email}).`));
       }
 
       // Attach limited user context (no sensitive info)
