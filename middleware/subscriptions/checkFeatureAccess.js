@@ -10,7 +10,7 @@ const Plan = require("../../model/subscriptions/Plan");
 function checkFeatureAccess(featureName) {
     return async (req, res, next) => {
         try {
-            const userid = req.user?.userid || req.body.userid || req.params.userid;
+            const userid = req.user?.userid || req.body?.userid || req.params?.userid;
 
             if (!userid) {
                 return res.status(401).json({ message: "User ID missing in request." });

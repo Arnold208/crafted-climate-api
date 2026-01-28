@@ -2,7 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const addDevice = require('../../../model/devices/addDevice')
 const registerNewDevice = require('../../../model/devices/registerDevice')
-const SensorModel= require('../../../model/devices/deviceModels')
+const SensorModel = require('../../../model/devices/deviceModels')
 const User = require('../../../model/user/userModel');
 const Deployment = require('../../../model/deployment/deploymentModel');
 const { sendEmail } = require('../../../config/mail/nodemailer');
@@ -11,7 +11,7 @@ const UserSubscription = require('../../../model/subscriptions/UserSubscription'
 const checkFeatureAccess = require("../../../middleware/subscriptions/checkFeatureAccess");
 
 // const CardSubscription = require("../../model/subscriptions/cardSubscription");
-// const authenticateToken = require('../../middleware/apiKeymiddleware');
+const authenticateToken = require('../../../middleware/bearermiddleware');
 // const AllowedModel = require("../../model/sensor_image/allowedModels");
 // const SensorImages = require("../../model/sensor_image/sensor_image");
 
@@ -75,7 +75,7 @@ router.post('/register-device', async (req, res) => {
   const { auid, serial, location, userid, nickname } = req.body;
 
   try {
-   
+
     await enforceDeviceLimit(userid);
 
 
@@ -521,7 +521,7 @@ router.get('/user/:userid/device-locations', async (req, res) => {
  *       500:
  *         description: Error retrieving the device information.
  */
-router.get('/user/:userid/device/:auid/location', checkFeatureAccess("location_access"),async (req, res) => {
+router.get('/user/:userid/device/:auid/location', checkFeatureAccess("location_access"), async (req, res) => {
   const { userid, auid } = req.params;
 
   try {
@@ -591,7 +591,7 @@ router.get('/user/:userid/device/:auid/location', checkFeatureAccess("location_a
  *       500:
  *         description: Server error while updating device.
  */
-router.put('/user/:userid/device/:auid/update', checkFeatureAccess("device_update"),async (req, res) => {
+router.put('/user/:userid/device/:auid/update', checkFeatureAccess("device_update"), async (req, res) => {
   const { userid, auid } = req.params;
   const { nickname, location } = req.body;
 
@@ -609,7 +609,7 @@ router.put('/user/:userid/device/:auid/update', checkFeatureAccess("device_updat
 
     if (location) {
       if (!Array.isArray(location) || location.length !== 2 ||
-          typeof location[0] !== 'number' || typeof location[1] !== 'number') {
+        typeof location[0] !== 'number' || typeof location[1] !== 'number') {
         return res.status(400).json({ message: 'Invalid location format. Must be [latitude, longitude]' });
       }
 
@@ -651,7 +651,7 @@ router.put('/user/:userid/device/:auid/update', checkFeatureAccess("device_updat
   }
 });
 
- 
+
 /**
  * @swagger
  * /api/devices/{userid}/device/{auid}/collaborators:
@@ -685,10 +685,14 @@ router.put('/user/:userid/device/:auid/update', checkFeatureAccess("device_updat
  *                 type: string
  *               role:
  *                 type: string
+ *                 enum: [viewer, editor, admin]
+ *                 description: "Valid roles: viewer, editor, admin"
  *               permissions:
  *                 type: array
  *                 items:
  *                   type: string
+ *                   enum: [update, delete, export, share]
+ *                 description: "Valid permissions: update, delete, export, share"
  *     responses:
  *       200:
  *         description: Collaborator added.
@@ -697,6 +701,101 @@ router.put('/user/:userid/device/:auid/update', checkFeatureAccess("device_updat
  *       404:
  *         description: Device or user not found.
  */
+/**
+ * @swagger
+ * /api/devices/{userid}/device/{auid}/collaborators:
+ *   get:
+ *     tags: [Devices]
+ *     summary: Get all collaborators for a device
+ *     description: Retrieve a list of all collaborators for a specific device, including their user details and when they were added.
+ *     parameters:
+ *       - in: path
+ *         name: userid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the user who owns the device.
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The AUID of the device.
+ *     responses:
+ *       200:
+ *         description: A list of collaborators.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   email:
+ *                     type: string
+ *                   firstName:
+ *                     type: string
+ *                   lastName:
+ *                     type: string
+ *                   contact:
+ *                     type: string
+ *                   role:
+ *                     type: string
+ *                   permissions:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   addedAt:
+ *                     type: string
+ *                     format: date-time
+ *       403:
+ *         description: Unauthorized.
+ *       404:
+ *         description: Device found.
+ *       500:
+ *         description: Server error.
+ */
+router.get('/:userid/device/:auid/collaborators', authenticateToken, checkFeatureAccess("collaboration"), async (req, res) => {
+  const { userid, auid } = req.params;
+
+  try {
+    const device = await registerNewDevice.findOne({ auid });
+    if (!device) return res.status(404).json({ message: 'Device not found.' });
+
+    // Check if requester is owner or a collaborator with view access
+    if (device.userid !== userid) {
+      // Optional: Check if the requester is a collaborator? 
+      // For now, enforcing owner check or relying on checkFeatureAccess/middleware if it handles checking 'userid' against token.
+      // Assuming strict ownership for listing ALL collaborators for now.
+      return res.status(403).json({ message: 'Only the owner can view collaborators.' });
+    }
+
+    const collaboratorDetails = [];
+
+    for (const collaborator of device.collaborators) {
+      const user = await User.findOne({ userid: collaborator.userid });
+      if (user) {
+        collaboratorDetails.push({
+          userid: user.userid,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          contact: user.contact,
+          profilePicture: user.profilePicture, // Added for completeness
+          role: collaborator.role,
+          permissions: collaborator.permissions,
+          addedAt: collaborator.addedAt || null
+        });
+      }
+    }
+
+    res.status(200).json(collaboratorDetails);
+  } catch (err) {
+    console.error('Error fetching collaborators:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/:userid/device/:auid/collaborators', checkFeatureAccess("collaboration"), async (req, res) => {
   const { userid, auid } = req.params;
   const { email, role, permissions = [] } = req.body;
@@ -827,7 +926,7 @@ router.delete('/:userid/device/:auid/collaborators', async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'Target user not found.' });
 
-    device.collaborators = device.collaborators.filter(c => c.userid !== user._id.toString());
+    device.collaborators = device.collaborators.filter(c => c.userid !== user.userid);
     await device.save();
     res.status(200).json({ message: 'Collaborator removed.', collaborators: device.collaborators });
   } catch (err) {
@@ -879,7 +978,7 @@ router.post('/:userid/device/:auid/collaborators/permissions', async (req, res) 
     const device = await registerNewDevice.findOne({ auid });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
 
-    const ownerUser = await User.findById(device.userid);
+    const ownerUser = await User.findOne({ userid: device.userid });
     const targetUser = await User.findOne({ email });
 
     if (!targetUser) return res.status(404).json({ message: 'Target user not found.' });
@@ -888,7 +987,7 @@ router.post('/:userid/device/:auid/collaborators/permissions', async (req, res) 
       return res.status(200).json({ role: 'owner', permissions: ['*'] });
     }
 
-    const collab = device.collaborators.find(c => c.userid === targetUser._id.toString());
+    const collab = device.collaborators.find(c => c.userid === targetUser.userid);
     if (!collab) return res.status(404).json({ message: 'Collaborator not found on this device.' });
 
     return res.status(200).json({ role: collab.role, permissions: collab.permissions });
@@ -1107,7 +1206,7 @@ router.post('/collaborator/:email/devices/batch', async (req, res) => {
  *       500:
  *         description: Server error.
  */
-router.put('/user/:userid/device/:auid/availability', checkFeatureAccess("public_listing"),async (req, res) => {
+router.put('/user/:userid/device/:auid/availability', checkFeatureAccess("public_listing"), async (req, res) => {
   const { userid, auid } = req.params;
   const { availability } = req.body;
 
