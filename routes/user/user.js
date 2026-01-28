@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const nanoid = require('nanoid')
+const { v4: uuidv4 } = require('uuid');
 const User = require('../../model/user/userModel');
 const jwt = require('jsonwebtoken');
 const authenticateToken = require('../../middleware/bearermiddleware');
@@ -22,11 +23,21 @@ const verifyApiKey = require('../../middleware/apiKeymiddleware');
 
 function normalizeContact(contact) {
     if (!contact) return contact;
-    contact = contact.trim();
-    if (contact.startsWith('0')) {
-        return '233' + contact.slice(1);
+    // Remove all non-digit characters (including +)
+    let clean = contact.toString().replace(/\D/g, '');
+
+    // Handle local format (020, 050, etc.) -> 23320...
+    if (clean.startsWith('0') && clean.length === 10) {
+        return '233' + clean.slice(1);
     }
-    return contact.replace(/^\+/, '');
+
+    // Handle international format (233...) ensuring length is reasonable
+    if (clean.startsWith('233') && clean.length === 12) {
+        return clean;
+    }
+
+    // Default return cleaned version if no specific rule matched
+    return clean;
 }
 
 /**
@@ -174,8 +185,8 @@ router.post('/signup', otpLimiter, upload.single('profilePicture'), async (req, 
                     }
                 });
 
-                // Store the UUID subscriptionId inside User model
-                newUser.subscription = subscription.subscriptionId;
+                // Store the ObjectId reference inside User model, NOT the UUID string
+                newUser.subscription = subscription._id;
                 await newUser.save();
 
                 console.log(`✔ Auto-assigned freemium plan to user: ${userid}`);
@@ -204,7 +215,12 @@ router.post('/signup', otpLimiter, upload.single('profilePicture'), async (req, 
             }
         }
 
-        await sendSMS(contact, `Your CraftedClimate OTP is ${otpCode}. It expires in 15 minutes.`);
+        // Validate contact before sending SMS
+        if (contact && (contact.length !== 12 || !contact.startsWith('233'))) {
+            console.warn(`Mb: Skipping SMS. Invalid contact format after normalization: ${contact}`);
+        } else {
+            await sendSMS(contact, `Your CraftedClimate OTP is ${otpCode}. It expires in 15 minutes.`);
+        }
 
         res.status(201).send({ message: 'User registered successfully', userid, verified: newUser.verified });
     } catch (error) {
@@ -1212,5 +1228,143 @@ router.post('/verify-otp-reset-password', async (req, res) => {
 //     }
 // });
 
+
+/**
+ * @swagger
+ * /api/user/profile:
+ *   get:
+ *     tags:
+ *       - Users
+ *     summary: Get current user profile
+ *     description: Retrieve the profile details of the currently logged-in user.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       404:
+ *         description: User not found.
+ *       500:
+ *         description: Server error.
+ */
+router.get('/profile', authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findOne({ userid: req.user.userid }).select('-password -otp -otpExpiresAt');
+        if (!user) return res.status(404).send({ message: 'User not found' });
+        res.status(200).send(user);
+    } catch (error) {
+        res.status(500).send({ message: 'Internal server error', error: error.message });
+    }
+});
+
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   put:
+ *     tags:
+ *       - Authentication
+ *     summary: Change password
+ *     description: Allows authenticated users to change their password by providing the old password.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - oldPassword
+ *               - newPassword
+ *             properties:
+ *               oldPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password changed successfully.
+ *       400:
+ *         description: Invalid old password or missing fields.
+ *       404:
+ *         description: User not found.
+ *       500:
+ *         description: Server error.
+ */
+router.put('/change-password', authenticateToken, async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword) {
+        return res.status(400).send({ message: 'Please provide both old and new passwords' });
+    }
+
+    try {
+        const user = await User.findOne({ userid: req.user.userid });
+        if (!user) return res.status(404).send({ message: 'User not found' });
+
+        const isMatch = await bcrypt.compare(oldPassword, user.password);
+        if (!isMatch) return res.status(400).send({ message: 'Invalid old password' });
+
+        user.password = await bcrypt.hash(newPassword, 10);
+        await user.save();
+
+        res.status(200).send({ message: 'Password changed successfully' });
+    } catch (error) {
+        res.status(500).send({ message: 'Internal server error', error: error.message });
+    }
+});
+
+/**
+ * @swagger
+ * /api/user/delete-account:
+ *   delete:
+ *     tags:
+ *       - Users
+ *     summary: Delete own account
+ *     description: Allows an authenticated user to permanently delete their own account.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - password
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 description: Current password for confirmation.
+ *     responses:
+ *       200:
+ *         description: Account deleted successfully.
+ *       400:
+ *         description: Invalid password.
+ *       404:
+ *         description: User not found.
+ *       500:
+ *         description: Server error.
+ */
+router.delete('/delete-account', authenticateToken, async (req, res) => {
+    const { password } = req.body;
+    if (!password) return res.status(400).send({ message: 'Password is required to delete account' });
+
+    try {
+        const user = await User.findOne({ userid: req.user.userid });
+        if (!user) return res.status(404).send({ message: 'User not found' });
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(400).send({ message: 'Invalid password' });
+
+        await User.findOneAndDelete({ userid: req.user.userid });
+        res.status(200).send({ message: 'Account deleted successfully' });
+    } catch (error) {
+        res.status(500).send({ message: 'Internal server error', error: error.message });
+    }
+});
 
 module.exports = router;

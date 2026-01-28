@@ -115,7 +115,7 @@ app.get('/climate-docs/logo', swaggerRateLimiter, (req, res) => {
 // Documentation UI router
 app.use('/climate-docs', swaggerRateLimiter, docsAuth, (req, res, next) => {
   const useSwagger = req.query.ui === 'swagger';
-  
+
   if (useSwagger) {
     // Serve Swagger UI and its assets
     app.use('/climate-docs', swaggerUi.serve);
@@ -231,11 +231,14 @@ app.use('/api/devices', registerSensor);
 app.use('/api/devices', otaUpdate);
 app.use('/api/devices', deployment);
 app.use('/api/telemetry', telemetry);
-app.use('/api/devices',notecard)
-app.use('/api/devices',notecardDeployment)
-app.use('/api',threshold)
-app.use('/api/subscriptions/admin',admin_subscription)
-app.use('/api/subscriptions/user',user_subscription)
+app.use('/api/devices', notecard)
+app.use('/api/devices', notecardDeployment)
+app.use('/api', threshold)
+app.use('/api/subscriptions/admin', admin_subscription)
+app.use('/api/subscriptions/user', user_subscription)
+
+// Analytics Routes
+app.use('/api/analytics', require('./routes/analytics/analytics'));
 
 
 // ✅ Connect Redis before starting server
@@ -262,5 +265,5 @@ connectRedis()
     process.exit(1); // Exit app if Redis fails
   });
 
-  secureMqtt.connectSecureMqtt();
+secureMqtt.connectSecureMqtt();
 
