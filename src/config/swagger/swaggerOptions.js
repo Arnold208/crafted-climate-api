@@ -168,7 +168,7 @@ socket.on('telemetry', (data) => console.log(data));
     tags: [
       { name: 'Authentication', description: 'User signup, login, and profile management' },
       { name: 'Organizations', description: 'Multi-tenant organization management with RBAC and membership' },
-      { name: 'Devices', description: 'Device registration and general management' },
+      // { name: 'Devices', description: 'Device registration and general management' }, // Removed as duplicate
       { name: 'Manufacturer', description: 'Device manufacturing and identity management' },
       { name: 'Device Registry', description: 'Technical device registration and tracking' },
       { name: 'Sensor Models', description: 'Sensor hardware definitions and parameters' },
@@ -187,8 +187,10 @@ socket.on('telemetry', (data) => console.log(data));
   },
 
   apis: [
-    path.join(__dirname, '../../modules/**/*.js'),
-    path.join(__dirname, '../../models/**/*.js')
+    './src/modules/**/*.js',  // Use forward slashes relative to project root involves changing execution context, 
+    // better to use relative to __dirname but ensuring forward slashes
+    path.join(__dirname, '../../modules/**/*.js').replace(/\\/g, '/'),
+    path.join(__dirname, '../../models/**/*.js').replace(/\\/g, '/')
   ]
 };
 

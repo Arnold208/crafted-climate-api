@@ -14,30 +14,121 @@ const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 // --- Admin Routes ---
 
+// --- Admin Routes ---
+/**
+ * @swagger
+ * /api/subscriptions/admin/create-plan:
+ *   post:
+ *     tags: [Subscription Plans]
+ *     summary: Create a new subscription plan
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, priceMonthly, maxDevices, maxDataRetentionDays]
+ *             properties:
+ *               name: { type: string }
+ *               priceMonthly: { type: number }
+ *               priceYearly: { type: number }
+ *               maxDevices: { type: number }
+ *               maxDataRetentionDays: { type: number }
+ *               features: { type: object }
+ *     responses:
+ *       201: { description: Plan created }
+ */
 router.post('/admin/create-plan',
     authenticateToken,
     authorizeRoles('admin'),
     subscriptionController.createPlan
 );
 
+/**
+ * @swagger
+ * /api/subscriptions/admin/update-plan/{planId}:
+ *   put:
+ *     tags: [Subscription Plans]
+ *     summary: Update an existing subscription plan
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: planId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200: { description: Plan updated }
+ */
 router.put('/admin/update-plan/:planId',
     authenticateToken,
     authorizeRoles('admin'),
     subscriptionController.updatePlan
 );
 
+/**
+ * @swagger
+ * /api/subscriptions/admin/delete-plan/{planId}:
+ *   delete:
+ *     tags: [Subscription Plans]
+ *     summary: Delete a subscription plan
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: planId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Plan deleted }
+ */
 router.delete('/admin/delete-plan/:planId',
     authenticateToken,
     authorizeRoles('admin'),
     subscriptionController.deletePlan
 );
 
+/**
+ * @swagger
+ * /api/subscriptions/admin/plans:
+ *   get:
+ *     tags: [Subscription Plans]
+ *     summary: List all subscription plans
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: List of plans }
+ */
 router.get('/admin/plans',
     authenticateToken,
     authorizeRoles('admin'),
     subscriptionController.getAllPlans
 );
 
+/**
+ * @swagger
+ * /api/subscriptions/admin/toggle-plan/{planId}:
+ *   patch:
+ *     tags: [Subscription Plans]
+ *     summary: Toggle plan active status
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: planId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Plan status toggled }
+ */
 router.patch('/admin/toggle-plan/:planId',
     authenticateToken,
     authorizeRoles('admin'),

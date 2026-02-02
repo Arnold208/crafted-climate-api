@@ -49,7 +49,9 @@ class AdminOrganizationExtendedService {
             Organization.find(query)
                 .skip(skip)
                 .limit(limit)
-                .sort({ createdAt: -1 })
+                // Fix: Cosmos DB error "index path excluded" on createdAt
+                // Using naturally ordered _id instead
+                .sort({ _id: -1 })
                 .lean(),
             Organization.countDocuments(query)
         ]);
@@ -153,9 +155,11 @@ class AdminOrganizationExtendedService {
             throw new Error('Organization not found');
         }
 
+        /* STRICT POLICY CHANGE: Even personal orgs can be suspended now
         if (org.organizationType === 'personal') {
             throw new Error('Cannot suspend personal organizations');
         }
+        */
 
         org.suspended = true;
         org.suspensionReason = reason;
@@ -176,6 +180,40 @@ class AdminOrganizationExtendedService {
         return {
             success: true,
             message: 'Organization suspended successfully'
+        };
+    }
+
+    /**
+     * Restore suspended organization
+     */
+    async restoreOrganization(orgId, adminId) {
+        const org = await Organization.findOne({ organizationId: orgId });
+        if (!org) {
+            throw new Error('Organization not found');
+        }
+
+        if (!org.suspended) {
+            throw new Error('Organization is not suspended');
+        }
+
+        org.suspended = false;
+        org.suspendedAt = null;
+        org.suspensionReason = null;
+        await org.save();
+
+        // Audit log
+        await createAuditLog({
+            action: 'ADMIN_RESTORE_ORGANIZATION',
+            userid: adminId,
+            details: {
+                organizationId: orgId
+            },
+            ipAddress: null
+        });
+
+        return {
+            success: true,
+            message: 'Organization restored successfully'
         };
     }
 

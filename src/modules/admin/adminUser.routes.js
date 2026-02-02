@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminUserController = require('./adminUser.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
 
 /**
@@ -47,9 +48,9 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *       200:
  *         description: Users retrieved successfully
  *       403:
- *         description: Forbidden - Platform admin required
+ *         description: Forbidden - Platform admin, supervisor, or support required
  */
-router.get('/', authenticateToken, requirePlatformAdmin, adminUserController.listUsers);
+router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminUserController.listUsers);
 
 /**
  * @swagger
@@ -74,7 +75,7 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminUserController.lis
  *       403:
  *         description: Forbidden
  */
-router.get('/:userid', authenticateToken, requirePlatformAdmin, adminUserController.getUserDetails);
+router.get('/:userid', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminUserController.getUserDetails);
 
 /**
  * @swagger
@@ -102,9 +103,9 @@ router.get('/:userid', authenticateToken, requirePlatformAdmin, adminUserControl
  *             properties:
  *               role:
  *                 type: string
- *                 enum: [user, admin]
+ *                 enum: [user, admin, supervisor, support]
  *             example:
- *               role: admin
+ *               role: supervisor
  *     responses:
  *       200:
  *         description: Role updated successfully
@@ -113,7 +114,7 @@ router.get('/:userid', authenticateToken, requirePlatformAdmin, adminUserControl
  *       403:
  *         description: Forbidden
  */
-router.patch('/:userid/role', authenticateToken, requirePlatformAdmin, adminUserController.changeUserRole);
+router.patch('/:userid/role', authenticateToken, authorizeRoles('admin'), adminUserController.changeUserRole);
 
 /**
  * @swagger
@@ -152,7 +153,7 @@ router.patch('/:userid/role', authenticateToken, requirePlatformAdmin, adminUser
  *       403:
  *         description: Forbidden
  */
-router.post('/:userid/suspend', authenticateToken, requirePlatformAdmin, adminUserController.suspendUser);
+router.post('/:userid/suspend', authenticateToken, authorizeRoles('admin', 'supervisor'), adminUserController.suspendUser);
 
 /**
  * @swagger
@@ -177,7 +178,7 @@ router.post('/:userid/suspend', authenticateToken, requirePlatformAdmin, adminUs
  *       403:
  *         description: Forbidden
  */
-router.post('/:userid/restore', authenticateToken, requirePlatformAdmin, adminUserController.restoreUser);
+router.post('/:userid/restore', authenticateToken, authorizeRoles('admin', 'supervisor'), adminUserController.restoreUser);
 
 /**
  * @swagger
@@ -252,12 +253,24 @@ router.post('/:userid/reset-password', authenticateToken, requirePlatformAdmin, 
  *         schema:
  *           type: string
  *           format: date
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
  *     responses:
  *       200:
  *         description: Activity log retrieved
  *       403:
  *         description: Forbidden
+ *       404:
+ *         description: User not found
  */
-router.get('/:userid/activity', authenticateToken, requirePlatformAdmin, adminUserController.getUserActivity);
+router.get('/:userid/activity', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminUserController.getUserActivity);
 
 module.exports = router;

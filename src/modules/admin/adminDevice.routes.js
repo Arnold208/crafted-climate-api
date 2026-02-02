@@ -8,7 +8,7 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  * @swagger
  * /api/admin/devices:
  *   get:
- *     tags: [Devices]
+ *     tags: [Admin Devices]
  *     summary: List all devices
  *     description: Get platform-wide device list with filters (Platform Admin only)
  *     security:
@@ -54,7 +54,7 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminDeviceController.l
  * @swagger
  * /api/admin/devices/statistics:
  *   get:
- *     tags: [Devices]
+ *     tags: [Admin Devices]
  *     summary: Get device statistics
  *     description: Get platform-wide device statistics (Platform Admin only)
  *     security:
@@ -82,7 +82,7 @@ router.get('/statistics', authenticateToken, requirePlatformAdmin, adminDeviceCo
  * @swagger
  * /api/admin/devices/{deviceId}:
  *   delete:
- *     tags: [Devices]
+ *     tags: [Admin Devices]
  *     summary: Remove device
  *     description: Permanently delete device (Platform Admin only)
  *     security:
@@ -105,7 +105,7 @@ router.delete('/:deviceId', authenticateToken, requirePlatformAdmin, adminDevice
  * @swagger
  * /api/admin/devices/offline/list:
  *   get:
- *     tags: [Devices]
+ *     tags: [Admin Devices]
  *     summary: Get offline devices
  *     description: List devices offline for more than specified hours (Platform Admin only)
  *     security:
@@ -127,7 +127,7 @@ router.get('/offline/list', authenticateToken, requirePlatformAdmin, adminDevice
  * @swagger
  * /api/admin/devices/{deviceId}/reassign:
  *   post:
- *     tags: [Devices]
+ *     tags: [Admin Devices]
  *     summary: Reassign device to different organization
  *     description: Transfer device to another organization (Platform Admin only)
  *     security:

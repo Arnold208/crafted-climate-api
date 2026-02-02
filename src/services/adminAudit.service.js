@@ -21,6 +21,7 @@ class AdminAuditService {
         } = filters;
 
         const {
+            page = 1,
             limit = 100
         } = pagination;
 
@@ -35,10 +36,17 @@ class AdminAuditService {
 
             const logs = [];
             let count = 0;
+            const skip = (page - 1) * limit;
+            let skipped = 0;
 
-            // Note: Data Tables doesn't support offset-based pagination well
-            // We use a simple limit for now
+            // Note: Data Tables doesn't support offset-based pagination well of "Skip"
+            // We implementation "Scan and Skip"
             for await (const entity of entities) {
+                if (skipped < skip) {
+                    skipped++;
+                    continue;
+                }
+
                 logs.push(this._formatLog(entity));
                 count++;
                 if (count >= limit) break;
@@ -47,9 +55,9 @@ class AdminAuditService {
             return {
                 logs,
                 pagination: {
+                    page,
                     limit,
-                    total: logs.length, // Approximate if we hit limit
-                    pages: 1
+                    returned: logs.length
                 }
             };
         } catch (error) {
@@ -61,8 +69,8 @@ class AdminAuditService {
     /**
      * Get user-specific logs
      */
-    async getUserLogs(userid, dateRange = {}) {
-        return this.getAllLogs({ userid, ...dateRange });
+    async getUserLogs(userid, dateRange = {}, pagination = {}) {
+        return this.getAllLogs({ userid, ...dateRange }, pagination);
     }
 
     /**

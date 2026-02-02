@@ -25,6 +25,39 @@ const logsRoutes = require('./modules/logs/logs.routes');
 const testRoutes = require('./modules/test/test.routes');
 const adminRoutes = require('./modules/admin/admin.routes');
 
+// PLATFORM ADMIN - CORS MANAGEMENT
+const corsAdminRoutes = require('./modules/admin/cors.routes');
+// PLATFORM ADMIN - USER MANAGEMENT
+const adminUserRoutes = require('./modules/admin/adminUser.routes');
+// PLATFORM ADMIN - SUBSCRIPTION MANAGEMENT
+const adminSubscriptionRoutes = require('./modules/admin/adminSubscription.routes');
+// PLATFORM ADMIN - ORGANIZATION MANAGEMENT (EXTENDED)
+const adminOrgRoutes = require('./modules/admin/adminOrganization.routes');
+// PLATFORM ADMIN - DEVICE MANAGEMENT
+const adminDeviceRoutes = require('./modules/admin/adminDevice.routes');
+// PLATFORM ADMIN - ANALYTICS
+const adminAnalyticsRoutes = require('./modules/admin/adminAnalytics.routes');
+// PLATFORM ADMIN - SYSTEM CONFIGURATION
+const systemConfigRoutes = require('./modules/admin/systemConfig.routes');
+// PLATFORM ADMIN - ANNOUNCEMENTS
+const announcementRoutes = require('./modules/admin/announcement.routes');
+// PLATFORM ADMIN - AUDIT LOGS
+const adminAuditRoutes = require('./modules/admin/adminAudit.routes');
+// PLATFORM ADMIN - API KEYS
+const adminApiKeyRoutes = require('./modules/admin/adminApiKey.routes');
+// PLATFORM ADMIN - SUPPORT TICKETS
+const adminTicketRoutes = require('./modules/admin/adminTicket.routes');
+// USER - SUPPORT TICKETS
+const userTicketRoutes = require('./modules/support/userTicket.routes');
+// USER - NOTIFICATIONS
+const notificationRoutes = require('./modules/notification/notification.routes');
+// PLATFORM ADMIN - NOTIFICATIONS
+const adminNotificationRoutes = require('./modules/admin/adminNotification.routes');
+// PLATFORM ADMIN - EMAIL TEMPLATES
+const emailTemplateRoutes = require('./modules/admin/emailTemplate.routes');
+// ANALYTICS
+// const analyticsRoutes = require('./modules/analytics/analytics.routes'); // Duplicate removed
+
 // ============================================
 // MIDDLEWARE
 // ============================================
@@ -117,63 +150,48 @@ app.use('/api', testRoutes);
 app.use('/auth/google', googleRoutes);
 
 // PLATFORM ADMIN - CORS MANAGEMENT
-const corsAdminRoutes = require('./modules/admin/cors.routes');
 app.use('/api/admin/cors', corsAdminRoutes);
 
 // PLATFORM ADMIN - USER MANAGEMENT
-const adminUserRoutes = require('./modules/admin/adminUser.routes');
 app.use('/api/admin/users', adminUserRoutes);
 
 // PLATFORM ADMIN - SUBSCRIPTION MANAGEMENT
-const adminSubscriptionRoutes = require('./modules/admin/adminSubscription.routes');
 app.use('/api/admin/subscriptions', adminSubscriptionRoutes);
 
-// PLATFORM ADMIN - ORGANIZATION MANAGEMENT (EXTENDED)
-const adminOrgRoutes = require('./modules/admin/adminOrganization.routes');
+// PLATFORM ADMIN - ORGANIZATION MANAGEMENT
 app.use('/api/admin/organizations', adminOrgRoutes);
 
 // PLATFORM ADMIN - DEVICE MANAGEMENT
-const adminDeviceRoutes = require('./modules/admin/adminDevice.routes');
 app.use('/api/admin/devices', adminDeviceRoutes);
 
 // PLATFORM ADMIN - ANALYTICS
-const adminAnalyticsRoutes = require('./modules/admin/adminAnalytics.routes');
 app.use('/api/admin/analytics', adminAnalyticsRoutes);
 
 // PLATFORM ADMIN - SYSTEM CONFIGURATION
-const systemConfigRoutes = require('./modules/admin/systemConfig.routes');
 app.use('/api/admin/config', systemConfigRoutes);
 
 // PLATFORM ADMIN - ANNOUNCEMENTS
-const announcementRoutes = require('./modules/admin/announcement.routes');
 app.use('/api/admin/announcements', announcementRoutes);
 
 // PLATFORM ADMIN - AUDIT LOGS
-const adminAuditRoutes = require('./modules/admin/adminAudit.routes');
 app.use('/api/admin/audit-logs', adminAuditRoutes);
 
 // PLATFORM ADMIN - API KEYS
-const adminApiKeyRoutes = require('./modules/admin/adminApiKey.routes');
 app.use('/api/admin/api-keys', adminApiKeyRoutes);
 
 // PLATFORM ADMIN - SUPPORT TICKETS
-const adminTicketRoutes = require('./modules/admin/adminTicket.routes');
 app.use('/api/admin/support/tickets', adminTicketRoutes);
 
 // USER - SUPPORT TICKETS
-const userTicketRoutes = require('./modules/support/userTicket.routes');
 app.use('/api/support/tickets', userTicketRoutes);
 
 // USER - NOTIFICATIONS
-const notificationRoutes = require('./modules/notification/notification.routes');
 app.use('/api/notifications', notificationRoutes);
 
 // PLATFORM ADMIN - NOTIFICATIONS
-const adminNotificationRoutes = require('./modules/admin/adminNotification.routes');
 app.use('/api/admin/notifications', adminNotificationRoutes);
 
 // PLATFORM ADMIN - EMAIL TEMPLATES
-const emailTemplateRoutes = require('./modules/admin/emailTemplate.routes');
 app.use('/api/admin/email-templates', emailTemplateRoutes);
 
 // NEW MODULES
@@ -191,6 +209,8 @@ app.use('/api/devices', devicesRoutes);
 app.use('/api', thresholdRoutes);
 
 app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+// app.use('/api/admin/plans', adminPlanRoutes); // Removed (using subscription routes)
 const analyticsRoutes = require('./modules/analytics/analytics.routes');
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);

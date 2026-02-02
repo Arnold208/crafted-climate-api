@@ -35,6 +35,13 @@ function auditLogger(req, res, next) {
     return next();
   }
 
+  // GLOBAL POLICY: Only log state changes (POST, PUT, PATCH, DELETE)
+  // Ignore reads (GET, HEAD, OPTIONS)
+  const stateChangingMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+  if (!stateChangingMethods.includes(req.method)) {
+    return next();
+  }
+
   // Extract JWT info if available (routes may have authenticateToken middleware)
   let userid = null;
   let platformRole = null;

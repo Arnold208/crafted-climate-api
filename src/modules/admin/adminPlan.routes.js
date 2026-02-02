@@ -1,0 +1,149 @@
+const express = require('express');
+const router = express.Router();
+const adminPlanController = require('./adminPlan.controller');
+const authenticateToken = require('../../middleware/bearermiddleware');
+const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+
+/**
+ * @swagger
+ * /api/admin/plans:
+ *   get:
+ *     tags: [Platform Admin - Plans]
+ *     summary: List all plans
+ *     description: Get list of subscription plans (Platform Admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: active
+ *         schema:
+ *           type: boolean
+ *         description: Filter by active status
+ *     responses:
+ *       200:
+ *         description: Plans retrieved
+ *       403:
+ *         description: Forbidden
+ */
+router.get('/', authenticateToken, requirePlatformAdmin, adminPlanController.listPlans);
+
+/**
+ * @swagger
+ * /api/admin/plans:
+ *   post:
+ *     tags: [Platform Admin - Plans]
+ *     summary: Create new plan
+ *     description: Create a new subscription plan (Platform Admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - priceMonthly
+ *               - maxDevices
+ *               - maxDataRetentionDays
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               priceMonthly:
+ *                 type: number
+ *               priceYearly:
+ *                 type: number
+ *               maxDevices:
+ *                 type: number
+ *               maxDataRetentionDays:
+ *                 type: number
+ *               features:
+ *                 type: object
+ *               enterprise:
+ *                 type: object
+ *     responses:
+ *       201:
+ *         description: Plan created
+ *       400:
+ *         description: Invalid input or duplicate name
+ */
+router.post('/', authenticateToken, requirePlatformAdmin, adminPlanController.createPlan);
+
+/**
+ * @swagger
+ * /api/admin/plans/{planId}:
+ *   get:
+ *     tags: [Platform Admin - Plans]
+ *     summary: Get plan details
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: planId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Plan details
+ *       404:
+ *         description: Plan not found
+ */
+router.get('/:planId', authenticateToken, requirePlatformAdmin, adminPlanController.getPlan);
+
+/**
+ * @swagger
+ * /api/admin/plans/{planId}:
+ *   put:
+ *     tags: [Platform Admin - Plans]
+ *     summary: Update plan
+ *     description: Update an existing plan (Platform Admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: planId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Plan updated
+ *       404:
+ *         description: Plan not found
+ */
+router.put('/:planId', authenticateToken, requirePlatformAdmin, adminPlanController.updatePlan);
+
+/**
+ * @swagger
+ * /api/admin/plans/{planId}:
+ *   delete:
+ *     tags: [Platform Admin - Plans]
+ *     summary: Deactivate plan
+ *     description: Soft delete a plan (set isActive=false). Existing subscriptions remain valid. (Platform Admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: planId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Plan deactivated
+ *       404:
+ *         description: Plan not found
+ */
+router.delete('/:planId', authenticateToken, requirePlatformAdmin, adminPlanController.deletePlan);
+
+module.exports = router;

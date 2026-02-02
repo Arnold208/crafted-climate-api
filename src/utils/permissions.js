@@ -171,6 +171,25 @@ const PLATFORM_PERMISSIONS = {
    * ============================================================ */
   "super-admin": [
     "platform.logs.view"
+  ],
+
+  /* ============================================================
+   * ROLE: supervisor (Platform)
+   * Can manage users but not critical system configs or delete.
+   * ============================================================ */
+  "supervisor": [
+    "platform.users.manage", // Suspend, restore, change role
+    "platform.users.view",
+    "platform.logs.view"
+  ],
+
+  /* ============================================================
+   * ROLE: support (Platform)
+   * Read-only access for troubleshooting.
+   * ============================================================ */
+  "support": [
+    "platform.users.view",
+    "platform.logs.view" // View logs for troubleshooting
   ]
 };
 

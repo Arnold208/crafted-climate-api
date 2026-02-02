@@ -160,7 +160,12 @@ class AdminUserController {
                 endDate: req.query.endDate
             };
 
-            const result = await adminUserService.getUserActivity(userid, dateRange);
+            const pagination = {
+                page: parseInt(req.query.page) || 1,
+                limit: parseInt(req.query.limit) || 50
+            };
+
+            const result = await adminUserService.getUserActivity(userid, dateRange, pagination);
 
             res.status(200).json({
                 success: true,

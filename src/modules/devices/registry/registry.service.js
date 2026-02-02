@@ -9,6 +9,7 @@ const Threshold = require('../../../models/threshold/threshold');
 const enforceDeviceLimit = require('../../../middleware/subscriptions/enforceDeviceLimit');
 const { sendEmail } = require('../../../config/mail/nodemailer');
 const CacheService = require('../../../modules/common/cache.service');
+const { createAuditLog } = require('../../../utils/auditLogger');
 
 class RegistryService {
     async registerDevice({ auid, serial, location, nickname, userid, organizationId }) {
@@ -93,6 +94,15 @@ class RegistryService {
             { organizationId },
             { $addToSet: { devices: auid } }
         );
+
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'DEVICE_REGISTER',
+            userid: userid,
+            organizationId: organizationId,
+            details: { auid, serial, model: manufactured.model },
+            ipAddress: null
+        });
 
         return newDevice;
     }
@@ -196,6 +206,16 @@ class RegistryService {
         );
 
         await CacheService.invalidate(`device:${auid}:meta`);
+
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'DEVICE_DELETE',
+            userid: device.userid, // Owner
+            organizationId: organizationId,
+            details: { auid, devid },
+            ipAddress: null
+        });
+
         return { message: "Device deleted and cleaned up" };
     }
 
@@ -205,6 +225,7 @@ class RegistryService {
 
         const user = await User.findOne({ email });
         if (!user) throw new Error('Target user not found');
+        if (user.deletedAt) throw new Error('Cannot add a suspended user as a collaborator');
 
         // Referential Integrity
         const org = await Organization.findOne({
@@ -231,6 +252,16 @@ class RegistryService {
 
         // INVALIDATION
         await CacheService.invalidate(`device:${auid}:meta`);
+
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'DEVICE_ADD_COLLABORATOR',
+            userid: user.userid, // Added user
+            organizationId: device.organizationId,
+            details: { auid, role, addedUserEmail: email },
+            ipAddress: null
+        });
+
         return device.collaborators;
     }
 
@@ -244,6 +275,16 @@ class RegistryService {
         device.collaborators = device.collaborators.filter(c => c.userid !== user.userid.toString());
         await device.save();
         await CacheService.invalidate(`device:${auid}:meta`);
+
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'DEVICE_REMOVE_COLLABORATOR',
+            userid: user.userid, // Removed user
+            organizationId: device.organizationId,
+            details: { auid, removedUserEmail: email },
+            ipAddress: null
+        });
+
         return device.collaborators;
     }
 

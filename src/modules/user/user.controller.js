@@ -64,7 +64,17 @@ class UserController {
     }
 
     async resendOtp(req, res) {
-        // ...
+        try {
+            const { email } = req.body;
+            if (!email) return res.status(400).json({ message: 'Email is required' });
+
+            const result = await userService.resendOtp({ email });
+            res.status(200).json(result);
+        } catch (error) {
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
+            if (error.message.includes('wait') || error.message.includes('verified')) return res.status(400).json({ message: error.message });
+            res.status(500).json({ message: error.message });
+        }
     }
 
     async getProfile(req, res) {

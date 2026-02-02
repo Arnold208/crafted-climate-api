@@ -1,4 +1,5 @@
 const ApiKey = require('../models/apikey/ApiKey');
+const User = require('../models/user/userModel');
 const ApiKeyUsage = require('../models/apikey/ApiKeyUsage');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -15,6 +16,12 @@ class ApiKeyService {
      * Generate new API key
      */
     async generateApiKey(organizationId, data, createdBy) {
+        // Enforce Suspension Check
+        const creator = await User.findOne({ userid: createdBy });
+        if (creator && creator.deletedAt) {
+            throw new Error('Account Suspended: Cannot generate API keys.');
+        }
+
         const { name, permissions, rateLimit, expiresAt, rotationSchedule, allowedIPs } = data;
 
         // Generate secure random key

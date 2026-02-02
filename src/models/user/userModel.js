@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema({
   /** ✅ PLATFORM ROLE */
   platformRole: {
     type: String,
-    enum: ["admin", "support", "user"],
+    enum: ["admin", "supervisor", "support", "user"],
     default: "user"
   },
 
@@ -63,7 +63,7 @@ const userSchema = new mongoose.Schema({
   /** OLD system RBAC - kept for backwards compatibility */
   role: {
     type: String,
-    enum: ['admin', 'supervisor', 'user'],
+    enum: ['admin', 'supervisor', 'support', 'user'],
     default: 'user'
   },
 
@@ -95,7 +95,7 @@ const userSchema = new mongoose.Schema({
     default: null,
     index: true
   }
-});
+}, { timestamps: true });
 
 const User = mongoose.model('User', userSchema);
 module.exports = User;

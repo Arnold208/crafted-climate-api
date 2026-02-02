@@ -1,6 +1,9 @@
 const User = require('../models/user/userModel');
 const Organization = require('../models/organization/organizationModel');
 const UserSubscription = require('../models/subscriptions/UserSubscription');
+// const AdminActivity = require('../models/admin/adminActivity'); // Removed: Module does not exist and is unused
+// const AdminActivity = require('../models/admin/adminActivity'); // Removed: Module does not exist and is unused
+const RegisterDevice = require('../models/devices/registerDevice');
 const { createAuditLog } = require('../utils/auditLogger');
 const emailTemplateService = require('./emailTemplate.service');
 const adminAuditService = require('./adminAudit.service');
@@ -61,10 +64,27 @@ class AdminUserService {
                 .select('-password -refreshToken -otp')
                 .skip(skip)
                 .limit(limit)
-                .sort({ createdAt: -1 })
+                .sort({ _id: -1 })
                 .lean(),
             User.countDocuments(query)
         ]);
+
+        // Populate devices for each user
+        const userIds = users.map(u => u.userid);
+        const devices = await RegisterDevice.find({
+            $or: [
+                { userid: { $in: userIds } },
+                { 'collaborators.userid': { $in: userIds } }
+            ]
+        }).select('auid devid model status userid collaborators').lean();
+
+        // Map devices to users
+        users.forEach(user => {
+            user.devices = devices.filter(d =>
+                d.userid === user.userid ||
+                (d.collaborators && d.collaborators.some(c => c.userid === user.userid))
+            );
+        });
 
         return {
             users,
@@ -99,10 +119,16 @@ class AdminUserService {
             .select('subscriptionId planId status billingCycle startDate endDate')
             .lean();
 
+        // Get devices OWNED by the user (excluding collaborations as requested)
+        const devices = await RegisterDevice.find({ userid })
+            .select('auid devid model status userid ownerUserId')
+            .lean();
+
         return {
             ...user,
             organizations,
-            subscriptions
+            subscriptions,
+            devices
         };
     }
 
@@ -111,7 +137,7 @@ class AdminUserService {
      */
     async changeUserRole(userid, newRole, adminId) {
         // Validate role
-        const validRoles = ['user', 'admin'];
+        const validRoles = ['user', 'admin', 'supervisor', 'support'];
         if (!validRoles.includes(newRole)) {
             throw new Error(`Invalid role. Must be one of: ${validRoles.join(', ')}`);
         }
@@ -119,6 +145,10 @@ class AdminUserService {
         const user = await User.findOne({ userid });
         if (!user) {
             throw new Error('User not found');
+        }
+
+        if (user.deletedAt) {
+            throw new Error('User is suspended. Restore user first before making changes.');
         }
 
         const oldRole = user.role;
@@ -264,6 +294,10 @@ class AdminUserService {
             throw new Error('User not found');
         }
 
+        if (user.deletedAt) {
+            throw new Error('User is suspended. Restore user first.');
+        }
+
         // Invalidate all refresh tokens
         user.refreshToken = null;
         await user.save();
@@ -290,8 +324,8 @@ class AdminUserService {
         };
     }
 
-    async getUserActivity(userid, dateRange = {}) {
-        const result = await adminAuditService.getUserLogs(userid, dateRange);
+    async getUserActivity(userid, dateRange = {}, pagination = {}) {
+        const result = await adminAuditService.getUserLogs(userid, dateRange, pagination);
 
         return {
             userid,

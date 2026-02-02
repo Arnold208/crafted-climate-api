@@ -51,7 +51,9 @@ class AdminDeviceService {
             RegisterDevice.find(query)
                 .skip(skip)
                 .limit(limit)
-                .sort({ createdAt: -1 })
+                // Fix: Cosmos DB error "index path excluded" on createdAt
+                // Using naturally ordered _id instead
+                .sort({ _id: -1 })
                 .lean(),
             RegisterDevice.countDocuments(query)
         ]);

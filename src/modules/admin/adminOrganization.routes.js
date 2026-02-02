@@ -135,6 +135,29 @@ router.post('/:orgId/suspend', authenticateToken, requirePlatformAdmin, adminOrg
 
 /**
  * @swagger
+ * /api/admin/organizations/{orgId}/restore:
+ *   post:
+ *     tags: [Organizations]
+ *     summary: Restore suspended organization
+ *     description: Restore suspended organization (Platform Admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Organization restored
+ *       400:
+ *         description: Organization not suspended
+ */
+router.post('/:orgId/restore', authenticateToken, requirePlatformAdmin, adminOrgController.restoreOrganization);
+
+/**
+ * @swagger
  * /api/admin/organizations/{orgId}/members:
  *   get:
  *     tags: [Organizations]

@@ -8,6 +8,7 @@ const Plan = require('../../models/subscriptions/Plan');
 const RegisteredDevice = require('../../models/devices/registerDevice');
 const Deployment = require('../../models/deployment/deploymentModel');
 const CacheService = require('../common/cache.service');
+const { createAuditLog } = require('../../utils/auditLogger');
 
 class OrganizationService {
 
@@ -77,12 +78,22 @@ class OrganizationService {
             );
         }
 
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'ORG_CREATE',
+            userid: createdBy, // Fixed: using createdBy instead of ownerUserId (usually same)
+            organizationId,
+            details: { name, planName },
+            ipAddress: null
+        });
+
         return { organizationId };
     }
 
     async addCollaborator(orgId, email, role) {
         const user = await User.findOne({ email });
         if (!user) throw new Error("User not found");
+        if (user.deletedAt) throw new Error("Cannot add a suspended user to an organization");
 
         const org = await Organization.findOne({ organizationId: orgId, deletedAt: null });
         if (!org) throw new Error("Organization not found");
@@ -120,6 +131,18 @@ class OrganizationService {
         // INVALIDATION
         await CacheService.invalidate(`org:${orgId}:meta`);
         await CacheService.invalidate(`user:${user.userid}:orgs`);
+
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'ORG_ADD_COLLABORATOR',
+            userid: user.userid, // Note: Tracks the ADDED user. Usually we want the actor? 
+            // BUT service methods don't always get 'actorId'. 
+            // Ideally we pass 'actorId' to service. 
+            // For now, logging the affected user + org is useful.
+            organizationId: orgId,
+            details: { role, addedUserEmail: email },
+            ipAddress: null
+        });
 
         return { message: "User added", userid: user.userid, organization: org };
     }
@@ -163,6 +186,15 @@ class OrganizationService {
         await CacheService.invalidate(`org:${orgId}:meta`);
         await CacheService.invalidate(`user:${userid}:orgs`);
 
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'ORG_REMOVE_COLLABORATOR',
+            userid: userid, // The removed user
+            organizationId: orgId,
+            details: { removedUserId: userid },
+            ipAddress: null
+        });
+
         return { message: "User removed and cleaned up" };
     }
 
@@ -179,6 +211,15 @@ class OrganizationService {
 
         // INVALIDATION
         await CacheService.invalidate(`org:${orgId}:meta`);
+
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'ORG_UPDATE_MEMBER_ROLE',
+            userid: userid,
+            organizationId: orgId,
+            details: { newRole },
+            ipAddress: null
+        });
 
         return { message: "Role updated" };
     }
@@ -216,6 +257,15 @@ class OrganizationService {
 
         user.currentOrganizationId = orgId;
         await user.save();
+
+        // AUDIT LOG (Optional, can be noisy)
+        await createAuditLog({
+            action: 'USER_SWITCH_ORG',
+            userid: userid,
+            organizationId: orgId,
+            details: { previousOrg: user.currentOrganizationId },
+            ipAddress: null
+        });
 
         return { currentOrganizationId: orgId };
     }

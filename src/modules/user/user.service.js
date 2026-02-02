@@ -12,6 +12,7 @@ const UserSubscription = require('../../models/subscriptions/UserSubscription');
 const { sendSMS } = require('../../config/sms/sms');
 const { containerClient, generateSignedUrl } = require('../../config/storage/storage');
 const { generateUserId } = require('../../utils/idGenerator');
+const { createAuditLog } = require('../../utils/auditLogger');
 
 function normalizeContact(contact) {
     if (!contact) return contact;
@@ -193,6 +194,15 @@ class UserService {
                 await sendSMS(contact, `Your CraftedClimate OTP is ${otpCode}. It expires in 15 minutes.`);
             }
 
+            // AUDIT LOG
+            await createAuditLog({
+                action: 'USER_SIGNUP',
+                userid: userid,
+                organizationId: personalOrgId,
+                details: { email, username, role },
+                ipAddress: null
+            });
+
             return {
                 userid,
                 personalOrganizationId: newUser.personalOrganizationId,
@@ -219,6 +229,10 @@ class UserService {
             throw new Error('User not found');
         }
 
+        if (user.deletedAt) {
+            throw new Error('Account Suspended: Your account has been suspended. Please contact support.');
+        }
+
         if (!user.verified) {
             throw new Error('Account not verified');
         }
@@ -238,10 +252,10 @@ class UserService {
         };
 
         const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
-            expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '60m',
+            expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN,
         });
         const refreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
-            expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d'
+            expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN
         });
 
         // Resolve subscription tier for frontend
@@ -277,6 +291,7 @@ class UserService {
     async verifyOtp({ email, otp }) {
         const user = await User.findOne({ email });
         if (!user) throw new Error('User not found');
+        if (user.deletedAt) throw new Error('Account Suspended');
 
         if (user.verified) return { message: 'User already verified' };
 
@@ -292,6 +307,15 @@ class UserService {
         user.otpExpiresAt = null;
         await user.save();
 
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'USER_VERIFY_OTP',
+            userid: user.userid,
+            organizationId: user.currentOrganizationId || 'personal',
+            details: { email },
+            ipAddress: null
+        });
+
         return { message: 'Account verified successfully' };
     }
 
@@ -301,6 +325,7 @@ class UserService {
     async resendOtp({ email }) {
         const user = await User.findOne({ email });
         if (!user) throw new Error('User not found');
+        if (user.deletedAt) throw new Error('Account Suspended');
         if (user.verified) throw new Error('User already verified');
 
         // Rate limiting logic could go here (e.g. check lastOtpSentAt)
@@ -321,6 +346,15 @@ class UserService {
         if (user.contact) {
             await sendSMS(user.contact, `Your new CraftedClimate OTP is ${otpCode}. Expires in 15m.`);
         }
+
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'USER_RESEND_OTP',
+            userid: user.userid,
+            organizationId: user.currentOrganizationId || 'personal',
+            details: { email },
+            ipAddress: null
+        });
 
         return { message: 'OTP resent successfully' };
     }

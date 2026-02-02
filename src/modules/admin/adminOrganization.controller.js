@@ -77,6 +77,20 @@ class AdminOrganizationController {
         }
     }
 
+    async restoreOrganization(req, res) {
+        try {
+            const { orgId } = req.params;
+            const adminId = req.user.userid;
+
+            const result = await adminOrgService.restoreOrganization(orgId, adminId);
+
+            res.status(200).json(result);
+        } catch (error) {
+            console.error('[AdminOrgController] Restore error:', error);
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
     async getMembers(req, res) {
         try {
             const { orgId } = req.params;

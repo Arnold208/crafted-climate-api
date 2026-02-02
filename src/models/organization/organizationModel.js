@@ -283,6 +283,24 @@ const organizationSchema = new mongoose.Schema(
       default: {} // Stores feature flags, limits, policies
     },
 
+    /**
+     * ⛔ SUSPENSION STATUS
+     * If true, organization is Read-Only/Frozen. No operations allowed.
+     */
+    suspended: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    suspendedAt: {
+      type: Date,
+      default: null
+    },
+    suspensionReason: {
+      type: String,
+      default: null
+    },
+
     deletedAt: {
       type: Date,
       default: null,
