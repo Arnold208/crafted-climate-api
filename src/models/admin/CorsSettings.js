@@ -57,13 +57,16 @@ const CorsSettingsSchema = new mongoose.Schema({
     },
 
     // Change History (last 10 changes)
-    changeHistory: [{
-        action: String,
-        performedBy: String,
-        timestamp: { type: Date, default: Date.now },
-        previousValue: mongoose.Schema.Types.Mixed,
-        newValue: mongoose.Schema.Types.Mixed
-    }]
+    changeHistory: {
+        type: [{
+            action: String,
+            performedBy: String,
+            timestamp: { type: Date, default: Date.now },
+            previousValue: mongoose.Schema.Types.Mixed,
+            newValue: mongoose.Schema.Types.Mixed
+        }],
+        default: []
+    }
 }, {
     timestamps: true,
     collection: 'corssettings'

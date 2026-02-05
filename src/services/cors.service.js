@@ -1,4 +1,8 @@
 const CorsSettings = require('../models/admin/CorsSettings');
+const { client: redisClient } = require('../config/redis/redis');
+
+const CORS_REDIS_KEY = 'cache:cors_settings';
+const CACHE_TTL_REDIS = 86400; // 24 hours
 
 /**
  * CORS Service - Manage dynamic CORS configuration
@@ -11,12 +15,29 @@ class CorsService {
      */
     async getCorsSettings() {
         try {
+            // 1. Try Redis Cache first
+            try {
+                if (redisClient.isOpen) {
+                    const cached = await redisClient.get(CORS_REDIS_KEY);
+                    if (cached) {
+                        return JSON.parse(cached);
+                    }
+                }
+            } catch (redisErr) {
+                console.error('[CorsService] Redis Get Error:', redisErr.message);
+                // Fall through to DB
+            }
+
+            // 2. Database Lookup
             let settings = await CorsSettings.findOne({ settingId: 'global' });
 
             // Initialize if doesn't exist
             if (!settings) {
                 settings = await this.initializeDefaults();
             }
+
+            // 3. Save to Redis for next time
+            await this._syncToRedis(settings);
 
             return settings;
         } catch (error) {
@@ -69,7 +90,9 @@ class CorsService {
      */
     async updateCorsSettings(data, adminId) {
         try {
-            const settings = await this.getCorsSettings();
+            // BYPASS Redis cache for admin write operations to ensure we have full document + changeHistory
+            let settings = await CorsSettings.findOne({ settingId: 'global' });
+            if (!settings) settings = await this.initializeDefaults();
 
             // SAFETY: Validate origins before applying
             if (data.allowedOrigins) {
@@ -109,6 +132,7 @@ class CorsService {
             settings.lastUpdatedAt = new Date();
 
             await settings.save();
+            await this._syncToRedis(settings);
 
             console.log(`✅ CORS settings updated by admin: ${adminId}`);
             return settings;
@@ -127,7 +151,9 @@ class CorsService {
             throw new Error(`Invalid origin format: ${origin}`);
         }
 
-        const settings = await this.getCorsSettings();
+        // BYPASS Redis cache for admin write operations
+        let settings = await CorsSettings.findOne({ settingId: 'global' });
+        if (!settings) settings = await this.initializeDefaults();
 
         if (settings.allowedOrigins.includes(origin)) {
             throw new Error(`Origin already exists: ${origin}`);
@@ -145,6 +171,7 @@ class CorsService {
         });
 
         await settings.save();
+        await this._syncToRedis(settings);
         console.log(`✅ Added origin: ${origin} by admin: ${adminId}`);
         return settings;
     }
@@ -153,7 +180,9 @@ class CorsService {
      * Remove an allowed origin (with safety check)
      */
     async removeAllowedOrigin(origin, adminId) {
-        const settings = await this.getCorsSettings();
+        // BYPASS Redis cache for admin write operations
+        let settings = await CorsSettings.findOne({ settingId: 'global' });
+        if (!settings) settings = await this.initializeDefaults();
 
         // SAFETY: Prevent removing last origin
         if (settings.allowedOrigins.length <= 1) {
@@ -177,6 +206,7 @@ class CorsService {
         });
 
         await settings.save();
+        await this._syncToRedis(settings);
         console.log(`✅ Removed origin: ${origin} by admin: ${adminId}`);
         return settings;
     }
@@ -185,7 +215,9 @@ class CorsService {
      * Toggle CORS enforcement
      */
     async toggleCorsEnforcement(enabled, adminId) {
-        const settings = await this.getCorsSettings();
+        // BYPASS Redis cache for admin write operations
+        let settings = await CorsSettings.findOne({ settingId: 'global' });
+        if (!settings) settings = await this.initializeDefaults();
 
         settings.changeHistory.push({
             action: 'TOGGLE_ENFORCEMENT',
@@ -200,6 +232,8 @@ class CorsService {
         settings.lastUpdatedAt = new Date();
 
         await settings.save();
+        await this._syncToRedis(settings);
+
         console.log(`✅ CORS enforcement ${enabled ? 'enabled' : 'disabled'} by admin: ${adminId}`);
         return settings;
     }
@@ -226,6 +260,25 @@ class CorsService {
     async getChangeHistory() {
         const settings = await this.getCorsSettings();
         return settings.changeHistory || [];
+    }
+
+    /**
+     * Helper: Sync settings to Redis
+     */
+    async _syncToRedis(settings) {
+        try {
+            if (redisClient.isOpen) {
+                // Ensure we only store what's needed to keep cache lean
+                const cacheData = {
+                    enabled: settings.enabled,
+                    allowedOrigins: settings.allowedOrigins,
+                    allowCredentials: settings.allowCredentials
+                };
+                await redisClient.setEx(CORS_REDIS_KEY, CACHE_TTL_REDIS, JSON.stringify(cacheData));
+            }
+        } catch (err) {
+            console.error('[CorsService] Redis Sync Error:', err.message);
+        }
     }
 }
 

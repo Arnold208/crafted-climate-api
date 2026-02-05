@@ -25,15 +25,17 @@ const client = createClient({
   password: process.env.REDIS_PASSWORD || undefined
 });
 
-// Optional: Detailed event logging
+// Required error handler to prevent process crash
+client.on('error', (err) => {
+  console.error('❌ Redis Client Error:', err.message);
+});
+
+// Optional event logging
 client.on('connect', () => {
   console.log('✅ Redis connected');
 });
 client.on('reconnecting', () => {
   console.log('🔄 Redis reconnecting...');
-});
-client.on('error', (err) => {
-  console.error('❌ Redis Client Error:', err.message);
 });
 client.on('end', () => {
   console.warn('⚠️ Redis connection closed');

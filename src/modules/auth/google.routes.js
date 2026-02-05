@@ -18,7 +18,15 @@ const googleController = require('./google.controller');
  *       302:
  *         description: Redirect to Google
  */
-router.get('/', passport.authenticate('google'));
+router.get('/', (req, res, next) => {
+    const platform = req.query.platform;
+    const state = platform === 'mobile' ? 'mobile' : 'web';
+
+    passport.authenticate('google', {
+        scope: ['profile', 'email'],
+        state: state
+    })(req, res, next);
+});
 
 /**
  * @swagger

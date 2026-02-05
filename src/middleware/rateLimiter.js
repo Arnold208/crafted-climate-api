@@ -44,11 +44,11 @@ const authLimiter = rateLimit({
 });
 
 const otpLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 2, // 2 requests per 5 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 requests per 15 minutes
   standardHeaders: true,
   legacyHeaders: false,
-  message: 'Too many OTP requests. Please try again after 5 minutes.',
+  message: 'Too many OTP requests. Please try again after 15 minutes.',
   store: createStore('otp'),
 });
 

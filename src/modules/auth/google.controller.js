@@ -45,17 +45,24 @@ exports.googleCallback = (req, res) => {
         };
 
         // SUCCESS RESPONSE
-        // If this is a browser redirect flow, we might want to redirect with tokens in URL,
-        // or render a view that posts a message to opener.
-        // For API usage (Postman/Mobile), JSON is correct.
-        // User asked for "auxiliary or alternate" signin.
-
-        res.status(200).json({
+        const responseData = {
             message: 'Google Authentication Successful',
             accessToken,
             refreshToken,
             user: responseUser
-        });
+        };
+
+        // Check if this was a mobile request via state parameter
+        const state = req.query.state;
+        if (state === 'mobile') {
+            const encodedData = encodeURIComponent(JSON.stringify(responseData));
+            const deepLink = `crowdsense://auth-callback?data=${encodedData}`;
+            console.log(`📱 Mobile OAuth Success: Redirecting to deep link`);
+            return res.redirect(302, deepLink);
+        }
+
+        // For API usage (Postman/Web), JSON is correct.
+        res.status(200).json(responseData);
 
     } catch (error) {
         console.error('[GoogleAuth] Callback Controller Error:', error);

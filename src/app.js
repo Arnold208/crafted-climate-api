@@ -72,6 +72,9 @@ const { getCsrfToken } = require('./middleware/csrfProtection');
 
 const app = express();
 
+// Trust proxy for rate limiting behind load balancers/proxies
+app.set('trust proxy', 1);
+
 app.use(passport.initialize());
 
 app.use(express.static(path.join(__dirname, '../public'))); // Public is in root

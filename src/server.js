@@ -77,6 +77,10 @@ connectRedis()
             console.error(`⏸️ QUEUE STALLED | Job ID: ${jobId} | Worker may have crashed or timed out`);
         });
 
+        queueEvents.on('error', (error) => {
+            console.error('❌ QueueEvents Error:', error);
+        });
+
         console.log('✅ QueueEvents monitoring initialized for telemetry queue');
 
         const PORT = process.env.PORT || 3000;

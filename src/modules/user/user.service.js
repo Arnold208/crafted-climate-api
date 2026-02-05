@@ -17,11 +17,17 @@ const { createAuditLog } = require('../../utils/auditLogger');
 
 function normalizeContact(contact) {
     if (!contact) return contact;
-    contact = contact.trim();
+
+    // Remove all non-numeric characters (spaces, dashes, parens, etc)
+    contact = contact.replace(/\D/g, '');
+
+    // If it starts with local 0, convert to Ghana 233
+    // Note: We can expand this for other regions but for now sticking to previous logic
     if (contact.startsWith('0')) {
         return '233' + contact.slice(1);
     }
-    return contact.replace(/^\+/, '');
+
+    return contact;
 }
 
 /**
@@ -431,21 +437,30 @@ class UserService {
     async _sendDualChannelOtp(user, context = "Account Verification") {
         const message = `Your CraftedClimate OTP for ${context} is ${user.otp}. Expires in 15m.`;
 
+        const tasks = [];
+
         // 1. Email Channel
-        try {
-            await sendEmail(user.email, `CraftedClimate - ${context}`, message);
-        } catch (err) {
-            console.error('[UserService] Email Send Error:', err.message);
-        }
+        tasks.push((async () => {
+            try {
+                await sendEmail(user.email, `CraftedClimate - ${context}`, message);
+            } catch (err) {
+                console.error('[UserService] Email Send Error:', err.message);
+            }
+        })());
 
         // 2. SMS Channel
         if (user.contact) {
-            try {
-                await sendSMS(user.contact, message);
-            } catch (err) {
-                console.error('[UserService] SMS Send Error:', err.message);
-            }
+            tasks.push((async () => {
+                try {
+                    await sendSMS(user.contact, message);
+                } catch (err) {
+                    console.error('[UserService] SMS Send Error:', err.message);
+                }
+            })());
         }
+
+        // Run in parallel - failure in one won't block the other or the caller
+        await Promise.allSettled(tasks);
     }
 
     /**
@@ -468,21 +483,29 @@ class UserService {
             </div>
         `;
 
+        const tasks = [];
+
         // 1. Send Email
-        try {
-            await sendEmail(user.email, "Welcome to CraftedClimate", emailBody);
-        } catch (err) {
-            console.error('[UserService] Welcome Email Error:', err.message);
+        tasks.push((async () => {
+            try {
+                await sendEmail(user.email, "Welcome to CraftedClimate", emailBody);
+            } catch (err) {
+                console.error('[UserService] Welcome Email Error:', err.message);
+            }
+        })());
+
+        // 2. Send SMS Welcome
+        if (user.contact) {
+            tasks.push((async () => {
+                try {
+                    await sendSMS(user.contact, `Welcome to CraftedClimate! Your account is active. Visit your dashboard to get started.`);
+                } catch (err) {
+                    console.error('[UserService] Welcome SMS Error:', err.message);
+                }
+            })());
         }
 
-        // 2. Send SMS Welcome (Optional/Subtle)
-        if (user.contact) {
-            try {
-                await sendSMS(user.contact, `Welcome to CraftedClimate! Your account is active. Visit your dashboard to get started.`);
-            } catch (err) {
-                console.error('[UserService] Welcome SMS Error:', err.message);
-            }
-        }
+        await Promise.allSettled(tasks);
     }
 
     async getUserById(userid) {
