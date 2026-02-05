@@ -15,6 +15,52 @@ const checkFeatureAccess = require('../../../middleware/subscriptions/checkFeatu
 
 /**
  * @swagger
+ * /api/devices/public-map:
+ *   get:
+ *     tags: [Devices, Device Registry]
+ *     summary: Get Public Sensors for Map
+ *     description: Retrieve all devices marked as public, including metadata and latest telemetry.
+ *     parameters:
+ *       - in: query
+ *         name: model
+ *         schema:
+ *           type: string
+ *           enum: [env, aqua, gas-solo]
+ *         description: Filter by sensor model
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [online, offline, all]
+ *         description: Filter by connection status
+ *       - in: query
+ *         name: online
+ *         schema:
+ *           type: boolean
+ *         description: Alias for status=online (true) or status=offline (false)
+ *     responses:
+ *       200:
+ *         description: List of public devices
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   auid: { type: string }
+ *                   nickname: { type: string }
+ *                   location: { type: object }
+ *                   image: { type: string }
+ *                   model: { type: string }
+ *                   status: { type: string }
+ *                   lastSeen: { type: number }
+ *                   telemetry: { type: object }
+ */
+router.get('/public-map', registryController.getPublicDevices);
+
+/**
+ * @swagger
  * /api/devices/register-device:
  *   post:
  *     tags: [Device Registry]

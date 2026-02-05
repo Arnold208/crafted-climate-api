@@ -26,7 +26,7 @@ const connectDB = async () => {
       socketTimeoutMS: 45000,     // Close sockets after 45s of inactivity
       serverSelectionTimeoutMS: 5000, // Fail fast if DB is down
       heartbeatFrequencyMS: 10000,
-      retryWrites: true           // Critical for CosmosDB consistency
+      retryWrites: false           // Azure Cosmos DB (RU) does not support retryable writes
     });
 
     console.log(`✅ Connected to MongoDB: ${dbName} (Pool: 10-100)`);

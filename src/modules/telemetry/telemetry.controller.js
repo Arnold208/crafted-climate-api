@@ -46,12 +46,14 @@ class TelemetryController {
         try {
             const { model } = req.query;
             const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10), 1), 1000);
+            const page = Math.max(1, parseInt(req.query.page || '1', 10));
 
-            const data = await telemetryService.getPublicTelemetry(model, limit);
+            const data = await telemetryService.getPublicTelemetry(model, limit, page);
 
             return res.status(200).json({
                 count: data.length,
                 per_device_limit: limit,
+                page: page,
                 data: data,
             });
         } catch (error) {
@@ -70,8 +72,10 @@ class TelemetryController {
             if (limit > 200) limit = 200;
 
             const { start, end } = req.query;
+            const userid = req.user.userid;
+            const organizationId = req.currentOrgId;
 
-            const telemetry = await telemetryService.getDbTelemetry(auid, model, limit, start, end);
+            const telemetry = await telemetryService.getDbTelemetry(auid, model, limit, start, end, userid, organizationId);
 
             if (!telemetry.length) {
                 return res.status(404).json({ message: 'No telemetry data found for this device.' });
@@ -93,8 +97,10 @@ class TelemetryController {
             const model = String(req.params.model || '').toLowerCase();
             const auid = String(req.params.auid || '').trim();
             const { start, end } = req.query;
+            const userid = req.user.userid;
+            const organizationId = req.currentOrgId;
 
-            const { cursor: dbCursor, columns } = await telemetryService.getCsvCursor(auid, model, start, end);
+            const { cursor: dbCursor, columns } = await telemetryService.getCsvCursor(auid, model, start, end, userid, organizationId);
             cursor = dbCursor;
 
             const safeAuid = auid.replace(/[^A-Za-z0-9._-]/g, '_');

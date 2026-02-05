@@ -10,6 +10,7 @@ const Plan = require('../../models/subscriptions/Plan');
 const UserSubscription = require('../../models/subscriptions/UserSubscription');
 
 const { sendSMS } = require('../../config/sms/sms');
+const { sendEmail } = require('../../config/mail/nodemailer');
 const { containerClient, generateSignedUrl } = require('../../config/storage/storage');
 const { generateUserId } = require('../../utils/idGenerator');
 const { createAuditLog } = require('../../utils/auditLogger');
@@ -29,9 +30,9 @@ function normalizeContact(contact) {
 class UserService {
 
     /**
-     * Register a new user
-     */
-    async signup({ username, email, password, invitationId, contact, firstName, lastName, file }) {
+    * Register a new user
+    */
+    async signup({ username, email, password, invitationId, contact, firstName, lastName, file, isVerified = false }) {
         try {
             email = email.trim().replace(/\s+/g, '');
             contact = normalizeContact(contact);
@@ -118,9 +119,10 @@ class UserService {
                 profilePicture: profilePictureUrl,
                 role,
                 devices,
-                otp: otpCode,
-                otpExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
-                lastOtpSentAt: new Date(),
+                otp: isVerified ? null : otpCode,
+                otpExpiresAt: isVerified ? null : new Date(Date.now() + 15 * 60 * 1000),
+                lastOtpSentAt: isVerified ? null : new Date(),
+                verified: isVerified,
                 platformRole: "user",
             });
 
@@ -189,9 +191,11 @@ class UserService {
                 }
             }
 
-            // 6. SEND OTP (only if contact number is provided)
-            if (contact) {
-                await sendSMS(contact, `Your CraftedClimate OTP is ${otpCode}. It expires in 15 minutes.`);
+            // 6. WELCOME OR OTP
+            if (isVerified) {
+                await this._sendWelcomeMessage(newUser);
+            } else {
+                await this._sendDualChannelOtp(newUser);
             }
 
             // AUDIT LOG
@@ -299,12 +303,13 @@ class UserService {
 
         const now = new Date();
         if (now > user.otpExpiresAt) throw new Error('OTP expired');
-
         if (parseInt(otp) !== user.otp) throw new Error('Invalid OTP');
 
         user.verified = true;
         user.otp = null;
         user.otpExpiresAt = null;
+        // If this was a reset flow, keeping it verified is correct. 
+        // If it was already verified, no harm.
         await user.save();
 
         // AUDIT LOG
@@ -328,7 +333,7 @@ class UserService {
         if (user.deletedAt) throw new Error('Account Suspended');
         if (user.verified) throw new Error('User already verified');
 
-        // Rate limiting logic could go here (e.g. check lastOtpSentAt)
+        // Rate limiting logic
         const now = new Date();
         const lastSent = user.lastOtpSentAt ? new Date(user.lastOtpSentAt) : new Date(0);
         const diffSeconds = (now - lastSent) / 1000;
@@ -343,9 +348,8 @@ class UserService {
         user.lastOtpSentAt = now;
         await user.save();
 
-        if (user.contact) {
-            await sendSMS(user.contact, `Your new CraftedClimate OTP is ${otpCode}. Expires in 15m.`);
-        }
+        // Send via Dual Channels
+        await this._sendDualChannelOtp(user);
 
         // AUDIT LOG
         await createAuditLog({
@@ -357,6 +361,128 @@ class UserService {
         });
 
         return { message: 'OTP resent successfully' };
+    }
+
+    /**
+     * Forgot Password - Initiates OTP flow
+     */
+    async forgotPassword({ email }) {
+        const user = await User.findOne({ email });
+        if (!user) throw new Error('User not found');
+        if (user.deletedAt) throw new Error('Account Suspended');
+
+        // Generate OTP for recovery
+        const otpCode = crypto.randomInt(100000, 999999);
+        user.otp = otpCode;
+        user.otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+        user.lastOtpSentAt = new Date();
+        await user.save();
+
+        // Send via Dual Channels
+        await this._sendDualChannelOtp(user, "Password Reset");
+
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'USER_FORGOT_PASSWORD_INIT',
+            userid: user.userid,
+            organizationId: user.currentOrganizationId || 'personal',
+            details: { email },
+            ipAddress: null
+        });
+
+        return { message: 'OTP sent to your email and phone' };
+    }
+
+    /**
+     * Reset Password - Completes the flow
+     */
+    async resetPassword({ email, otp, newPassword }) {
+        const user = await User.findOne({ email });
+        if (!user) throw new Error('User not found');
+        if (user.deletedAt) throw new Error('Account Suspended');
+
+        if (!user.otp || !user.otpExpiresAt) throw new Error('No OTP found. Please request one.');
+        if (new Date() > user.otpExpiresAt) throw new Error('OTP expired');
+        if (parseInt(otp) !== user.otp) throw new Error('Invalid OTP');
+
+        // Update Password
+        user.password = await bcrypt.hash(newPassword, 10);
+        user.verified = true; // Ensure they are verified if they could reset
+        user.otp = null;
+        user.otpExpiresAt = null;
+        user.refreshToken = ""; // Invalidate sessions
+        await user.save();
+
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'USER_PASSWORD_RESET',
+            userid: user.userid,
+            organizationId: user.currentOrganizationId || 'personal',
+            details: { email },
+            ipAddress: null
+        });
+
+        return { message: 'Password reset successfully' };
+    }
+
+    /**
+     * Helper: Send OTP via both Email and SMS
+     */
+    async _sendDualChannelOtp(user, context = "Account Verification") {
+        const message = `Your CraftedClimate OTP for ${context} is ${user.otp}. Expires in 15m.`;
+
+        // 1. Email Channel
+        try {
+            await sendEmail(user.email, `CraftedClimate - ${context}`, message);
+        } catch (err) {
+            console.error('[UserService] Email Send Error:', err.message);
+        }
+
+        // 2. SMS Channel
+        if (user.contact) {
+            try {
+                await sendSMS(user.contact, message);
+            } catch (err) {
+                console.error('[UserService] SMS Send Error:', err.message);
+            }
+        }
+    }
+
+    /**
+     * Helper: Send Professional Welcome Message
+     */
+    async _sendWelcomeMessage(user) {
+        const welcomeText = `Welcome to CraftedClimate, ${user.firstName || user.username}! 🌍\n\nWe're thrilled to have you join our mission for a sustainable future. Your account is now active and verified via Google.\n\nExplore your dashboard: ${process.env.APP_URL || 'https://app.craftedclimate.com'}`;
+
+        const emailBody = `
+            <div style="font-family: 'Inter', sans-serif; color: #111827; line-height: 1.6;">
+                <h1 style="color: #059669; font-size: 24px; margin-bottom: 20px;">Welcome to CraftedClimate! 🌍</h1>
+                <p>Hello <strong>${user.firstName || user.username}</strong>,</p>
+                <p>We are delighted to welcome you to the CraftedClimate platform. Your account has been successfully created and verified via Google.</p>
+                <p>At CraftedClimate, we are committed to providing you with the best-in-class tools for environmental monitoring and climate action. You can now access your Command Center to manage your devices and analyze real-time data.</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${process.env.APP_URL || 'https://app.craftedclimate.com'}" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Explore Your Dashboard</a>
+                </div>
+                <p>If you have any questions, our support team is always here to help.</p>
+                <p>Best Regards,<br><strong>The CraftedClimate Team</strong></p>
+            </div>
+        `;
+
+        // 1. Send Email
+        try {
+            await sendEmail(user.email, "Welcome to CraftedClimate", emailBody);
+        } catch (err) {
+            console.error('[UserService] Welcome Email Error:', err.message);
+        }
+
+        // 2. Send SMS Welcome (Optional/Subtle)
+        if (user.contact) {
+            try {
+                await sendSMS(user.contact, `Welcome to CraftedClimate! Your account is active. Visit your dashboard to get started.`);
+            } catch (err) {
+                console.error('[UserService] Welcome SMS Error:', err.message);
+            }
+        }
     }
 
     async getUserById(userid) {
@@ -374,6 +500,56 @@ class UserService {
         user.subscriptionTier = subscriptionTier;
 
         return user;
+    }
+
+    /**
+     * Refresh Access Token
+     * @param {string} token - The refresh token
+     */
+    async refreshToken(token) {
+        if (!token) throw new Error('Refresh Token is required');
+
+        try {
+            // 1. Verify Token
+            const decoded = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
+
+            // 2. Check User Status
+            const user = await User.findOne({ userid: decoded.userid });
+            if (!user) throw new Error('User not found');
+            if (user.deletedAt) throw new Error('Account Suspended');
+
+            // 3. Generate New Tokens
+            // Re-use payload construction logic to ensure consistency
+            const payload = {
+                userid: user.userid,
+                email: user.email,
+                username: user.username,
+                platformRole: user.role,
+                organizations: user.organization,
+                currentOrganizationId: user.currentOrganizationId || null
+            };
+
+            const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
+                expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN,
+            });
+            const newRefreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
+                expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN
+            });
+
+            return {
+                accessToken,
+                refreshToken: newRefreshToken
+            };
+
+        } catch (error) {
+            if (error.name === 'TokenExpiredError') {
+                throw new Error('Refresh token expired. Please login again.');
+            }
+            if (error.name === 'JsonWebTokenError') {
+                throw new Error('Invalid refresh token');
+            }
+            throw error;
+        }
     }
 }
 

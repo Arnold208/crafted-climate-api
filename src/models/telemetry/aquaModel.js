@@ -23,6 +23,7 @@ const aquaTelemetrySchema = new mongoose.Schema({
   temperature_ambient: { type: Number, default: 0 },
   pressure: { type: Number, default: 0 },
   ph: { type: Number, default: 0 },
+  do: { type: Number, default: 0 },
   lux: { type: Number, default: 0 },
   turbidity: { type: Number, default: 0 },
   voltage: { type: Number, default: 0 },

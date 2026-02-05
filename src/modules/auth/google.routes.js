@@ -9,7 +9,11 @@ const googleController = require('./google.controller');
  *   get:
  *     tags: [Authentication]
  *     summary: Initiate Google OAuth login
- *     description: Redirects user to Google Sign-In page
+ *     description: |
+ *       Redirects user to Google Sign-In page.
+ *       
+ *       **Note:** Typical "Execute" via Swagger UI will fail due to CORS restrictions on AJAX redirects to Google. 
+ *       Please **[click here to initiate login](/auth/google)** directly in your browser.
  *     responses:
  *       302:
  *         description: Redirect to Google

@@ -44,11 +44,11 @@ const authLimiter = rateLimit({
 });
 
 const otpLimiter = rateLimit({
-  windowMs: parseInt(process.env.OTP_LIMIT_WINDOW_MS) || 10 * 60 * 1000,
-  max: 5,
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 2, // 2 requests per 5 minutes
   standardHeaders: true,
   legacyHeaders: false,
-  message: 'Too many OTP requests. Please try again later.',
+  message: 'Too many OTP requests. Please try again after 5 minutes.',
   store: createStore('otp'),
 });
 
@@ -86,6 +86,28 @@ const csvRouteLimiter = rateLimit({
   store: createStore('csv'),
 });
 
+// 📊 Public Telemetry limiter
+const publicTelemetryLimiter = rateLimit({
+  windowMs: parseInt(process.env.PUBLIC_TELEMETRY_LIMIT_WINDOW_MS, 10) || 5 * 60 * 1000,
+  max: parseInt(process.env.PUBLIC_TELEMETRY_LIMIT_MAX, 10) || 120,
+  message: 'Too many requests to the public telemetry API. Please slow down.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  store: createStore('public-telemetry'),
+});
+
+// 📥 Telemetry Ingestion limiter
+const ingestRouteLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute
+  message: 'Ingestion rate limit exceeded. Please slow down.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.body.i || ipKeyGenerator(req), // Safely handle Device ID or IP
+  store: createStore('ingest'),
+});
+
 module.exports = {
   globalRateLimiter,
   swaggerRateLimiter,
@@ -93,4 +115,6 @@ module.exports = {
   authLimiter,
   dbRouteLimiter,
   csvRouteLimiter,
+  publicTelemetryLimiter,
+  ingestRouteLimiter,
 };

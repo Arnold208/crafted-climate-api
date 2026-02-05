@@ -230,6 +230,17 @@ class RegistryController {
             res.status(500).json({ error: e.message });
         }
     }
+
+    async getPublicDevices(req, res) {
+        try {
+            const { model, status, online } = req.query;
+            const devices = await registryService.getPublicDevices({ model, status, online });
+            res.status(200).json(devices);
+        } catch (error) {
+            console.error("Public map error:", error);
+            res.status(500).json({ error: error.message });
+        }
+    }
 }
 
 module.exports = new RegistryController();

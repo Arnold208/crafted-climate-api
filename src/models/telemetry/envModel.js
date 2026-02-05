@@ -21,6 +21,8 @@ const envTelemetrySchema = new mongoose.Schema({
   humidity: { type: Number, default: 0 },
   pressure: { type: Number, default: 0 },
   altitude: { type: Number, default: 0 },
+  voltage: { type: Number, default: 0 },
+  current: { type: Number, default: 0 },
 
   // Particulate Matter
   pm1: { type: Number, default: 0 },

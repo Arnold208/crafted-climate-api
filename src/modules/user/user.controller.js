@@ -85,6 +85,57 @@ class UserController {
             res.status(500).json({ message: error.message });
         }
     }
+
+    async refreshToken(req, res) {
+        try {
+            const { refreshToken } = req.body;
+            if (!refreshToken) return res.status(400).json({ message: 'Refresh Token is required' });
+
+            const result = await userService.refreshToken(refreshToken);
+            res.status(200).json({
+                message: 'Token refreshed successfully',
+                ...result
+            });
+        } catch (error) {
+            if (error.message.includes('expired') || error.message.includes('Invalid')) {
+                return res.status(401).json({ message: error.message }); // 401 for auth issues
+            }
+            if (error.message.includes('Suspended')) {
+                return res.status(403).json({ message: error.message });
+            }
+            res.status(500).json({ message: error.message });
+        }
+    }
+
+    async forgotPassword(req, res) {
+        try {
+            const { email } = req.body;
+            if (!email) return res.status(400).json({ message: 'Email is required' });
+
+            const result = await userService.forgotPassword({ email });
+            res.status(200).json(result);
+        } catch (error) {
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
+            res.status(500).json({ message: error.message });
+        }
+    }
+
+    async resetPassword(req, res) {
+        try {
+            const { email, otp, newPassword } = req.body;
+            if (!email || !otp || !newPassword) {
+                return res.status(400).json({ message: 'Email, OTP, and newPassword are required' });
+            }
+
+            const result = await userService.resetPassword({ email, otp, newPassword });
+            res.status(200).json(result);
+        } catch (error) {
+            if (error.message.includes('Invalid') || error.message.includes('expired')) {
+                return res.status(400).json({ message: error.message });
+            }
+            res.status(500).json({ message: error.message });
+        }
+    }
 }
 
 module.exports = new UserController();

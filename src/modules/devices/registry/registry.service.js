@@ -10,6 +10,18 @@ const enforceDeviceLimit = require('../../../middleware/subscriptions/enforceDev
 const { sendEmail } = require('../../../config/mail/nodemailer');
 const CacheService = require('../../../modules/common/cache.service');
 const { createAuditLog } = require('../../../utils/auditLogger');
+const { client: redisClient } = require('../../../config/redis/redis');
+
+// Telemetry Models for Fallback
+const EnvTelemetry = require('../../../models/telemetry/envModel');
+const AquaTelemetry = require('../../../models/telemetry/aquaModel');
+const GasSoloTelemetry = require('../../../models/telemetry/gasSoloModel');
+
+const MODEL_MAP = {
+    env: EnvTelemetry,
+    aqua: AquaTelemetry,
+    'gas-solo': GasSoloTelemetry
+};
 
 class RegistryService {
     async registerDevice({ auid, serial, location, nickname, userid, organizationId }) {
@@ -329,6 +341,91 @@ class RegistryService {
           <p>CraftedClimate Team</p>
         `;
         await sendEmail(email, `Added as collaborator on ${devName}`, emailContent);
+    }
+
+    /**
+     * Get Public Devices for Map
+     * Returns: Metadata + Latest Telemetry
+     */
+    async getPublicDevices({ model, status, online }) {
+        const query = { availability: 'public' };
+
+        // 1. Filter by Model
+        if (model) {
+            query.model = model.toLowerCase();
+        }
+
+        // 2. Filter by Status
+        // Note: 'online' param is an alias or boolean check for status
+        const targetStatus = status || (online === 'true' ? 'online' : null);
+        if (targetStatus && targetStatus !== 'all') {
+            query.status = targetStatus;
+        }
+
+        const devices = await registerNewDevice.find(query).lean();
+
+        // 3. Attach Telemetry (Redis -> Mongo Fallback)
+        const results = await Promise.all(devices.map(async (device) => {
+            try {
+                let latestTelemetry = null;
+                const auid = device.auid;
+
+                // A. Try Redis
+                const allRedis = await redisClient.hGetAll(auid);
+
+                if (allRedis && Object.keys(allRedis).length > 0) {
+                    // Extract latest timestamp key (numeric)
+                    const timestamps = Object.keys(allRedis)
+                        .filter(k => k !== 'metadata' && k !== 'flushed')
+                        .map(Number)
+                        .filter(n => !isNaN(n))
+                        .sort((a, b) => b - a); // Descending
+
+                    if (timestamps.length > 0) {
+                        const latestTs = timestamps[0];
+                        try {
+                            latestTelemetry = JSON.parse(allRedis[latestTs]);
+                        } catch (e) {
+                            console.warn(`Failed to parse Redis data for ${auid}`);
+                        }
+                    }
+                }
+
+                // B. Fallback to Mongo if no telemetry in Redis
+                if (!latestTelemetry) {
+                    const devModel = device.model?.toLowerCase();
+                    const M = MODEL_MAP[devModel];
+                    if (M) {
+                        const dbRecord = await M.findOne({ auid })
+                            .sort({ transport_time: -1 })
+                            .lean();
+
+                        if (dbRecord) {
+                            // Standardize format if needed, or just return record
+                            latestTelemetry = dbRecord;
+                        }
+                    }
+                }
+
+                // Construct Public Response Object
+                return {
+                    auid: device.auid,
+                    devid: device.devid,
+                    nickname: device.nickname,
+                    location: device.location ? JSON.parse(device.location) : null,
+                    image: device.image,
+                    model: device.model,
+                    status: device.status, // online/offline from device registry (managed by heartbeat)
+                    lastSeen: latestTelemetry?.transport_time || latestTelemetry?.timestamp || null,
+                    telemetry: latestTelemetry
+                };
+            } catch (err) {
+                console.error(`Error processing public device ${device.auid}:`, err);
+                return null; // Skip errored devices
+            }
+        }));
+
+        return results.filter(Boolean);
     }
 }
 

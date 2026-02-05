@@ -14,22 +14,41 @@ const modelKeyMaps = {
     d: 'date',
     e: 'error',
     b: 'battery',
+    v: 'voltage',
+    c: 'current',
   },
-  gas: {
+  aqua: {
+    i: 'devid',
+    ts: 'date',
+    v: 'voltage',
+    c: 'current',
+    temp: 'temperature_water',
+    ph: 'ph',
+    do: 'do',
+    ec: 'ec',
+    h: 'humidity',
+    p: 'pressure',
+    l: 'lux',
+    t: 'temperature_ambient',
+    err: 'error',
+  },
+  'gas-solo': {
+    i: 'devid',
+    ts: 'date',
+    v: 'voltage',
+    c: 'current',
     t: 'temperature',
     h: 'humidity',
-    co2: 'co2',
-    ch4: 'methane',
-    no2: 'no2',
-    d: 'date',
+    p: 'pressure',
+    co2: 'eco2_ppm',
+    voc: 'tvoc_ppb',
     e: 'error',
     b: 'battery',
   },
-  // Add more models as needed
 };
 
 // System-level fields that should always be included even if not in datapoints[]
-const systemFields = ['date', 'error', 'battery','aqi'];
+const systemFields = ['date', 'error', 'battery', 'aqi'];
 
 function mapTelemetryData(model, body, datapoints) {
   const keyMap = modelKeyMaps[model.toLowerCase()];

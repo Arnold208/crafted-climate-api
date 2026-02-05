@@ -33,6 +33,7 @@ passport.use(new GoogleStrategy({
             if (user) {
                 console.log(`[GoogleAuth] User found by Email (Linking Account): ${email}`);
                 user.googleId = googleId;
+                user.verified = true; // Mark as verified when linking
                 await user.save();
                 return cb(null, user);
             }
@@ -55,14 +56,14 @@ passport.use(new GoogleStrategy({
                 firstName,
                 lastName,
                 invitationId: null,
-                contact: null
+                contact: null,
+                isVerified: true
             });
 
-            // Fetch back the user to add googleId (since signup doesn't accept googleId arg currently)
+            // Fetch back the user
             user = await User.findOne({ email });
             if (user) {
                 user.googleId = googleId;
-                user.verified = true; // Google trust implies verified email usually
                 await user.save();
             }
 

@@ -20,11 +20,11 @@ const MODEL_MAP = {
 const CSV_COLUMNS = {
     env: [
         'auid', 'transport_time', 'telem_time', 'temperature', 'humidity', 'pressure', 'altitude',
-        'pm1', 'pm2_5', 'pm10', 'pm1s', 'pm2_5s', 'pm10s', 'lux', 'uv', 'sound', 'aqi', 'battery', 'error'
+        'pm1', 'pm2_5', 'pm10', 'pm1s', 'pm2_5s', 'pm10s', 'lux', 'uv', 'sound', 'aqi', 'voltage', 'current', 'battery', 'error'
     ],
     aqua: [
         'auid', 'transport_time', 'telem_time', 'ec', 'humidity', 'temperature_water', 'temperature_ambient',
-        'pressure', 'ph', 'lux', 'turbidity', 'voltage', 'current', 'aqi', 'battery', 'error'
+        'pressure', 'ph', 'do', 'lux', 'turbidity', 'voltage', 'current', 'aqi', 'battery', 'error'
     ],
     gasSolo: [
         'auid', 'transport_time', 'telem_time', 'temperature', 'humidity', 'pressure',
@@ -164,11 +164,12 @@ class TelemetryService {
     /**
      * Get Public Telemetry
      */
-    async getPublicTelemetry(minModel, limit = 50) {
+    async getPublicTelemetry(minModel, limit = 50, page = 1) {
         const query = { availability: 'public' };
         if (minModel) query.model = minModel.toLowerCase();
 
-        const devices = await registerNewDevice.find(query, { auid: 1 }).lean();
+        const skip = (Math.max(1, page) - 1) * limit;
+        const devices = await registerNewDevice.find(query, { auid: 1 }).skip(skip).limit(limit).lean();
 
         const result = await Promise.all(
             devices.map(async ({ auid }) => {
@@ -205,13 +206,19 @@ class TelemetryService {
     /**
     * Get Database Telemetry (Direct Mongo Query)
     */
-    async getDbTelemetry(auid, model, limit, start, end) {
+    async getDbTelemetry(auid, model, limit, start, end, userid, organizationId) {
         const M = MODEL_MAP[model.toLowerCase()];
         if (!M) throw new Error(`Unknown model '${model}'`);
 
         const query = { auid };
+
+        // 🛡️ Data Retention Enforcement
+        const enforceDataRetention = require('../../middleware/subscriptions/enforceDataRetention');
+        const retentionFilter = await enforceDataRetention(userid, organizationId);
+        Object.assign(query, retentionFilter);
+
         if (start || end) {
-            query.transport_time = {};
+            query.transport_time = query.transport_time || {};
             if (start) query.transport_time.$gte = new Date(isNaN(start) ? start : Number(start));
             if (end) query.transport_time.$lte = new Date(isNaN(end) ? end : Number(end));
         }
@@ -224,7 +231,7 @@ class TelemetryService {
      * Stream CSV (Helper returns cursor and columns)
      * The controller will pipe this to response
      */
-    async getCsvCursor(auid, model, start, end) {
+    async getCsvCursor(auid, model, start, end, userid, organizationId) {
         const M = MODEL_MAP[model.toLowerCase()];
         const columns = CSV_COLUMNS[model.toLowerCase()];
 
@@ -233,8 +240,14 @@ class TelemetryService {
         }
 
         const query = { auid };
+
+        // 🛡️ Data Retention Enforcement
+        const enforceDataRetention = require('../../middleware/subscriptions/enforceDataRetention');
+        const retentionFilter = await enforceDataRetention(userid, organizationId);
+        Object.assign(query, retentionFilter);
+
         if (start || end) {
-            query.transport_time = {};
+            query.transport_time = query.transport_time || {};
             if (start) query.transport_time.$gte = new Date(isNaN(start) ? start : Number(start));
             if (end) query.transport_time.$lte = new Date(isNaN(end) ? end : Number(end));
         }
