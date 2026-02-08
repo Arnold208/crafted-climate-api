@@ -42,9 +42,17 @@ function startTelemetryWorker() {
             const devid = body.devid;
 
             // 🔒 PRODUCTION HARDENING: Idempotency/Deduplication Check
-            // Prevent duplicate processing from MQTT retries or job retries
-            const timestamp = body.ts || data.receivedAt || Date.now();
-            const dedupKey = `seen:${devid}:${timestamp}`;
+            // FIX: Use 'event' UUID from Notecard/Hub if available to safely handle batches with same timestamp
+            // Fallback to timestamp if event ID is missing
+            const eventId = data.event || body.event;
+            const timestamp = body.ts || body.time || data.receivedAt || Date.now(); // Also check body.time
+
+            let dedupKey;
+            if (eventId) {
+                dedupKey = `seen:event:${eventId}`;
+            } else {
+                dedupKey = `seen:${devid}:${timestamp}`;
+            }
 
             try {
                 // NX flag: only set if key doesn't exist (returns null if already exists)
@@ -54,7 +62,8 @@ function startTelemetryWorker() {
                 });
 
                 if (!isNew) {
-                    logger.debug(`⏭️ Skipping duplicate telemetry: ${devid} @ ${timestamp}`);
+                    console.log(`⏭️ [DEBUG] Skipping duplicate telemetry: ${dedupKey}`); // Forced Log
+                    logger.debug(`⏭️ Skipping duplicate telemetry: ${dedupKey}`);
                     return; // Already processed, skip silently
                 }
             } catch (dedupErr) {
@@ -93,8 +102,8 @@ function startTelemetryWorker() {
         {
             connection,
             removeOnComplete: { age: 60, count: 1000 },
-            // ⬇️ Keep failed jobs very briefly to avoid Redis pile-up
-            removeOnFail: { age: 5 }, // auto-remove failed jobs ~5s after final failure
+            // ⬇️ HARDENING: Keep failed jobs for 24 hours for debugging/replay (DLQ)
+            removeOnFail: { age: 24 * 3600 }, // 24 hours
             concurrency: 50,          // 🚀 Increased from 5 to 50 for production throughput
             lockDuration: 30000,
         }

@@ -60,6 +60,10 @@ connectRedis()
         startSLABreachCron(); // 🆕 Start SLA breach cron
         emailWorker.start().then(() => console.log('✅ Email worker started'));
 
+        // 🔥 Initialize Email Templates (Seeds DB)
+        const emailTemplateService = require('./services/emailTemplate.service');
+        emailTemplateService.initializeDefaults().catch(err => console.error('❌ Failed to init templates:', err.message));
+
         // 🔥 PRODUCTION HARDENING: Monitor queue for failed/stalled jobs
         const queueEvents = new QueueEvents('telemetry', {
             connection: {

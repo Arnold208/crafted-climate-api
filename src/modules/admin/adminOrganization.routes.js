@@ -8,7 +8,7 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  * @swagger
  * /api/admin/organizations:
  *   get:
- *     tags: [Organizations]
+ *     tags: [Organizations (Platform Admin)]
  *     summary: List all organizations
  *     description: Get paginated list of organizations with filters (Platform Admin only)
  *     security:
@@ -54,7 +54,7 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminOrgController.list
  * @swagger
  * /api/admin/organizations/{orgId}:
  *   get:
- *     tags: [Organizations]
+ *     tags: [Organizations (Platform Admin)]
  *     summary: Get organization details
  *     description: Get detailed information about an organization (Platform Admin only)
  *     security:
@@ -77,7 +77,7 @@ router.get('/:orgId', authenticateToken, requirePlatformAdmin, adminOrgControlle
  * @swagger
  * /api/admin/organizations/{orgId}:
  *   delete:
- *     tags: [Organizations]
+ *     tags: [Organizations (Platform Admin)]
  *     summary: Delete organization
  *     description: Permanently delete organization (Platform Admin only). Cannot delete orgs with members or devices.
  *     security:
@@ -100,7 +100,7 @@ router.delete('/:orgId', authenticateToken, requirePlatformAdmin, adminOrgContro
  * @swagger
  * /api/admin/organizations/{orgId}/suspend:
  *   post:
- *     tags: [Organizations]
+ *     tags: [Organizations (Platform Admin)]
  *     summary: Suspend organization
  *     description: Suspend organization (Platform Admin only)
  *     security:
@@ -137,7 +137,7 @@ router.post('/:orgId/suspend', authenticateToken, requirePlatformAdmin, adminOrg
  * @swagger
  * /api/admin/organizations/{orgId}/restore:
  *   post:
- *     tags: [Organizations]
+ *     tags: [Organizations (Platform Admin)]
  *     summary: Restore suspended organization
  *     description: Restore suspended organization (Platform Admin only)
  *     security:
@@ -160,7 +160,7 @@ router.post('/:orgId/restore', authenticateToken, requirePlatformAdmin, adminOrg
  * @swagger
  * /api/admin/organizations/{orgId}/members:
  *   get:
- *     tags: [Organizations]
+ *     tags: [Organizations (Platform Admin)]
  *     summary: Get organization members
  *     description: List all members of an organization (Platform Admin only)
  *     security:
@@ -183,7 +183,7 @@ router.get('/:orgId/members', authenticateToken, requirePlatformAdmin, adminOrgC
  * @swagger
  * /api/admin/organizations/{orgId}/transfer-owner:
  *   post:
- *     tags: [Organizations]
+ *     tags: [Organizations (Platform Admin)]
  *     summary: Transfer organization ownership
  *     description: Transfer ownership to another member (Platform Admin only)
  *     security:

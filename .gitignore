@@ -1,5 +1,51 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary Files
+*.txt
+*.bak
+*.swp
+*.tmp
+temp/
+tmp/
+logo_base64.txt
+audit_results.txt
+prompt.txt
+
+# Test & Debug Scripts
+test-*.js
+verify-*.js
+scripts/test-*.js
+scripts/verify-*.js
+scripts/inject-logo.js
+mqttClientTest/
+test_profile_debug*.js
+
+# IDE
+.vscode/
+.idea/
+*.DS_Store
+
+# Build Artifacts
+dist/
+build/
+coverage/
+
+# Certificates
 config/certificates/*
+!config/certificates/.gitkeep
 .env
 .env.development
 .env.production
@@ -20,14 +66,10 @@ PROMPT*.md
 CHANGES.md
 QA_*.md
 *.txt
-scripts/verify-fix.js
-logs/combined-2026-01-27.log
-logs/error-2026-01-27.log
-logs/combined-2026-02-02.log
-logs/error-2026-02-02.log
-logs/combined-2026-02-03.log
-logs/combined-2026-02-04.log
-logs/combined-2026-02-05.log
-logs/error-2026-02-03.log
-logs/error-2026-02-04.log
-logs/error-2026-02-05.log
+scripts
+oldProd
+logs
+frontend
+ai_summary
+logs/.9b91393ad778cf5b753ba5fe8e25485c9f75419f-audit.json
+logs/.f309c0a64ae23cd50e3a2cef7bb3bf0a435e901a-audit.json

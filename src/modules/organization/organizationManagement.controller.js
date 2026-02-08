@@ -6,6 +6,8 @@
  */
 
 const organizationManagementService = require('./organizationManagement.service');
+const documentUploadService = require('./documentUpload.service'); // Added import
+const { v4: uuidv4 } = require('uuid');
 const adminOrganizationService = require('./adminOrganization.service');
 
 class OrganizationManagementController {
@@ -190,6 +192,179 @@ class OrganizationManagementController {
                 return res.status(409).json({ message: error.message });
             }
 
+            return res.status(400).json({ message: error.message });
+        }
+    }
+
+    // ========================================
+    // ORG CREATION REQUESTS (NEW WORKFLOW)
+    // ========================================
+
+    /**
+     * POST /api/org/request-creation
+     * Request a new verified organization
+     */
+    async requestCreation(req, res) {
+        try {
+            const userid = req.user.userid;
+
+            // 1. EXTRACT DATA (Multipart fields usually come as strings)
+            let { name, type, description, businessDetails, documents } = req.body;
+
+            // Handle businessDetails if sent as string (common in multipart)
+            if (typeof businessDetails === 'string') {
+                try {
+                    businessDetails = JSON.parse(businessDetails);
+                } catch (e) {
+                    console.warn('[OrgMgmt] businessDetails is not valid JSON, attempting to construct from fields');
+                }
+            }
+
+            // If still not an object (or parsing failed/was empty), construct from flat fields
+            if (!businessDetails || typeof businessDetails !== 'object') {
+                businessDetails = {
+                    legalName: req.body['businessDetails.legalName'] || req.body.legalName,
+                    tin: req.body['businessDetails.tin'] || req.body.tin, // Tax ID
+                    businessType: req.body['businessDetails.businessType'] || req.body.businessType,
+                    industry: req.body['businessDetails.industry'] || req.body.industry,
+                    website: req.body['businessDetails.website'] || req.body.website,
+                    location: req.body['businessDetails.location'] || req.body.location,
+
+                    // Nested Address
+                    address: {
+                        streetAddress: req.body['businessDetails.address.streetAddress'] || req.body.streetAddress,
+                        city: req.body['businessDetails.address.city'] || req.body.city,
+                        state: req.body['businessDetails.address.state'] || req.body.state,
+                        postalCode: req.body['businessDetails.address.postalCode'] || req.body.postalCode,
+                        country: req.body['businessDetails.address.country'] || req.body.country,
+                        buildingName: req.body['businessDetails.address.buildingName'] || req.body.buildingName,
+                        gps: {
+                            latitude: req.body['businessDetails.address.gps.latitude'] || req.body.latitude,
+                            longitude: req.body['businessDetails.address.gps.longitude'] || req.body.longitude
+                        }
+                    }
+                };
+            }
+
+            // 2. NAME UNIQUENESS CHECK (Stop before uploading)
+            // Delegate this check to the service helper or do it here. 
+            // Ideally we do it here to save bandwidth/time, but service encapsulates logic.
+            // We'll call a dedicated validation method first.
+            await organizationManagementService.validateCreationRequestUniqueness(userid, name);
+
+            const requestId = `req-${uuidv4()}`;
+            const uploadedDocuments = [];
+
+            // 3. HANDLE FILE UPLOADS
+            if (req.files && req.files.length > 0) {
+                // Upload each file
+                for (const file of req.files) {
+                    // Determine doc type from fieldname or body map
+                    // Client should send fieldname like 'businessCert', 'workplaceImage'
+                    const docType = file.fieldname || 'other';
+
+                    const uploadResult = await documentUploadService.uploadCreationRequestDocument(
+                        file,
+                        requestId,
+                        docType,
+                        userid
+                    );
+                    uploadedDocuments.push(uploadResult);
+                }
+            }
+
+            // 4. SUBMIT REQUEST
+            const requestData = {
+                requestId,
+                name,
+                type,
+                description,
+                businessDetails,
+                documents: uploadedDocuments
+            };
+
+            const result = await organizationManagementService.createCreationRequest(userid, requestData, true); // true = skip validation since we did checks/processing
+            return res.status(201).json({ message: "Request submitted successfully", ...result.toObject() });
+
+        } catch (error) {
+            console.error('[OrgMgmt] Request Creation Error:', error);
+            if (error.message.includes('already taken') || error.message.includes('pending request')) {
+                return res.status(409).json({ message: error.message });
+            }
+            return res.status(400).json({ message: error.message });
+        }
+    }
+
+    /**
+     * GET /api/org/admin/creation-requests
+     * List creation requests (Admin Only)
+     */
+    async listCreationRequests(req, res) {
+        try {
+            const platformRole = req.user.platformRole;
+            const { status } = req.query;
+            const requests = await organizationManagementService.getCreationRequests(platformRole, status);
+            return res.status(200).json({ success: true, count: requests.length, data: requests });
+        } catch (error) {
+            if (error.message.includes('Unauthorized')) return res.status(403).json({ message: error.message });
+            return res.status(500).json({ message: error.message });
+        }
+    }
+
+    /**
+     * GET /api/org/admin/creation-requests/:requestId
+     * Get specific request details
+     */
+    async getCreationRequest(req, res) {
+        try {
+            const { requestId } = req.params;
+            const platformRole = req.user.platformRole;
+            const request = await organizationManagementService.getCreationRequestById(requestId, platformRole);
+            return res.status(200).json(request);
+        } catch (error) {
+            if (error.message.includes('Unauthorized')) return res.status(403).json({ message: error.message });
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
+            return res.status(400).json({ message: error.message });
+        }
+    }
+
+    /**
+     * PUT /api/org/admin/creation-requests/:requestId/approve
+     * Approve creation request -> Creates Org
+     */
+    async approveCreationRequest(req, res) {
+        try {
+            const { requestId } = req.params;
+            const adminUserId = req.user.userid;
+            const platformRole = req.user.platformRole;
+
+            const result = await organizationManagementService.approveCreationRequest(requestId, adminUserId, platformRole);
+            return res.status(200).json(result);
+        } catch (error) {
+            if (error.message.includes('Unauthorized')) return res.status(403).json({ message: error.message });
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
+            return res.status(400).json({ message: error.message });
+        }
+    }
+
+    /**
+     * PUT /api/org/admin/creation-requests/:requestId/reject
+     * Reject creation request
+     */
+    async rejectCreationRequest(req, res) {
+        try {
+            const { requestId } = req.params;
+            const { reason } = req.body;
+            const adminUserId = req.user.userid;
+            const platformRole = req.user.platformRole;
+
+            if (!reason) return res.status(400).json({ message: "Rejection reason is required" });
+
+            const result = await organizationManagementService.rejectCreationRequest(requestId, adminUserId, reason, platformRole);
+            return res.status(200).json(result);
+        } catch (error) {
+            if (error.message.includes('Unauthorized')) return res.status(403).json({ message: error.message });
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
             return res.status(400).json({ message: error.message });
         }
     }

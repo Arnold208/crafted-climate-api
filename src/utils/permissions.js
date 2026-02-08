@@ -116,14 +116,11 @@ const ORG_PERMISSIONS = {
    * Can view and update thresholds/notecard, but not create/delete.
    * ============================================================ */
   "org-user": [
-
     "org.users.view",
+    /* No default visibility - Access granted via Collaborator only */
 
-    /* Read-only Access */
-    "org.deployments.view",
+    /* FIX: Allow viewing specific devices shared with them */
     "org.devices.view",
-    "org.analytics.view",
-    "org.telemetry.read",
 
     /* Thresholds - Read & Update only */
     "org.thresholds.view",

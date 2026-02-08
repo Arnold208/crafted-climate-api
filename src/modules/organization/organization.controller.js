@@ -108,6 +108,18 @@ class OrganizationController {
             return res.status(500).json({ message: error.message });
         }
     }
+
+    async dissolve(req, res) {
+        try {
+            const { orgId } = req.params;
+            const result = await organizationService.dissolveOrganization(orgId, req.user.userid);
+            return res.status(200).json(result);
+        } catch (error) {
+            if (error.message.includes("Unauthorized")) return res.status(403).json({ message: error.message });
+            if (error.message.includes("not found")) return res.status(404).json({ message: error.message });
+            return res.status(500).json({ message: error.message });
+        }
+    }
 }
 
 module.exports = new OrganizationController();

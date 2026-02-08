@@ -18,16 +18,17 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  * @swagger
  * /api/telemetry/{model}:
  *   post:
- *     tags: [Telemetry]
+ *     tags:
+ *       - Telemetry
  *     summary: Ingest telemetry data
- *     description: Accepts telemetry data using short keys. Uses the device ID ("i") to verify the registered device and stores only mapped datapoints.
+ *     description: Ingests telemetry data.
  *     parameters:
  *       - in: path
  *         name: model
  *         required: true
  *         schema:
  *           type: string
- *         description: The model type of the device (e.g., env, gas, aqua).
+ *         description: The model type.
  *     requestBody:
  *       required: true
  *       content:
@@ -35,42 +36,17 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  *           schema:
  *             type: object
  *             properties:
- *               i: { type: string, description: "Device ID" }
- *               t: { type: number, description: "Temperature" }
- *               h: { type: number, description: "Humidity" }
- *               p: { type: number, description: "Pressure" }
- *               p1: { type: number, description: "PM1" }
- *               p2: { type: number, description: "PM2.5" }
- *               p10: { type: number, description: "PM10" }
- *               l: { type: number, description: "Lux" }
- *               u: { type: number, description: "UV" }
- *               s: { type: number, description: "Sound" }
- *               d: { type: integer, description: "Unix Timestamp" }
- *               e: { type: string, description: "Error Code" }
- *               b: { type: number, description: "Battery Level" }
- *           example:
- *             i: "device-id-123"
- *             t: 26.4
- *             h: 60.1
- *             p: 1013.2
- *             p1: 4.2
- *             p2: 18.7
- *             p10: 30.3
- *             l: 430
- *             u: 1.9
- *             s: 60
- *             d: 1721666400
- *             e: "0000"
- *             b: 85
+ *               i:
+ *                 type: string
  *     responses:
  *       201:
- *         description: Telemetry stored successfully
+ *         description: Created
  *       400:
- *         description: Missing or invalid device ID
+ *         description: Bad Request
  *       404:
- *         description: Device not found
+ *         description: Not Found
  *       500:
- *         description: Server error
+ *         description: Server Error
  */
 router.post('/:model', ingestRouteLimiter, enforceTelemetryIngestion, telemetryController.ingest);
 
@@ -119,6 +95,40 @@ router.get('/:userid/device/:auid',
     checkOrgAccess("org.devices.view"),
     checkTelemetryReadAccess,
     telemetryController.getDeviceTelemetry
+);
+
+/**
+ * @swagger
+ * /api/telemetry/{userid}/device/{auid}:
+ *   delete:
+ *     tags: [Telemetry]
+ *     summary: Delete all telemetry for a device
+ *     description: Deletes all telemetry data for a specific device from both Redis cache and MongoDB. Requires Owner or Org Admin privileges.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userid
+ *         required: true
+ *         schema: { type: string }
+ *         description: User ID (must match owner or authorized admin)
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *         description: Device AUID
+ *     responses:
+ *       200:
+ *         description: Telemetry deleted successfully
+ *       403:
+ *         description: Unauthorized
+ *       404:
+ *         description: Device not found
+ */
+router.delete('/:userid/device/:auid',
+    authenticateToken,
+    checkOrgAccess("org.devices.edit"),
+    telemetryController.deleteDeviceTelemetry
 );
 
 /**
@@ -197,7 +207,7 @@ router.get('/public/telemetry', publicTelemetryLimiter, telemetryController.getP
  *         required: true
  *         schema:
  *           type: string
- *           enum: [env, aqua, gasSolo]
+ *           enum: [env, aqua, gas-solo]
  *           default: env
  *         description: Telemetry model (e.g. "env").
  *       - in: path
@@ -262,7 +272,7 @@ router.get('/db/:model/:auid',
  *         required: true
  *         schema:
  *           type: string
- *           enum: [env, aqua, gasSolo]
+ *           enum: [env, aqua, gas-solo]
  *           default: env
  *         description: Telemetry model (currently only "env").
  *       - in: path
@@ -333,6 +343,51 @@ router.get('/db/:model/:auid/raw',
     checkTelemetryReadAccess,
     checkPlanFeature('apiAccess', 'full'), // Only Enterprise (full API access)
     telemetryController.getRawData
+);
+
+/**
+ * @swagger
+ * /api/telemetry/graph/{model}/{auid}:
+ *   get:
+ *     tags:
+ *       - Telemetry
+ *     summary: Get graph data
+ *     parameters:
+ *       - in: path
+ *         name: model
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: start
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: "2023-10-27T10:00:00.000Z"
+ *         description: Start time (ISO 8601 or similar)
+ *       - in: query
+ *         name: end
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: "2023-10-27T12:00:00.000Z"
+ *         description: End time (ISO 8601 or similar)
+ *     responses:
+ *       200:
+ *         description: OK
+ */
+
+router.get('/graph/:model/:auid',
+    authenticateToken,
+    checkOrgAccess("org.devices.view"),
+    checkTelemetryReadAccess,
+    dbRouteLimiter,
+    telemetryController.getGraphData
 );
 
 module.exports = router;

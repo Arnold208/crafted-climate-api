@@ -50,7 +50,7 @@ const EmailTemplateSchema = new mongoose.Schema({
 
     category: {
         type: String,
-        enum: ['auth', 'billing', 'support', 'marketing', 'system', 'notification'],
+        enum: ['auth', 'billing', 'support', 'marketing', 'system', 'notification', 'alerts'],
         required: true
     },
 

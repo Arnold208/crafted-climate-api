@@ -1,6 +1,8 @@
 const Deployment = require('../../../models/deployment/deploymentModel');
 const RegisteredDevice = require('../../../models/devices/registerDevice');
 const Organization = require('../../../models/organization/organizationModel');
+const User = require('../../../models/user/userModel');
+const registryService = require('../registry/registry.service');
 const { nanoid } = require('nanoid');
 
 class DeploymentService {
@@ -61,30 +63,73 @@ class DeploymentService {
     }
 
     async deleteDeployment(deploymentId, organizationId) {
+        // ... (existing implementation) ...
         const deployment = await this.getDeployment(deploymentId, organizationId);
         if (!deployment) throw new Error('Deployment not found');
 
-        // Unassign devices from this deployment so they can be reused?
-        // Or keep them assigned to the "deleted" deployment for history?
-        // Usage: "Devices can be reassigned"
-        // Let's release them.
+        // Unassign devices
         await RegisteredDevice.updateMany(
             { deployment: deploymentId },
             { $set: { deployment: null, deploymentId: null } }
         );
 
-        // SOFT DELETE
         deployment.deletedAt = new Date();
         await deployment.save();
 
-        // Do NOT pull from Org if preserving history, or DO pull?
-        // Consistency: if we soft delete, we usually keep links but filter queries.
-        // await Organization.findOneAndUpdate(
-        //     { organizationId },
-        //     { $pull: { deployments: deploymentId } },
-        //     { new: true }
-        // );
         return { message: "Deployment deleted successfully" };
+    }
+
+    async addCollaborator(deploymentId, organizationId, email, role) {
+        const user = await User.findOne({ email });
+        if (!user) throw new Error("User not found");
+
+        const deployment = await this.getDeployment(deploymentId, organizationId);
+        if (!deployment) throw new Error("Deployment not found");
+
+        // 1. Upsert into Deployment
+        const existsIndex = deployment.collaborators.findIndex(c => c.userid === user.userid.toString());
+        if (existsIndex >= 0) {
+            deployment.collaborators[existsIndex].role = role;
+        } else {
+            deployment.collaborators.push({ userid: user.userid.toString(), role });
+        }
+        await deployment.save();
+
+        // 2. Sync to Devices (Auto-Permissions)
+        // Default: 'device-user' with 'view', 'export'
+        const deviceRole = 'device-user';
+        const devicePermissions = ['view', 'export'];
+
+        for (const auid of deployment.devices) {
+            try {
+                await registryService.addCollaborator(auid, email, deviceRole, devicePermissions);
+            } catch (err) {
+                console.warn(`[Deployment] Failed to sync collaborator to device ${auid}:`, err.message);
+            }
+        }
+        return deployment.collaborators;
+    }
+
+    async removeCollaborator(deploymentId, organizationId, email) {
+        const user = await User.findOne({ email });
+        if (!user) throw new Error("User not found");
+
+        const deployment = await this.getDeployment(deploymentId, organizationId);
+        if (!deployment) throw new Error("Deployment not found");
+
+        // 1. Remove from Deployment
+        deployment.collaborators = deployment.collaborators.filter(c => c.userid !== user.userid.toString());
+        await deployment.save();
+
+        // 2. Remove from ALL devices
+        for (const auid of deployment.devices) {
+            try {
+                await registryService.removeCollaborator(auid, email);
+            } catch (err) {
+                console.warn(`[Deployment] Failed to remove collaborator from device ${auid}:`, err.message);
+            }
+        }
+        return deployment.collaborators;
     }
 
     async addDeviceToDeployment(deploymentId, organizationId, auid) {
@@ -107,6 +152,21 @@ class DeploymentService {
             { $addToSet: { devices: auid } },
             { new: true }
         );
+
+        // SYNC: Add existing Deployment Collaborators to this new Device
+        if (deployment.collaborators && deployment.collaborators.length > 0) {
+            for (const collab of deployment.collaborators) {
+                try {
+                    // We need email for registryService.addCollaborator
+                    const user = await User.findOne({ userid: collab.userid });
+                    if (user) {
+                        await registryService.addCollaborator(auid, user.email, 'device-user', ['view', 'export']);
+                    }
+                } catch (e) {
+                    console.warn(`[Deployment] Failed to sync existing deployment collab to new device ${auid}`, e.message);
+                }
+            }
+        }
 
         return { message: 'Device added successfully to deployment' };
     }

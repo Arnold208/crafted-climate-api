@@ -14,7 +14,8 @@ const { getDeviceCache, setDeviceCache } = require('../../utils/deviceCache');
 const MODEL_MAP = {
     env: EnvTelemetry,
     aqua: AquaTelemetry,
-    'gas-solo': GasSoloTelemetry
+    'gas-solo': GasSoloTelemetry,
+    'gassolo': GasSoloTelemetry // Alias for safety
 };
 
 const CSV_COLUMNS = {
@@ -26,19 +27,30 @@ const CSV_COLUMNS = {
         'auid', 'transport_time', 'telem_time', 'ec', 'humidity', 'temperature_water', 'temperature_ambient',
         'pressure', 'ph', 'do', 'lux', 'turbidity', 'voltage', 'current', 'aqi', 'battery', 'error'
     ],
-    gasSolo: [
+    'gas-solo': [
         'auid', 'transport_time', 'telem_time', 'temperature', 'humidity', 'pressure',
-        'aqi', 'current', 'eco2_ppm', 'tvoc_ppb', 'voltage', 'battery', 'error'
-    ]
+        'box_temperature', 'box_humidity', 'box_pressure',
+        'aqi', 'current', 'eco2_ppm', 'tvoc_ppb', 'voltage', 'battery', 'error', 'err_count',
+        'mode', 'v_type', 'ver', 'devmod', 'boot', 'brownout',
+        'comp_temp', 'comp_humi', 'eco2', 'tvoc', 'err_status'
+    ],
+    // Alias to match the above array reference if needed, but robust lookup is better
 };
+CSV_COLUMNS.gassolo = CSV_COLUMNS['gas-solo'];
 
 class TelemetryService {
+
+    _resolveModelKey(model) {
+        const m = model.toLowerCase();
+        if (m === 'gassolo' || m === 'gas-solo') return 'gas-solo';
+        return m;
+    }
 
     /**
      * Ingest telemetry data
      */
     async ingestTelemetry(modelName, deviceId, payload) {
-        modelName = modelName.toLowerCase();
+        modelName = this._resolveModelKey(modelName);
         let device;
 
         // 1. Check Redis Cache First
@@ -98,7 +110,7 @@ class TelemetryService {
     /**
      * Get Telemetry (Redis -> Mongo Fallback)
      */
-    async getDeviceTelemetry(userid, auid, limit = 50) {
+    async getDeviceTelemetry(userid, auid, limit = 50, orgRole = null) {
         // 1. Check Access
         const device = await registerNewDevice.findOne({ auid });
         if (!device) {
@@ -107,7 +119,11 @@ class TelemetryService {
 
         const isOwner = device.userid === userid;
         const isCollaborator = device.collaborators?.some(c => c.userid === userid);
-        if (!isOwner && !isCollaborator) {
+
+        // FIX: Allow Org Admins and Support to view ALL devices in their Org
+        const isOrgAdmin = orgRole === 'org-admin' || orgRole === 'org-support';
+
+        if (!isOwner && !isCollaborator && !isOrgAdmin) {
             throw new Error('Unauthorized access'); // 403
         }
 
@@ -126,8 +142,7 @@ class TelemetryService {
                 })
                 .filter(Boolean)
                 .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
-                .slice(0, limit)
-                .reverse(); // Standardize: Newest last? Or follow existing logic? Existing logic did slice().reverse() which implies Oldest -> Newest return
+                .slice(0, limit); // Descending (Newest -> Oldest)
 
             return {
                 source: 'redis',
@@ -139,7 +154,8 @@ class TelemetryService {
 
         // 3. Fallback to Mongo
         const model = device.model?.toLowerCase();
-        const M = MODEL_MAP[model];
+        const resolvedModel = this._resolveModelKey(model);
+        const M = MODEL_MAP[resolvedModel];
         if (!M) {
             throw new Error(`No telemetry model for '${model}'`);
         }
@@ -157,8 +173,40 @@ class TelemetryService {
             source: 'mongo',
             metadata: device.metadata || null,
             count: telemetryData.length,
-            telemetry: telemetryData.reverse()
+            telemetry: telemetryData
         };
+    }
+
+    /**
+     * Delete Device Telemetry (Redis + Mongo)
+     */
+    async deleteDeviceTelemetry(userid, auid, orgRole = null) {
+        // 1. Check Access
+        const device = await registerNewDevice.findOne({ auid });
+        if (!device) {
+            throw new Error('Device not found'); // 404
+        }
+
+        const isOwner = device.userid === userid;
+        // Only Owners and Org Admins can delete telemetry
+        const isOrgAdmin = orgRole === 'org-admin';
+
+        if (!isOwner && !isOrgAdmin) {
+            throw new Error('Unauthorized access'); // 403
+        }
+
+        // 2. Delete from Redis
+        await redisClient.del(auid);
+
+        // 3. Delete from Mongo
+        const model = device.model?.toLowerCase();
+        const resolvedModel = this._resolveModelKey(model);
+        const M = MODEL_MAP[resolvedModel];
+        if (M) {
+            await M.deleteMany({ auid });
+        }
+
+        return { success: true };
     }
 
     /**
@@ -207,7 +255,8 @@ class TelemetryService {
     * Get Database Telemetry (Direct Mongo Query)
     */
     async getDbTelemetry(auid, model, limit, start, end, userid, organizationId) {
-        const M = MODEL_MAP[model.toLowerCase()];
+        const resolvedModel = this._resolveModelKey(model);
+        const M = MODEL_MAP[resolvedModel];
         if (!M) throw new Error(`Unknown model '${model}'`);
 
         const query = { auid };
@@ -232,8 +281,9 @@ class TelemetryService {
      * The controller will pipe this to response
      */
     async getCsvCursor(auid, model, start, end, userid, organizationId) {
-        const M = MODEL_MAP[model.toLowerCase()];
-        const columns = CSV_COLUMNS[model.toLowerCase()];
+        const resolvedModel = this._resolveModelKey(model);
+        const M = MODEL_MAP[resolvedModel];
+        const columns = CSV_COLUMNS[resolvedModel];
 
         if (!M || !columns) {
             throw new Error(`Unknown model '${model}'`);
@@ -266,13 +316,102 @@ class TelemetryService {
      * Bypasses standard aggregations for raw sensor auditing.
      */
     async getRawData(auid, model, limit = 100) {
-        const M = MODEL_MAP[model.toLowerCase()];
+        const resolvedModel = this._resolveModelKey(model);
+        const M = MODEL_MAP[resolvedModel];
         if (!M) throw new Error(`Unknown model '${model}'`);
 
         return await M.find({ auid })
             .sort({ transport_time: -1 })
             .limit(Math.min(limit, 1000))
             .lean();
+    }
+    /**
+ * Get Graph Data (Optimized for Charts)
+ * - Requires Date Range
+ * - Sorts Ascending (Chronological)
+ * - Higher limit than pagination
+ */
+    async getGraphData(auid, model, start, end) {
+        const resolvedModel = this._resolveModelKey(model);
+        const M = MODEL_MAP[resolvedModel];
+        if (!M) throw new Error(`Unknown model '${model}'`);
+
+        if (!start || !end) {
+            throw new Error("Start and End dates are required for graph data.");
+        }
+
+        const query = {
+            auid,
+            transport_time: {
+                $gte: new Date(start),
+                $lte: new Date(end)
+            }
+        };
+
+        // Limit to 5000 points to prevent browser crash, but allow high res
+        // Sort Ascending (1) for charts
+        // 1. Fetch Historical Data from MongoDB (Base Layer)
+        const mongoPromise = M.find(query)
+            .sort({ transport_time: 1 })
+            .limit(5000)
+            .lean();
+
+        // 2. Fetch Latest Data from Redis (Hot Layer)
+        const redisPromise = (async () => {
+            try {
+                const entries = await redisClient.hGetAll(auid);
+                if (!entries) return [];
+
+                const redisData = [];
+                const startDate = new Date(start).getTime();
+                const endDate = new Date(end).getTime();
+
+                for (const [key, value] of Object.entries(entries)) {
+                    if (key === 'metadata' || key === 'flushed') continue;
+
+                    const ts = Number(key);
+                    // Filter Redis data by requested time range
+                    if (ts >= startDate && ts <= endDate) {
+                        try {
+                            const parsed = JSON.parse(value);
+                            // Ensure structure matches Mongo (Date object for transport_time)
+                            parsed.transport_time = new Date(ts);
+                            redisData.push(parsed);
+                        } catch (e) { /* ignore corrupt */ }
+                    }
+                }
+                return redisData;
+            } catch (err) {
+                console.error("Redis fetch error in graph:", err);
+                return []; // Fail safe, return only Mongo data
+            }
+        })();
+
+        // 3. Execute in Parallel
+        const [mongoData, redisData] = await Promise.all([mongoPromise, redisPromise]);
+
+        // 4. Merge & Deduplicate (Optimized)
+        // Map: Timestamp -> Data Point. Redis overwrites Mongo (newer/truer source)
+        const mergedMap = new Map();
+
+        // Add Mongo Data
+        for (const item of mongoData) {
+            const timeKey = item.transport_time.getTime();
+            mergedMap.set(timeKey, item);
+        }
+
+        // Add/Overlay Redis Data
+        for (const item of redisData) {
+            const timeKey = item.transport_time.getTime();
+            mergedMap.set(timeKey, item);
+        }
+
+        // 5. Convert back to array and Sort
+        const finalData = Array.from(mergedMap.values()).sort((a, b) =>
+            a.transport_time.getTime() - b.transport_time.getTime()
+        );
+
+        return finalData;
     }
 }
 

@@ -97,6 +97,48 @@ class DocumentUploadService {
     }
 
     /**
+     * Upload organization creation request document
+     * 
+     * @param {Object} file - Multer file object
+     * @param {string} requestId - Request ID
+     * @param {string} documentType - Type of document (e.g., 'business_license')
+     * @param {string} uploadedBy - User ID
+     * @returns {Promise<Object>}
+     */
+    async uploadCreationRequestDocument(file, requestId, documentType, uploadedBy) {
+        // 🔒 SECURITY: Validate file
+        const validation = validateDocumentUpload(file);
+        if (!validation.isValid) {
+            throw new Error(validation.error);
+        }
+
+        // Generate unique filename
+        const fileExtension = path.extname(file.originalname);
+        const fileName = `creation-requests/${requestId}/${documentType}-${uuidv4()}${fileExtension}`;
+
+        try {
+            // Upload to Azure Blob Storage
+            const blockBlobClient = containerClient.getBlockBlobClient(fileName);
+            await blockBlobClient.upload(file.buffer, file.buffer.length, {
+                blobHTTPHeaders: { blobContentType: file.mimetype }
+            });
+
+            // Generate signed URL
+            const signedUrl = generateSignedUrl(fileName);
+
+            return {
+                type: documentType,
+                url: signedUrl,
+                uploadedAt: new Date(),
+                uploadedBy
+            };
+        } catch (error) {
+            console.error('Document upload error:', error);
+            throw new Error('Failed to upload document to cloud storage');
+        }
+    }
+
+    /**
      * Upload multiple documents
      * 
      * @param {Array} files - Array of multer file objects

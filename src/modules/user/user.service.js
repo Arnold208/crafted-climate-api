@@ -40,7 +40,7 @@ class UserService {
     */
     async signup({ username, email, password, invitationId, contact, firstName, lastName, file, isVerified = false }) {
         try {
-            email = email.trim().replace(/\s+/g, '');
+            email = email.trim().toLowerCase().replace(/\s+/g, '');
             contact = normalizeContact(contact);
 
             // 1. PRE-CHECKS
@@ -83,23 +83,6 @@ class UserService {
             const userid = generateUserId();
             const hashedPassword = await bcrypt.hash(password, 10);
             const otpCode = crypto.randomInt(100000, 999999); // Secure OTP
-
-            // Create JWT payload
-            const payload = {
-                userid: userid,
-                email: email,
-                username: username,
-                platformRole: role,
-                organizations: [],
-                currentOrganizationId: null
-            };
-
-            const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
-                expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '60m',
-            });
-            const refreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
-                expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d'
-            });
 
             // Upload profile picture if included
             let profilePictureUrl = "";
@@ -158,6 +141,9 @@ class UserService {
             newUser.personalOrganizationId = personalOrgId;
             newUser.currentOrganizationId = personalOrgId;
             newUser.organization = [personalOrgId];
+
+            // 🔥 Ensure full context is handled
+            await this._ensureUserContext(newUser);
             await newUser.save();
 
             // 4. ASSIGN FREEMIUM SUBSCRIPTION
@@ -234,7 +220,7 @@ class UserService {
             throw new Error('Please provide email and password');
         }
 
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase() });
         if (!user) {
             throw new Error('User not found');
         }
@@ -252,13 +238,16 @@ class UserService {
             throw new Error('Invalid Password');
         }
 
+        // ✨ AUTO-HEALING: Ensure user has valid organization context
+        await this._ensureUserContext(user);
+
         const payload = {
             userid: user.userid,
             email: user.email,
             username: user.username,
             platformRole: user.role,
             organizations: user.organization,
-            currentOrganizationId: user.currentOrganizationId || null
+            currentOrganizationId: user.currentOrganizationId
         };
 
         const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
@@ -270,12 +259,32 @@ class UserService {
 
         // Resolve subscription tier for frontend
         let subscriptionTier = 'free';
+
+        // 1. Try to find the subscription linked in User profile
+        let sub = null;
         if (user.subscription) {
-            const sub = await UserSubscription.findOne({ subscriptionId: user.subscription });
-            if (sub) {
-                const plan = await Plan.findOne({ planId: sub.planId });
-                if (plan) subscriptionTier = plan.name;
+            sub = await UserSubscription.findOne({ subscriptionId: user.subscription });
+        }
+
+        // 2. Auto-Healing: If not found or inactive, check for ANY active subscription for this user
+        if (!sub || sub.status !== 'active') {
+            const activeSub = await UserSubscription.findOne({
+                userid: user.userid,
+                status: 'active',
+                subscriptionScope: 'personal' // Prioritize personal
+            }).sort({ updatedAt: -1 }); // Get most recent
+
+            if (activeSub) {
+                console.log(`[UserService] Healing: Updated user subscription pointer from ${user.subscription} to ${activeSub.subscriptionId}`);
+                user.subscription = activeSub.subscriptionId;
+                await user.save(); // PERSIST FIX
+                sub = activeSub;
             }
+        }
+
+        if (sub) {
+            const plan = await Plan.findOne({ planId: sub.planId });
+            if (plan) subscriptionTier = plan.name;
         }
 
         return {
@@ -299,7 +308,7 @@ class UserService {
      * Verify OTP
      */
     async verifyOtp({ email, otp }) {
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase() });
         if (!user) throw new Error('User not found');
         if (user.deletedAt) throw new Error('Account Suspended');
 
@@ -334,7 +343,7 @@ class UserService {
      * Resend OTP
      */
     async resendOtp({ email }) {
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase() });
         if (!user) throw new Error('User not found');
         if (user.deletedAt) throw new Error('Account Suspended');
         if (user.verified) throw new Error('User already verified');
@@ -373,7 +382,7 @@ class UserService {
      * Forgot Password - Initiates OTP flow
      */
     async forgotPassword({ email }) {
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase() });
         if (!user) throw new Error('User not found');
         if (user.deletedAt) throw new Error('Account Suspended');
 
@@ -403,7 +412,7 @@ class UserService {
      * Reset Password - Completes the flow
      */
     async resetPassword({ email, otp, newPassword }) {
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase() });
         if (!user) throw new Error('User not found');
         if (user.deletedAt) throw new Error('Account Suspended');
 
@@ -509,8 +518,11 @@ class UserService {
     }
 
     async getUserById(userid) {
-        const user = await User.findOne({ userid }).select('-password -otp -otpExpiresAt').lean();
+        const user = await User.findOne({ userid }).select('-password -otp -otpExpiresAt');
         if (!user) throw new Error('User not found');
+
+        // ✨ AUTO-HEALING: Ensure user has valid organization context
+        await this._ensureUserContext(user);
 
         let subscriptionTier = 'free';
         if (user.subscription) {
@@ -520,9 +532,12 @@ class UserService {
                 if (plan) subscriptionTier = plan.name;
             }
         }
-        user.subscriptionTier = subscriptionTier;
 
-        return user;
+        // Return as POJO
+        const userObj = user.toObject();
+        userObj.subscriptionTier = subscriptionTier;
+
+        return userObj;
     }
 
     /**
@@ -541,6 +556,9 @@ class UserService {
             if (!user) throw new Error('User not found');
             if (user.deletedAt) throw new Error('Account Suspended');
 
+            // ✨ AUTO-HEALING: Ensure user has valid organization context
+            await this._ensureUserContext(user);
+
             // 3. Generate New Tokens
             // Re-use payload construction logic to ensure consistency
             const payload = {
@@ -549,7 +567,7 @@ class UserService {
                 username: user.username,
                 platformRole: user.role,
                 organizations: user.organization,
-                currentOrganizationId: user.currentOrganizationId || null
+                currentOrganizationId: user.currentOrganizationId
             };
 
             const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
@@ -573,6 +591,114 @@ class UserService {
             }
             throw error;
         }
+    }
+    /**
+     * ✨ USER CONTEXT AUTO-HEALING
+     * Ensures user has a personal organization and an active currentOrganizationId.
+     */
+    async _ensureUserContext(user) {
+        let changed = false;
+
+        // 1. Ensure personal organization exists
+        if (!user.personalOrganizationId) {
+            console.log(`[UserService] Healing: Missing PersonalOrg for ${user.email}`);
+
+            // Try to find if they already have a "personal" plan org they created
+            let personalOrg = await Organization.findOne({
+                createdBy: user.userid,
+                planType: 'personal'
+            });
+
+            if (!personalOrg) {
+                const personalOrgId = `org-${uuidv4()}`;
+                personalOrg = new Organization({
+                    organizationId: personalOrgId,
+                    name: `${user.firstName || user.username}'s Workspace`,
+                    description: "Personal organization workspace",
+                    planType: "personal",
+                    collaborators: [{ userid: user.userid, role: "org-admin", permissions: [] }],
+                    createdBy: user.userid
+                });
+                await personalOrg.save();
+
+                // Assign Freemium Plan to the new personal org
+                const freemiumPlan = await Plan.findOne({ name: "freemium", isActive: true });
+                if (freemiumPlan) {
+                    await UserSubscription.create({
+                        subscriptionId: uuidv4(),
+                        userid: user.userid,
+                        organizationId: personalOrgId,
+                        subscriptionScope: "personal",
+                        planId: freemiumPlan.planId,
+                        status: "active",
+                        billingCycle: "free",
+                        autoRenew: false,
+                        usage: { devicesCount: 0, exportsThisMonth: 0, apiCallsThisMonth: 0 }
+                    });
+                }
+            }
+
+            user.personalOrganizationId = personalOrg.organizationId;
+            if (!user.organization.includes(personalOrg.organizationId)) {
+                user.organization.push(personalOrg.organizationId);
+            }
+            changed = true;
+        }
+
+        // 2. Ensure subscription exists for personal workspace
+        if (!user.subscription && user.personalOrganizationId) {
+            console.log(`[UserService] Healing: Missing Subscription for ${user.email}`);
+
+            // Look for existing subscription record
+            let existingSub = await UserSubscription.findOne({
+                userid: user.userid,
+                organizationId: user.personalOrganizationId
+            });
+
+            if (!existingSub) {
+                // Create new Freemium subscription if none exists
+                const freemiumPlan = await Plan.findOne({ name: "freemium", isActive: true });
+                if (freemiumPlan) {
+                    existingSub = await UserSubscription.create({
+                        subscriptionId: uuidv4(),
+                        userid: user.userid,
+                        organizationId: user.personalOrganizationId,
+                        subscriptionScope: "personal",
+                        planId: freemiumPlan.planId,
+                        status: "active",
+                        billingCycle: "free",
+                        autoRenew: false,
+                        usage: { devicesCount: 0, exportsThisMonth: 0, apiCallsThisMonth: 0 }
+                    });
+                }
+            }
+
+            if (existingSub) {
+                user.subscription = existingSub.subscriptionId;
+                changed = true;
+            }
+        }
+
+        // 3. Ensure currentOrganizationId is set
+        if (!user.currentOrganizationId) {
+            // Default to personal if available
+            if (user.personalOrganizationId) {
+                user.currentOrganizationId = user.personalOrganizationId;
+            } else if (user.organization && user.organization.length > 0) {
+                // Fallback to first joined organization
+                user.currentOrganizationId = user.organization[0];
+            }
+
+            if (user.currentOrganizationId) {
+                console.log(`[UserService] Healing: Set currentOrg to ${user.currentOrganizationId} for ${user.email}`);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            await user.save();
+        }
+        return user;
     }
 }
 

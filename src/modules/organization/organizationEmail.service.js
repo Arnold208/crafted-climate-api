@@ -193,6 +193,41 @@ class OrganizationEmailService {
 
         await sendEmail(adminEmail, subject, body);
     }
+
+    /**
+     * Send organization creation request approved notification
+     */
+    async sendOrganizationApproved(userEmail, organizationName) {
+        const subject = `Organization Created - ${organizationName}`;
+        const body = `
+            <h2>Organization Creation Approved</h2>
+            <p>Congratulations! Your request to create <strong>${organizationName}</strong> has been approved.</p>
+            <p>Your organization has been created and verified successfully.</p>
+            <p>You can now access your organization dashboard and start adding team members.</p>
+            <br>
+            <p>Thank you for choosing Crafted Climate!</p>
+        `;
+
+        await sendEmail(userEmail, subject, body);
+    }
+
+    /**
+     * Send organization creation request rejected notification
+     */
+    async sendOrganizationRejected(userEmail, organizationName, reason) {
+        const subject = `Organization Creation Update - ${organizationName}`;
+        const body = `
+            <h2>Organization Creation Request Update</h2>
+            <p>Thank you for your interest in creating an organization on Crafted Climate.</p>
+            <p>After reviewing your request for <strong>${organizationName}</strong>, we are unable to approve it at this time.</p>
+            <p><strong>Reason:</strong> ${reason}</p>
+            <p>You may submit a new request with updated details or documentation.</p>
+            <br>
+            <p>If you have questions, please contact our support team.</p>
+        `;
+
+        await sendEmail(userEmail, subject, body);
+    }
 }
 
 module.exports = new OrganizationEmailService();

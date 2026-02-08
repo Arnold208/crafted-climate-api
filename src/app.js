@@ -208,12 +208,14 @@ app.use('/api/org', organizationRoutes);
 
 
 // NEW DEVICES
+app.use('/api/telemetry', telemetryRoutes);
 app.use('/api/devices', devicesRoutes);
 app.use('/api', thresholdRoutes);
 
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
-// app.use('/api/admin/plans', adminPlanRoutes); // Removed (using subscription routes)
+const adminPlanRoutes = require('./modules/admin/adminPlan.routes');
+app.use('/api/admin/plans', adminPlanRoutes);
 const analyticsRoutes = require('./modules/analytics/analytics.routes');
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);

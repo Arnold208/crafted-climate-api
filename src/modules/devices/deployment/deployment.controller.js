@@ -58,6 +58,41 @@ class DeploymentController {
         }
     }
 
+    async addCollaborator(req, res) {
+        try {
+            const { email, role } = req.body;
+            if (!email) return res.status(400).json({ message: "Missing required field: email" });
+
+            const collaborators = await deploymentService.addCollaborator(
+                req.params.deploymentId,
+                req.currentOrgId,
+                email,
+                role || 'deployment-user'
+            );
+            return res.status(200).json({ message: "Collaborator added/updated", collaborators });
+        } catch (error) {
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
+            return res.status(500).json({ message: error.message });
+        }
+    }
+
+    async removeCollaborator(req, res) {
+        try {
+            const { email } = req.body;
+            if (!email) return res.status(400).json({ message: "Missing required field: email" });
+
+            const collaborators = await deploymentService.removeCollaborator(
+                req.params.deploymentId,
+                req.currentOrgId,
+                email
+            );
+            return res.status(200).json({ message: "Collaborator removed", collaborators });
+        } catch (error) {
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
+            return res.status(500).json({ message: error.message });
+        }
+    }
+
     async addDeviceToDeployment(req, res) {
         try {
             const { auid } = req.body || {};

@@ -269,6 +269,59 @@ class OrganizationService {
 
         return { currentOrganizationId: orgId };
     }
+
+    /**
+     * 🗑️ DISSOLVE ORGANIZATION (Soft Delete)
+     * Allows Org Admin to delete their organization.
+     */
+    async dissolveOrganization(orgId, userid) {
+        const org = await Organization.findOne({ organizationId: orgId, deletedAt: null });
+        if (!org) throw new Error("Organization not found");
+
+        // Authorization: Must be Org Admin
+        const member = org.collaborators.find(c => c.userid === userid);
+        if (!member || member.role !== 'org-admin') {
+            throw new Error("Unauthorized. Only Organization Admins can dissolve the organization.");
+        }
+
+        // Logic: Soft Delete + Suspend
+        org.deletedAt = new Date();
+        org.suspended = true;
+        org.suspensionReason = "Dissolved by Organization Admin";
+
+        // Cancel Subscription
+        if (org.subscription) {
+            org.subscription.status = 'cancelled';
+
+            // Also update UserSubscription model if exists
+            await UserSubscription.updateMany(
+                { organizationId: orgId, status: 'active' },
+                { $set: { status: 'cancelled', canceledAt: new Date() } }
+            );
+        }
+
+        await org.save();
+
+        // Remove from all users' lists (Optional, or keep for history?)
+        // Usually we keep the link but filter by deletedAt in queries.
+        // But for 'switchOrganization' safety, we might want to remove strict dependency.
+        // For now, let's keep the link so they can see "Deleted Org" in history if we ever build that. 
+        // But invalidating cache is crucial.
+
+        await CacheService.invalidate(`org:${orgId}:meta`);
+        // We can't easily invalidate ALL users' org lists without scanning. 
+        // But individually they will refresh on next fetch.
+
+        await createAuditLog({
+            action: 'ORG_DISSOLVE',
+            userid: userid,
+            organizationId: orgId,
+            details: { reason: "User requested dissolution" },
+            ipAddress: null
+        });
+
+        return { message: "Organization dissolved successfully. It is now suspended and scheduled for deletion.", organizationId: orgId };
+    }
 }
 
 module.exports = new OrganizationService();

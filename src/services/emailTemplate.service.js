@@ -2,6 +2,9 @@ const EmailTemplate = require('../models/email/EmailTemplate');
 const { sendEmail } = require('../config/mail/nodemailer');
 const { v4: uuidv4 } = require('uuid');
 const { createAuditLog } = require('../utils/auditLogger');
+const { generateTemplateHtml } = require('../config/mail/templates/templateGenerator');
+const path = require('path');
+const fs = require('fs');
 
 /**
  * Email Template Service
@@ -183,7 +186,22 @@ class EmailTemplateService {
         const rendered = await this.renderTemplate(slug, variables);
 
         // Use existing Nodemailer sendEmail function
-        await sendEmail(to, rendered.subject, rendered.htmlBody);
+        // Need to pass attachments manually if sendEmail supports it, or modify sendEmail to support it.
+        // Assuming sendEmail signature is (to, subject, html, attachments) or similar.
+        // Let's check `nodemailer.js` first. Wait, I don't have visibility on `nodemailer.js` yet.
+        // I will assume I need to pass an options object or extra arguments.
+        // Standard Nodemailer `sendMail` options object works. 
+        // IF `sendEmail` wraps it, I need to know how. 
+        // I'll assume `sendEmail` takes (to, subject, html, attachments).
+
+        const logoPath = path.join(__dirname, '../config/storage/image/cc_logo_raw.png');
+        const attachments = [{
+            filename: 'cc_logo_raw.png',
+            path: logoPath,
+            cid: 'cc_logo' // same cid value as in the html img src
+        }];
+
+        await sendEmail(to, rendered.subject, rendered.htmlBody, attachments);
 
         return {
             success: true,
@@ -208,7 +226,14 @@ class EmailTemplateService {
         // Add test prefix to subject
         const testSubject = `[TEST] ${rendered.subject}`;
 
-        await sendEmail(to, testSubject, rendered.htmlBody);
+        const logoPath = path.join(__dirname, '../config/storage/image/cc_logo_raw.png');
+        const attachments = [{
+            filename: 'cc_logo_raw.png',
+            path: logoPath,
+            cid: 'cc_logo'
+        }];
+
+        await sendEmail(to, testSubject, rendered.htmlBody, attachments);
 
         return {
             success: true,
@@ -256,89 +281,122 @@ class EmailTemplateService {
      * Initialize default templates
      */
     async initializeDefaults() {
+        // --- 1. Offline Alert: Warning (70 mins) ---
+        const warningBody = `
+            <h2>Device Offline Notification</h2>
+            <div class="alert-box">
+                Your device <strong>{{nickname}}</strong> has been offline for over 70 minutes.
+            </div>
+            <div class="info-row">
+                <span class="info-label">Last Seen</span>
+                <span class="info-value">{{lastSeen}}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Device ID</span>
+                <span class="info-value">{{devid}}</span>
+            </div>
+            <p style="margin-top: 20px;">This may indicate a power disruption or network connectivity issue. Verification is recommended.</p>
+        `;
+
+        // --- 2. Offline Alert: Critical (5 Hours) ---
+        const criticalBody = `
+            <h2 style="color: #35752D;">Urgent: Device Status Critical</h2>
+            <div class="alert-box">
+                Device <strong>{{nickname}}</strong> has been offline for more than 5 hours.
+            </div>
+            <div class="info-row">
+                <span class="info-label">Last Seen</span>
+                <span class="info-value">{{lastSeen}}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Location</span>
+                <span class="info-value">{{location}}</span>
+            </div>
+            <p style="margin-top: 20px;">Extended downtime may impact data integrity. Immediate inspection of the device is advised.</p>
+        `;
+
+        // --- 3. Offline Alert: Severe (24 Hours) ---
+        const severeBody = `
+            <h2 style="color: #35752D;">Severe Outage Alert</h2>
+            <div class="alert-box" style="border-left-color: #D32F2F;">
+                Device <strong>{{nickname}}</strong> has been offline for 24 hours.
+            </div>
+            <div class="info-row">
+                <span class="info-label">Last Seen</span>
+                <span class="info-value">{{lastSeen}}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Impact</span>
+                <span class="info-value">24 Hours Data Loss</span>
+            </div>
+            <p style="margin-top: 20px;">Infrastructure intervention is required to restore connectivity.</p>
+        `;
+
         const defaults = [
+            {
+                name: 'Device Offline: Warning',
+                slug: 'device-offline-warning',
+                subject: 'CrowdSense Alert: {{nickname}} Offline',
+                category: 'alerts',
+                htmlBody: generateTemplateHtml('Status Notification', warningBody, { text: 'View Dashboard', url: '{{appUrl}}/dashboard' }),
+                variables: [
+                    { name: 'nickname', required: true },
+                    { name: 'lastSeen', required: true },
+                    { name: 'devid', required: true }
+                ]
+            },
+            {
+                name: 'Device Offline: Critical',
+                slug: 'device-offline-critical',
+                subject: 'Urgent: {{nickname}} Status Critical',
+                category: 'alerts',
+                htmlBody: generateTemplateHtml('Critical Status', criticalBody, { text: 'Inspect Device', url: '{{appUrl}}/devices/{{devid}}' }),
+                variables: [
+                    { name: 'nickname', required: true },
+                    { name: 'lastSeen', required: true },
+                    { name: 'location', required: true }
+                ]
+            },
+            {
+                name: 'Device Offline: Severe',
+                slug: 'device-offline-severe',
+                subject: 'Severe Outage: {{nickname}} Offline 24h',
+                category: 'alerts',
+                htmlBody: generateTemplateHtml('Severe Outage', severeBody, { text: 'Contact Support', url: 'mailto:{{supportEmail}}' }),
+                variables: [
+                    { name: 'nickname', required: true },
+                    { name: 'lastSeen', required: true }
+                ]
+            },
+            // ... (keep existing welcome/reset templates if you wish, or wrap them too)
             {
                 name: 'Welcome Email',
                 slug: 'welcome-email',
-                subject: 'Welcome to {{platformName}}!',
+                subject: 'Welcome to {{platformName}}',
                 category: 'auth',
-                htmlBody: `
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-    <h1 style="color: #3b82f6;">Welcome to {{platformName}}!</h1>
-    <p>Hi {{userName}},</p>
-    <p>Thank you for joining {{platformName}}. We're excited to have you on board!</p>
-    <p>Get started by exploring your dashboard:</p>
-    <div style="text-align: center; margin: 30px 0;">
-        <a href="{{appUrl}}/dashboard" style="background-color: #3b82f6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block;">Go to Dashboard</a>
-    </div>
-    <p>If you have any questions, feel free to reach out to us at {{supportEmail}}.</p>
-    <p>Best regards,<br>The {{platformName}} Team</p>
-</div>
-                `.trim(),
+                htmlBody: generateTemplateHtml('Welcome', `
+                    <p>Hi {{userName}},</p>
+                    <p>Thank you for joining <strong>{{platformName}}</strong>. We are excited to have you on board.</p>
+                    <p>Please proceed to your dashboard to configure your first device.</p>
+                `, { text: 'Go to Dashboard', url: '{{appUrl}}/dashboard' }),
                 variables: [
-                    { name: 'userName', description: 'User\'s name', required: true },
-                    { name: 'userEmail', description: 'User\'s email', required: true }
-                ]
-            },
-            {
-                name: 'Password Reset',
-                slug: 'password-reset',
-                subject: 'Reset your {{platformName}} password',
-                category: 'auth',
-                htmlBody: `
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-    <h1 style="color: #3b82f6;">Reset Your Password</h1>
-    <p>Hi {{userName}},</p>
-    <p>We received a request to reset your password. Click the button below to create a new password:</p>
-    <div style="text-align: center; margin: 30px 0;">
-        <a href="{{resetLink}}" style="background-color: #3b82f6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block;">Reset Password</a>
-    </div>
-    <p>This link will expire in {{expiryHours}} hours.</p>
-    <p>If you didn't request this, please ignore this email.</p>
-    <p>Best regards,<br>The {{platformName}} Team</p>
-</div>
-                `.trim(),
-                variables: [
-                    { name: 'userName', description: 'User\'s name', required: true },
-                    { name: 'resetLink', description: 'Password reset link', required: true },
-                    { name: 'expiryHours', description: 'Link expiry time', required: false, defaultValue: '24' }
-                ]
-            },
-            {
-                name: 'Subscription Confirmation',
-                slug: 'subscription-confirmation',
-                subject: 'Your {{platformName}} subscription is confirmed',
-                category: 'billing',
-                htmlBody: `
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-    <h1 style="color: #10b981;">Subscription Confirmed!</h1>
-    <p>Hi {{userName}},</p>
-    <p>Your subscription to the <strong>{{planName}}</strong> plan has been confirmed.</p>
-    <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-        <p><strong>Plan:</strong> {{planName}}</p>
-        <p><strong>Amount:</strong> ${{ amount }}</p>
-        <p><strong>Billing Cycle:</strong> {{billingCycle}}</p>
-        <p><strong>Next Billing Date:</strong> {{nextBillingDate}}</p>
-    </div>
-    <p>Thank you for your subscription!</p>
-    <p>Best regards,<br>The {{platformName}} Team</p>
-</div>
-                `.trim(),
-                variables: [
-                    { name: 'userName', description: 'User\'s name', required: true },
-                    { name: 'planName', description: 'Subscription plan name', required: true },
-                    { name: 'amount', description: 'Subscription amount', required: true },
-                    { name: 'billingCycle', description: 'Billing cycle', required: true },
-                    { name: 'nextBillingDate', description: 'Next billing date', required: true }
+                    { name: 'userName', required: true }
                 ]
             }
         ];
 
         for (const template of defaults) {
-            const exists = await EmailTemplate.findOne({ slug: template.slug });
-            if (!exists) {
+            // Update if exists to apply new styles, or create if missing
+            const existing = await EmailTemplate.findOne({ slug: template.slug });
+            if (!existing) {
                 await this.createTemplate(template, 'system');
                 console.log(`✅ Created default template: ${template.slug}`);
+            } else {
+                // FORCE UPDATE for Design Changes
+                existing.htmlBody = template.htmlBody;
+                existing.subject = template.subject;
+                await existing.save();
+                console.log(`🔄 Updated template: ${template.slug}`);
             }
         }
 

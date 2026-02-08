@@ -1,6 +1,5 @@
 // utils/flushTelemetryToMongo.js
 const { client: redisClient } = require('../config/redis/redis');
-const { connectRedis } = require('../config/redis/redis'); // ✅ Add this line
 // const connectDB = require('../config/database/mongodb');
 
 // connectRedis()
@@ -54,15 +53,18 @@ async function flushTelemetryToMongo(auid, model) {
       const isFlushed = Number(doc.f ?? 0) === 1;
       if (isFlushed) continue;
 
-      // normalize times (optional; matches mongoose Date types)
-      if (doc.transport_time) doc.transport_time = toDate(doc.transport_time);
-      if (doc.telem_time)     doc.telem_time     = toDate(doc.telem_time);
-      if (doc.ts != null)     doc.ts             = Number(doc.ts);
+      // CLONE for MongoDB modification (to keep original `doc` intact for Redis update)
+      const mongoDoc = { ...doc };
 
-      if (!doc.auid) doc.auid = auid;
+      // normalize times for MONGO only
+      if (mongoDoc.transport_time) mongoDoc.transport_time = toDate(mongoDoc.transport_time);
+      if (mongoDoc.telem_time) mongoDoc.telem_time = toDate(mongoDoc.telem_time);
+      if (mongoDoc.ts != null) mongoDoc.ts = Number(mongoDoc.ts);
 
-      toInsert.push(doc);
-      toMark.push({ ts: field, doc });
+      if (!mongoDoc.auid) mongoDoc.auid = auid;
+
+      toInsert.push(mongoDoc);
+      toMark.push({ ts: field, doc }); // Pass original `doc` to be re-saved to Redis
     }
 
     if (toInsert.length === 0) {
@@ -80,9 +82,17 @@ async function flushTelemetryToMongo(auid, model) {
     console.log(`✅ Flushed ${toInsert.length} entries for ${auid}`);
 
     // 6) mark flushed by the SAME hash field (the epoch key)
+    // 6) mark flushed by the SAME hash field (the epoch key)
+    const batchUpdates = {};
     for (const { ts, doc } of toMark) {
       const updated = { ...doc, f: 1 };
-      await redisClient.hSet(String(auid), String(ts), JSON.stringify(updated));
+      batchUpdates[String(ts)] = JSON.stringify(updated);
+    }
+
+    if (Object.keys(batchUpdates).length > 0) {
+      // 🚀 SCALABILITY FIX: Single round-trip to Redis instead of N awaits
+      // hSet supports multiple field-value pairs: hSet(key, { field: value, ... })
+      await redisClient.hSet(String(auid), batchUpdates);
     }
 
     return { status: 'success', message: `${toInsert.length} records flushed & flagged.` };
@@ -91,7 +101,7 @@ async function flushTelemetryToMongo(auid, model) {
     return { status: 'error', message: err?.message || String(err) };
   } finally {
     if (lockAcquired) {
-      try { await redisClient.del(LOCK_KEY); } catch {}
+      try { await redisClient.del(LOCK_KEY); } catch { }
     }
   }
 }

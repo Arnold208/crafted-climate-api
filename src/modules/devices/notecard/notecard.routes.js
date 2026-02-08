@@ -20,6 +20,8 @@ const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess'
  *     summary: Update Notehub environment variables for a device
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Environment variables updated }
  */
 router.put('/update-notehub-env',
     authenticateToken,
@@ -38,6 +40,9 @@ router.put('/update-notehub-env',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Environment variables retrieved }
+ *       404: { description: Device not found }
  */
 router.get('/get-notehub-env/:auid',
     authenticateToken,
@@ -60,6 +65,9 @@ router.get('/get-notehub-env/:auid',
  *         name: key
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Environment variable deleted }
+ *       404: { description: Device not found }
  */
 router.delete('/delete-notehub-env/:auid/:key',
     authenticateToken,
@@ -78,6 +86,8 @@ router.delete('/delete-notehub-env/:auid/:key',
  *         name: deploymentId
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Deployment environment updated }
  */
 router.put('/deployments/:deploymentId/update-env',
     authenticateToken,
@@ -96,6 +106,8 @@ router.put('/deployments/:deploymentId/update-env',
  *         name: deploymentId
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Models retrieved }
  */
 router.get('/deployments/:deploymentId/models',
     authenticateToken,

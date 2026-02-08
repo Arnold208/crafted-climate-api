@@ -21,7 +21,7 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  * /api/org/create:
  *   post:
  *     summary: Create a new organization (Admin only)
- *     tags: [Organizations]
+ *     tags: [Organizations (Platform User)]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -79,33 +79,123 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
 // Create Organization (Admin)
 router.post('/create', authenticateToken, authorizeRoles('admin'), organizationController.create);
 
-// Get My Organizations
+
+/**
+ * @swagger
+ * /api/org/my-organizations:
+ *   get:
+ *     summary: Get list of organizations I belong to
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of organizations
+ */
 router.get('/my-organizations', authenticateToken, organizationController.getMyOrganizations);
 
-// Switch Active Organization
+/**
+ * @swagger
+ * /api/org/select:
+ *   post:
+ *     summary: Switch active organization context
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [organizationId]
+ *             properties:
+ *               organizationId: { type: string }
+ *     responses:
+ *       200:
+ *         description: Context switched successfully
+ */
 router.post('/select', authenticateToken, organizationController.selectOrganization);
 // Support legacy PATCH /select as well since it was in old routes
 router.patch('/select', authenticateToken, organizationController.selectOrganization);
 
-// Get Organization Info
+/**
+ * @swagger
+ * /api/org/{orgId}/info:
+ *   get:
+ *     summary: Get organization details (metadata)
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Organization info retrieved
+ */
 router.get('/:orgId/info', authenticateToken, organizationController.getOrganizationInfo);
 
-// Get Organization Dashboard (Analytics)
+/**
+ * @swagger
+ * /api/org/{orgId}/dashboard:
+ *   get:
+ *     summary: Get organization dashboard stats
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Stats retrieved
+ */
 router.get('/:orgId/dashboard',
     authenticateToken,
     checkOrgAccess('org.devices.view'), // Assuming view access is enough for dashboard
     organizationController.getDashboard
 );
 
-// Add Collaborator
+/**
+ * @swagger
+ * /api/org/{orgId}/invite:
+ *   post:
+ *     summary: Invite a member to the organization
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, role]
+ *             properties:
+ *               email: { type: string, format: email }
+ *               role: { type: string, enum: ['org-admin', 'org-support', 'org-user'] }
+ *     responses:
+ *       200:
+ *         description: User invited successfully
+ */
 router.post('/:orgId/invite',
     authenticateToken,
     checkOrgAccess("org.users.invite"),
     checkPlanFeature('collaboration'),
     organizationController.addCollaborator
 );
-// Legacy path support if needed (old route was /:orgId/add-user or /:orgId/invite depending on section)
-// The file showed multiple routes. I will support /:orgId/add-user too to be safe.
+
+// Legacy path support
 router.post('/:orgId/add-user',
     authenticateToken,
     checkOrgAccess("org.users.invite"),
@@ -113,7 +203,33 @@ router.post('/:orgId/add-user',
     organizationController.addCollaborator
 );
 
-// Update Role
+/**
+ * @swagger
+ * /api/org/{orgId}/update-role:
+ *   patch:
+ *     summary: Update a member's role
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [userid, newRole]
+ *             properties:
+ *               userid: { type: string }
+ *               newRole: { type: string, enum: ['org-admin', 'org-support', 'org-user'] }
+ *     responses:
+ *       200:
+ *         description: Role updated successfully
+ */
 router.patch('/:orgId/update-role',
     authenticateToken,
     checkOrgAccess("org.users.change-role"),
@@ -125,46 +241,227 @@ router.patch('/:orgId/update-user-role',
     organizationController.updateCollaboratorRole
 );
 
-// Remove User
+/**
+ * @swagger
+ * /api/org/{orgId}/remove-user/{userid}:
+ *   delete:
+ *     summary: Remove a member from the organization
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: userid
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: User removed successfully
+ */
 router.delete('/:orgId/remove-user/:userid',
     authenticateToken,
     checkOrgAccess("org.users.remove"),
     organizationController.removeCollaborator
 );
 
+/**
+ * @swagger
+ * /api/org/{orgId}:
+ *   delete:
+ *     summary: Dissolve (delete) an organization
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Organization dissolved successfully
+ *       403:
+ *         description: Unauthorized (Org Admin only)
+ */
+router.delete('/:orgId',
+    authenticateToken,
+    // We rely on service-level check for 'org-admin' role for critical actions
+    // But we can also add a permission check if 'org.delete' existed.
+    // tailored Logic:
+    organizationController.dissolve
+);
+
 
 // --- Device Management (Org Scoped) ---
 
+/**
+ * @swagger
+ * /api/org/{orgId}/devices:
+ *   get:
+ *     summary: List devices in organization
+ *     tags: [Organization Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: List of devices }
+ */
 router.get('/:orgId/devices',
     authenticateToken,
     checkOrgAccess('org.devices.view'),
     orgDevicesController.listDevices
 );
 
+/**
+ * @swagger
+ * /api/org/{orgId}/devices/{auid}:
+ *   get:
+ *     summary: Get device details
+ *     tags: [Organization Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Device details }
+ *       404: { description: Device not found }
+ */
 router.get('/:orgId/devices/:auid',
     authenticateToken,
     checkOrgAccess('org.devices.view'),
     orgDevicesController.getDevice
 );
 
+/**
+ * @swagger
+ * /api/org/{orgId}/devices/{auid}:
+ *   put:
+ *     summary: Update device details
+ *     tags: [Organization Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string }
+ *     responses:
+ *       200: { description: Device updated }
+ */
 router.put('/:orgId/devices/:auid',
     authenticateToken,
     checkOrgAccess('org.devices.edit'),
     orgDevicesController.updateDevice
 );
 
+/**
+ * @swagger
+ * /api/org/{orgId}/devices/{auid}:
+ *   delete:
+ *     summary: Delete device from organization
+ *     tags: [Organization Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Device deleted }
+ */
 router.delete('/:orgId/devices/:auid',
     authenticateToken,
     checkOrgAccess('org.devices.remove'),
     orgDevicesController.deleteDevice
 );
 
+/**
+ * @swagger
+ * /api/org/{orgId}/devices/{auid}/remove:
+ *   delete:
+ *     summary: Remove device from organization (unbind)
+ *     tags: [Organization Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Device removed }
+ */
 router.delete('/:orgId/devices/:auid/remove',
     authenticateToken,
     checkOrgAccess('org.devices.remove'),
     orgDevicesController.removeDevice
 );
 
+/**
+ * @swagger
+ * /api/org/{orgId}/devices/{auid}/move:
+ *   post:
+ *     summary: Move device to another deployment
+ *     tags: [Organization Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [deploymentId]
+ *             properties:
+ *               deploymentId: { type: string }
+ *     responses:
+ *       200: { description: Device moved }
+ */
 router.post('/:orgId/devices/:auid/move',
     authenticateToken,
     checkOrgAccess('org.deployments.edit'),

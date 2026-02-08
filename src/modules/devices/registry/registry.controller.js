@@ -8,9 +8,13 @@ class RegistryController {
         try {
             const { auid, serial, location, nickname } = req.body;
             const userid = req.user.userid;
-            const organizationId = req.query.orgId;
 
-            if (!organizationId) return res.status(400).json({ message: "organizationId (orgId) is required in query param" });
+            // 🔥 Priority: Middleware context -> Query param -> User Profile
+            const organizationId = req.currentOrgId || req.query.orgId || req.user.currentOrganizationId;
+
+            if (!organizationId) {
+                return res.status(400).json({ message: "Organization context required (use x-org-id header or orgId query param)" });
+            }
 
             // Note: Limit enforcement is now handled inside registryService.registerDevice
             // to ensure atomic check with organization context.
@@ -32,7 +36,12 @@ class RegistryController {
     async getUserDevices(req, res) {
         try {
             const { userid } = req.params;
-            const organizationId = req.query.orgId;
+
+            // Priority: Header -> Middleware -> Query -> User Profile
+            const organizationId = req.headers['x-org-id']
+                || req.currentOrgId
+                || req.query.orgId
+                || req.user.currentOrganizationId;
 
             let devices = [];
 
@@ -239,6 +248,30 @@ class RegistryController {
         } catch (error) {
             console.error("Public map error:", error);
             res.status(500).json({ error: error.message });
+        }
+    }
+
+
+    async transferDevice(req, res) {
+        try {
+            const { auid } = req.params;
+            const { targetOrgId, targetDeploymentId } = req.body;
+            const userid = req.user.userid;
+
+            if (!targetOrgId) {
+                return res.status(400).json({ message: "Target Organization ID (targetOrgId) is required." });
+            }
+
+            const result = await registryService.transferDevice(userid, auid, targetOrgId, targetDeploymentId);
+            return res.status(200).json(result);
+
+        } catch (error) {
+            console.error("Transfer error:", error);
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
+            if (error.message.includes('Unauthorized') || error.message.includes('must be a member')) return res.status(403).json({ message: error.message });
+            if (error.message.includes('already')) return res.status(409).json({ message: error.message });
+
+            res.status(500).json({ message: error.message });
         }
     }
 }

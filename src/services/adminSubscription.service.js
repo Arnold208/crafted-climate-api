@@ -50,7 +50,7 @@ class AdminSubscriptionService {
             UserSubscription.find(query)
                 .skip(skip)
                 .limit(limit)
-                .sort({ createdAt: -1 })
+                .sort({ _id: -1 })
                 .lean(),
             UserSubscription.countDocuments(query)
         ]);

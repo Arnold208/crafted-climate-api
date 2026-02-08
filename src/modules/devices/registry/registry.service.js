@@ -254,10 +254,15 @@ class RegistryService {
             if (!dep) console.warn(`User ${user.userid} not in deployment`);
         }
 
-        const exists = device.collaborators.find(c => c.userid === user.userid.toString());
-        if (exists) throw new Error('Collaborator already exists');
+        const existsIndex = device.collaborators.findIndex(c => c.userid === user.userid.toString());
+        if (existsIndex >= 0) {
+            // Idempotent Upsert: Update capabilities if already exists
+            device.collaborators[existsIndex].role = role;
+            device.collaborators[existsIndex].permissions = permissions;
+        } else {
+            device.collaborators.push({ userid: user.userid.toString(), role, permissions });
+        }
 
-        device.collaborators.push({ userid: user.userid.toString(), role, permissions });
         await device.save();
 
         this.sendCollaboratorEmail(user.email, role, device.nickname, permissions);
@@ -426,6 +431,126 @@ class RegistryService {
         }));
 
         return results.filter(Boolean);
+    }
+
+
+    /**
+     * 🚚 TRANSFER DEVICE
+     * Move device to a new Organization.
+     * - Cleans up old Org/Deployment links
+     * - Filters collaborators (removes those not in new Org)
+     */
+    async transferDevice(userid, auid, targetOrgId, targetDeploymentId = null) {
+        // 1. Fetch Device
+        const device = await registerNewDevice.findOne({ auid });
+        if (!device) throw new Error('Device not found');
+
+        // 2. Auth: Only Owner can transfer
+        if (device.userid !== userid && device.ownerUserId !== userid) {
+            throw new Error("Unauthorized: Only the device owner can transfer this device.");
+        }
+
+        const oldOrgId = device.organizationId;
+        if (oldOrgId === targetOrgId) {
+            throw new Error("Device is already in this organization.");
+        }
+
+        // 3. Verify Target Org
+        const targetOrg = await Organization.findOne({ organizationId: targetOrgId, deletedAt: null });
+        if (!targetOrg) throw new Error("Target Organization not found.");
+
+        // 4. Verify Owner Membership in Target Org
+        const ownerMember = targetOrg.collaborators.find(c => c.userid === userid);
+        if (!ownerMember) {
+            throw new Error("You must be a member of the target organization to transfer devices there.");
+        }
+
+        // 5. Intelligent Collaborator Cleanup
+        // Rule: Keep collaborators ONLY if they are members of the NEW organization
+        const validCollaborators = [];
+        const removedCollaborators = [];
+
+        if (device.collaborators && device.collaborators.length > 0) {
+            for (const collab of device.collaborators) {
+                const isMemberStart = targetOrg.collaborators.some(c => c.userid === collab.userid);
+                if (isMemberStart) {
+                    validCollaborators.push(collab);
+                } else {
+                    removedCollaborators.push(collab.userid);
+                }
+            }
+        }
+        device.collaborators = validCollaborators;
+
+        // 6. Deployment Handling
+        // Clean up OLD deployment
+        if (device.deploymentId) {
+            await Deployment.updateOne(
+                { deploymentid: device.deploymentId },
+                { $pull: { devices: device.devid } } // Note: deployment uses devid usually
+            );
+        }
+
+        // Verify/Set NEW deployment (if provided)
+        if (targetDeploymentId) {
+            const newDep = await Deployment.findOne({ deploymentid: targetDeploymentId, organizationId: targetOrgId });
+            if (!newDep) throw new Error("Target Deployment not found in target Organization.");
+
+            device.deploymentId = targetDeploymentId;
+            device.deployment = targetDeploymentId; // legacy sync
+
+            await Deployment.updateOne(
+                { deploymentid: targetDeploymentId },
+                { $addToSet: { devices: device.devid } }
+            );
+        } else {
+            device.deploymentId = null;
+            device.deployment = null;
+        }
+
+        // 7. Update Organization Links
+        // Remove from Old Org
+        if (oldOrgId) {
+            await Organization.updateOne(
+                { organizationId: oldOrgId },
+                { $pull: { devices: auid } }
+            );
+        }
+
+        // Add to New Org
+        await Organization.updateOne(
+            { organizationId: targetOrgId },
+            { $addToSet: { devices: auid } }
+        );
+
+        // 8. Final Save
+        device.organizationId = targetOrgId;
+        device.organization = targetOrgId; // legacy sync
+        await device.save();
+
+        // 9. Invalidate & Log
+        await CacheService.invalidate(`device:${auid}:meta`);
+        await CacheService.invalidate(`org:${oldOrgId}:meta`);
+        await CacheService.invalidate(`org:${targetOrgId}:meta`);
+
+        await createAuditLog({
+            action: 'DEVICE_TRANSFER',
+            userid: userid,
+            organizationId: targetOrgId,
+            details: {
+                auid,
+                fromOrg: oldOrgId,
+                toOrg: targetOrgId,
+                removedCollaboratorsCount: removedCollaborators.length
+            },
+            ipAddress: null
+        });
+
+        return {
+            message: "Device transferred successfully",
+            targetOrgId,
+            removedCollaborators
+        };
     }
 }
 

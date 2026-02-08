@@ -11,12 +11,15 @@ const { client: redisClient } = require('../config/redis/redis');
 async function cacheTelemetryToRedis(auid, telemetry, device) {
   let timestamp;
 
-  if (telemetry?.date) {
+  if (telemetry?.timestamp) {
+    timestamp = telemetry.timestamp;
+  } else if (telemetry?.date) {
     timestamp = telemetry.date;
   } else if (telemetry?.transport_time) {
     timestamp = telemetry.transport_time;
   } else {
-    console.log("no date found")// fallback to current time
+    timestamp = Date.now(); // fallback to current time
+    console.log("⚠️ No date/timestamp found in telemetry, using Date.now()");
   }
 
 
@@ -27,7 +30,7 @@ async function cacheTelemetryToRedis(auid, telemetry, device) {
     auid: device.auid,
     nickname: device.nickname,
     availability: device.availability,
-    status: device.status,
+    status: 'online', // ⚡ FORCE ONLINE INSTANTLY (Data just arrived!)
     battery: device.battery,
     location: device.location,
     model: device.model,
@@ -35,6 +38,7 @@ async function cacheTelemetryToRedis(auid, telemetry, device) {
     serial: device.serial,
     mac: device.mac,
     collaborators: device.collaborators,
+    statusUpdatedAt: new Date().toISOString() // Track when it flipped
   };
 
   // ✅ Store metadata
@@ -48,6 +52,20 @@ async function cacheTelemetryToRedis(auid, telemetry, device) {
 
   // ✅ Add to Dirty Set for the Flush Cron to pick up
   await redisClient.sAdd('device:dirty_set', auid);
+
+  // ✅ UPDATE STATUS TRACKER (ZSET)
+  // This is critical for the "Online/Offline" cron job.
+  // We use the timestamp as the score.
+  await redisClient.zAdd('devices:heartbeat', {
+    score: timestamp,
+    value: auid
+  });
+
+  // ✅ RE-ARM ALERTS
+  // If device was offline and alerted, clear the flag so we can alert again if it drops.
+  // We clear the entire context/levels to reset the escalation ladder.
+  await redisClient.del(`device:${auid}:alert_context`);
+  await redisClient.del(`device:${auid}:alert_state`); // Clear legacy key just in case
 
   // ✅ Expire the device’s Redis key after 24 hours
   await redisClient.expire(redisHashKey, 86400);

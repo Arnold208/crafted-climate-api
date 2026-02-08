@@ -79,6 +79,21 @@ router.get('/public-map', registryController.getPublicDevices);
  *               serial: { type: string }
  *               location: { type: array, items: { type: number }, example: [5.56, -0.20] }
  *               nickname: { type: string }
+ *     responses:
+ *       201:
+ *         description: Device registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Device'
+ *       400:
+ *         description: Missing required fields or invalid data
+ *       403:
+ *         description: Organization device limit reached or insufficient permissions
+ *       404:
+ *         description: Device not found in manufacturer records
+ *       409:
+ *         description: Device already registered
  */
 router.post('/register-device',
     authenticateToken,
@@ -92,11 +107,21 @@ router.post('/register-device',
  *   get:
  *     tags: [Device Registry]
  *     summary: Get all registered devices for a user
+ *     security:
+ *       - bearerAuth: []
+ *       - organizationId: []
  *     parameters:
  *       - in: path
  *         name: userid
  *         required: true
  *         schema: { type: string }
+ *       - in: query
+ *         name: orgId
+ *         required: false
+ *         schema: { type: string }
+ *         description: Optional organization ID to filter devices by workspace
+ *     responses:
+ *       200: { description: List of registered devices }
  */
 router.get('/user/:userid/registered-devices',
     authenticateToken,
@@ -109,11 +134,17 @@ router.get('/user/:userid/registered-devices',
  *   get:
  *     tags: [Device Registry]
  *     summary: Find a registered device by AUID
+ *     security:
+ *       - bearerAuth: []
+ *       - organizationId: []
  *     parameters:
  *       - in: path
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Device found }
+ *       404: { description: Device not found }
  */
 router.get('/find-registered-device/:auid',
     authenticateToken,
@@ -126,6 +157,9 @@ router.get('/find-registered-device/:auid',
  *   delete:
  *     tags: [Device Registry]
  *     summary: Delete a device
+ *     security:
+ *       - bearerAuth: []
+ *       - organizationId: []
  *     parameters:
  *       - in: path
  *         name: userid
@@ -135,6 +169,9 @@ router.get('/find-registered-device/:auid',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Device deleted }
+ *       404: { description: Device not found }
  */
 router.delete('/delete-device/:userid/:auid',
     authenticateToken,
@@ -147,11 +184,16 @@ router.delete('/delete-device/:userid/:auid',
  *   get:
  *     tags: [Device Registry]
  *     summary: Get all device locations for a user
+ *     security:
+ *       - bearerAuth: []
+ *       - organizationId: []
  *     parameters:
  *       - in: path
  *         name: userid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Device locations retrieved }
  */
 router.get('/user/:userid/device-locations',
     authenticateToken,
@@ -164,6 +206,9 @@ router.get('/user/:userid/device-locations',
  *   get:
  *     tags: [Device Registry]
  *     summary: Get a specific device location
+ *     security:
+ *       - bearerAuth: []
+ *       - organizationId: []
  *     parameters:
  *       - in: path
  *         name: userid
@@ -173,6 +218,9 @@ router.get('/user/:userid/device-locations',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: specific device location }
+ *       404: { description: Location not found }
  */
 router.get('/user/:userid/device/:auid/location',
     authenticateToken,
@@ -186,6 +234,9 @@ router.get('/user/:userid/device/:auid/location',
  *   put:
  *     tags: [Device Registry]
  *     summary: Update a device's nickname or location
+ *     security:
+ *       - bearerAuth: []
+ *       - organizationId: []
  *     parameters:
  *       - in: path
  *         name: userid
@@ -195,6 +246,9 @@ router.get('/user/:userid/device/:auid/location',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Device updated }
+ *       404: { description: Device not found }
  */
 router.put('/user/:userid/device/:auid/update',
     authenticateToken,
@@ -204,10 +258,45 @@ router.put('/user/:userid/device/:auid/update',
 
 /**
  * @swagger
+ * /api/devices/device/{auid}/transfer:
+ *   post:
+ *     tags: [Device Registry]
+ *     summary: Transfer device to another organization
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [targetOrgId]
+ *             properties:
+ *               targetOrgId: { type: string }
+ *               targetDeploymentId: { type: string }
+ *     responses:
+ *       200: { description: Device transferred }
+ *       404: { description: Device or Organization not found }
+ */
+router.post('/device/:auid/transfer',
+    authenticateToken,
+    registryController.transferDevice
+);
+
+/**
+ * @swagger
  * /api/devices/{userid}/device/{auid}/collaborators:
  *   post:
  *     tags: [Device Registry]
  *     summary: Add a collaborator to a device
+ *     security:
+ *       - bearerAuth: []
+ *       - organizationId: []
  *     parameters:
  *       - in: path
  *         name: userid
@@ -217,6 +306,8 @@ router.put('/user/:userid/device/:auid/update',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       201: { description: Collaborator added }
  */
 router.post('/:userid/device/:auid/collaborators',
     authenticateToken,
@@ -239,6 +330,8 @@ router.post('/:userid/device/:auid/collaborators',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Collaborator removed }
  */
 router.delete('/:userid/device/:auid/collaborators',
     authenticateToken,
@@ -288,6 +381,9 @@ router.post('/:userid/device/:auid/collaborators/permissions',
  *   put:
  *     tags: [Device Registry]
  *     summary: Set a device's availability (public/private)
+ *     security:
+ *       - bearerAuth: []
+ *       - organizationId: []
  *     parameters:
  *       - in: path
  *         name: userid
@@ -297,6 +393,8 @@ router.post('/:userid/device/:auid/collaborators/permissions',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Availability updated }
  */
 router.put('/user/:userid/device/:auid/availability',
     authenticateToken,

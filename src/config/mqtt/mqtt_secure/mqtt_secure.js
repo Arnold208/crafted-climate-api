@@ -16,7 +16,7 @@ dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
 
 // Resolve certificate paths
 const certPath = path.resolve(__dirname, "../../certificates/api_v2-client.pem");
-const keyPath  = path.resolve(__dirname, "../../certificates/api_v2-client.key");
+const keyPath = path.resolve(__dirname, "../../certificates/api_v2-client.key");
 
 
 // Base MQTT options
@@ -28,6 +28,11 @@ let options = {
   clientId: process.env.MQTT_SECURE_CLIENT_ID,
   keepalive: parseInt(process.env.MQTT_SECURE_KEEPALIVE, 10) || 60,
   connectTimeout: parseInt(process.env.MQTT_SECURE_CONNECT_TIMEOUT, 10) || 5000,
+  // 🔒 HARDENING: Enable persistent sessions for QoS 1 delivery while offline
+  clean: false,
+  properties: {
+    sessionExpiryInterval: 3600 // Keep session alive for 1 hour on broker
+  }
 };
 
 // Format PEM string from ENV

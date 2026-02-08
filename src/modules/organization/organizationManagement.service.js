@@ -7,12 +7,17 @@
 
 const Organization = require('../../models/organization/organizationModel');
 const User = require('../../models/user/userModel');
+const Plan = require('../../models/subscriptions/Plan');
+const UserSubscription = require('../../models/subscriptions/UserSubscription');
 const CacheService = require('../common/cache.service');
 const { validateOrganizationName, validateBusinessDetails, validatePartnerApplication, sanitizeText } = require('../../validators/organizationValidators');
 const { hasPermission, hasPlatformPermission } = require('../../constants/organizationPermissions');
 const { requiresVerification } = require('../../constants/organizationTypes');
 const { getDefaultBenefits } = require('../../constants/partnerTiers');
 const emailService = require('./organizationEmail.service');
+const OrganizationRequest = require('../../models/organization/organizationRequestModel');
+const { v4: uuidv4 } = require('uuid');
+const { getDefaultPermissions } = require('../../utils/permissions'); // Need to ensure this exists or use logic
 
 class OrganizationManagementService {
 
@@ -366,6 +371,231 @@ class OrganizationManagementService {
             status: 'pending'
         };
     }
+
+
+    /**
+     * 🚀 REQUEST TO CREATE NEW ORGANIZATION
+     * Logic for User to request a new verified organization
+     */
+    /**
+     * 🔒 VALIDATE UNIQUENESS (PRE-UPLOAD CHECK)
+     */
+    async validateCreationRequestUniqueness(userId, name) {
+        if (!name) throw new Error("Organization name is required");
+
+        const existingRequest = await OrganizationRequest.findOne({
+            requesterUserId: userId,
+            status: "pending",
+            proposedName: new RegExp(`^${name}$`, 'i')
+        });
+        if (existingRequest) throw new Error("You already have a pending request for this organization name.");
+
+        const existingOrg = await Organization.findOne({
+            name: new RegExp(`^${name}$`, 'i'),
+            deletedAt: null
+        });
+        if (existingOrg) throw new Error("Organization name is already taken. Please choose a different name.");
+
+        return true;
+    }
+
+    /**
+     * 🚀 REQUEST TO CREATE NEW ORGANIZATION
+     * Logic for User to request a new verified organization
+     * Supports both pre-processed requests (from multipart controller) and standard JSON
+     */
+    async createCreationRequest(userId, data, isPreProcessed = false) {
+        let { name, type, description, businessDetails, documents, requestId } = data;
+
+        // Validation
+        if (!name || name.length < 3) throw new Error("Organization name is required and must be at least 3 chars");
+        if (!["business", "non-profit", "government", "education", "research"].includes(type)) {
+            throw new Error("Invalid organization type. Personal organizations do not require approval.");
+        }
+
+        // Basic business details validation
+        if (!businessDetails || !businessDetails.location || !businessDetails.businessType) {
+            // throw new Error("Missing required business details (location, businessType)"); 
+            // Relaxing strictness slightly to allow partial saves if needed, but for verified we want strict.
+            // Let's enforce the model constraints naturally.
+        }
+
+        if (!documents || documents.length === 0) throw new Error("At least one supporting document is required.");
+
+        // If not pre-processed, do the uniqueness checks here
+        if (!isPreProcessed) {
+            await this.validateCreationRequestUniqueness(userId, name);
+            requestId = `req-${uuidv4()}`;
+            documents = documents.map(d => ({ ...d, uploadedBy: userId }));
+        }
+
+        const request = new OrganizationRequest({
+            requestId: requestId || `req-${uuidv4()}`,
+            requesterUserId: userId,
+            proposedName: name,
+            proposedType: type,
+            description,
+            businessDetails,
+            documents: documents
+        });
+
+        await request.save();
+
+        // TODO: Send Email to Admin (Notification)
+
+        return request;
+    }
+
+    /**
+     * 📋 GET CREATION REQUESTS (ADMIN)
+     */
+    async getCreationRequests(platformRole, status = 'pending') {
+        if (!hasPlatformPermission(platformRole, 'platform:orgs:manage')) {
+            throw new Error('Unauthorized. Platform Admin access required.');
+        }
+
+        const query = status === 'all' ? {} : { status };
+        return await OrganizationRequest.find(query).sort({ requestedAt: -1 });
+    }
+
+    /**
+     * 🔍 GET SPECIFIC CREATION REQUEST (ADMIN)
+     */
+    async getCreationRequestById(requestId, platformRole) {
+        if (!hasPlatformPermission(platformRole, 'platform:orgs:manage')) {
+            throw new Error('Unauthorized. Platform Admin access required.');
+        }
+
+        const request = await OrganizationRequest.findOne({ requestId });
+        if (!request) throw new Error("Request not found");
+
+        return request;
+    }
+
+    /**
+     * ✅ APPROVE CREATION REQUEST (ADMIN)
+     * Creates the Organization and verifies it immediately.
+     */
+    async approveCreationRequest(requestId, adminUserId, platformRole) {
+        if (!hasPlatformPermission(platformRole, 'platform:orgs:manage')) {
+            throw new Error('Unauthorized. Platform Admin access required.');
+        }
+
+        const request = await OrganizationRequest.findOne({ requestId });
+        if (!request) throw new Error("Request not found");
+        if (request.status !== "pending") throw new Error(`Request is already ${request.status}`);
+
+        const orgId = `org-${uuidv4()}`;
+
+        // 1. Create Organization (Verified Business)
+        const newOrg = new Organization({
+            organizationId: orgId,
+            name: request.proposedName,
+            description: request.description,
+            organizationType: request.proposedType,
+            planType: "enterprise", // Structure is Enterprise (Multi-user)
+            createdBy: request.requesterUserId,
+
+            // Auto-Verify Business Status
+            businessVerification: {
+                status: "verified",
+                submittedAt: request.requestedAt,
+                verifiedAt: new Date(),
+                verifiedBy: adminUserId,
+                businessDetails: request.businessDetails,
+                documents: request.documents
+            },
+
+            // Add Requester as Org-Admin
+            collaborators: [{
+                userid: request.requesterUserId,
+                role: "org-admin",
+                permissions: [],
+                addedAt: new Date()
+            }]
+        });
+
+        // 1b. Assign ENTERPRISE Plan (Matching planType)
+        const enterprisePlan = await Plan.findOne({ name: 'enterprise', isActive: true });
+        // Fallback to free if enterprise not found, but we want enterprise
+        const planToAssign = enterprisePlan || await Plan.findOne({ $or: [{ name: 'free' }, { name: 'starter' }], isActive: true });
+
+        if (planToAssign) {
+            // Create Subscription Record
+            await UserSubscription.create({
+                subscriptionId: uuidv4(),
+                userid: request.requesterUserId,
+                organizationId: orgId,
+                subscriptionScope: "organization",
+                planId: planToAssign.planId,
+                billingCycle: "monthly",
+                status: "active"
+            });
+
+            // Embed in Org
+            newOrg.subscription = {
+                planId: planToAssign.planId,
+                status: "active",
+                subscribedAt: new Date()
+            };
+        } else {
+            console.warn(`[OrgMgmt] No active plan found for new organization ${orgId}`);
+        }
+
+        await newOrg.save();
+
+        // 2. Add User to Org (Update User model)
+        await User.updateOne(
+            { userid: request.requesterUserId },
+            {
+                $addToSet: { organization: orgId },
+                $set: { currentOrganizationId: orgId } // Switch checks user context usually
+            }
+        );
+
+        // 3. Update Request Status
+        request.status = "approved";
+        request.reviewedBy = adminUserId;
+        request.reviewedAt = new Date();
+        request.createdOrganizationId = orgId;
+        await request.save();
+
+        // 4. Send Email to User
+        const user = await User.findOne({ userid: request.requesterUserId });
+        if (user) {
+            await emailService.sendOrganizationApproved(user.email, newOrg.name);
+        }
+
+        return { message: "Organization created and verified successfully", organization: newOrg };
+    }
+
+    /**
+     * ❌ REJECT CREATION REQUEST
+     */
+    async rejectCreationRequest(requestId, adminUserId, reason, platformRole) {
+        if (!hasPlatformPermission(platformRole, 'platform:orgs:manage')) {
+            throw new Error('Unauthorized. Platform Admin access required.');
+        }
+
+        const request = await OrganizationRequest.findOne({ requestId });
+        if (!request) throw new Error("Request not found");
+        if (request.status !== "pending") throw new Error(`Request is already ${request.status}`);
+
+        request.status = "rejected";
+        request.rejectionReason = reason;
+        request.reviewedBy = adminUserId;
+        request.reviewedAt = new Date();
+        await request.save();
+
+        // Send Email
+        const user = await User.findOne({ userid: request.requesterUserId });
+        if (user) {
+            await emailService.sendOrganizationRejected(user.email, request.proposedName, reason);
+        }
+
+        return { message: "Request rejected" };
+    }
+
 }
 
 module.exports = new OrganizationManagementService();

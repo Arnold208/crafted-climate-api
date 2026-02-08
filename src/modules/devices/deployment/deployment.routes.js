@@ -50,6 +50,9 @@ router.post('/deployments',
  *         name: deploymentId
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Deployment details retrieved }
+ *       404: { description: Deployment not found }
  */
 router.get('/deployments/:deploymentId',
     authenticateToken,
@@ -68,6 +71,8 @@ router.get('/deployments/:deploymentId',
  *         name: deploymentId
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Devices in deployment retrieved }
  */
 router.get('/deployments/:deploymentId/devices',
     authenticateToken,
@@ -86,6 +91,9 @@ router.get('/deployments/:deploymentId/devices',
  *         name: deploymentId
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Deployment updated }
+ *       404: { description: Deployment not found }
  */
 router.patch('/deployments/:deploymentId',
     authenticateToken,
@@ -104,11 +112,79 @@ router.patch('/deployments/:deploymentId',
  *         name: deploymentId
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Deployment deleted }
+ *       404: { description: Deployment not found }
  */
 router.delete('/deployments/:deploymentId',
     authenticateToken,
     checkOrgAccess('org.deployments.delete'),
     deploymentController.deleteDeployment
+);
+
+/**
+ * @swagger
+ * /api/deployments/{deploymentId}/collaborators:
+ *   post:
+ *     tags: [Deployments]
+ *     summary: Add a collaborator to the deployment
+ *     description: Adding a collaborator here AUTOMATICALLY adds them to all devices in the deployment.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email: { type: string }
+ *               role: { type: string, enum: ['deployment-admin', 'deployment-support', 'deployment-user'] }
+ *     parameters:
+ *       - in: path
+ *         name: deploymentId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       201: { description: Collaborator added }
+ */
+router.post('/deployments/:deploymentId/collaborators',
+    authenticateToken,
+    checkOrgAccess('org.deployments.edit'),
+    deploymentController.addCollaborator
+);
+
+/**
+ * @swagger
+ * /api/deployments/{deploymentId}/collaborators:
+ *   delete:
+ *     tags: [Deployments]
+ *     summary: Remove a collaborator from the deployment
+ *     description: Removing a collaborator here AUTOMATICALLY removes them from all devices in the deployment.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email: { type: string }
+ *     parameters:
+ *       - in: path
+ *         name: deploymentId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Collaborator removed }
+ */
+router.delete('/deployments/:deploymentId/collaborators',
+    authenticateToken,
+    checkOrgAccess('org.deployments.edit'),
+    deploymentController.removeCollaborator
 );
 
 /**
@@ -122,6 +198,8 @@ router.delete('/deployments/:deploymentId',
  *         name: deploymentId
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Device added to deployment }
  */
 router.post('/deployments/:deploymentId/devices',
     authenticateToken,
@@ -144,6 +222,8 @@ router.post('/deployments/:deploymentId/devices',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Device removed from deployment }
  */
 router.delete('/deployments/:deploymentId/devices/:auid',
     authenticateToken,
@@ -157,6 +237,8 @@ router.delete('/deployments/:deploymentId/devices/:auid',
  *   get:
  *     tags: [Deployments]
  *     summary: List all deployments in the organization
+ *     responses:
+ *       200: { description: Deployments list retrieved }
  */
 router.get('/deployments',
     authenticateToken,

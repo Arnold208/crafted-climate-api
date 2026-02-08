@@ -21,6 +21,35 @@ const logQueryLimiter = rateLimit({
  *   description: Access audit logs for organizations and platform
  */
 
+/**
+ * @swagger
+ * /api/logs/org/{orgId}/logs:
+ *   get:
+ *     tags: [Audit Logs]
+ *     summary: Get organization audit logs
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 50 }
+ *       - in: query
+ *         name: action
+ *         schema: { type: string }
+ *       - in: query
+ *         name: actor
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Logs retrieved successfully }
+ *       403: { description: Forbidden }
+ */
 router.get('/org/:orgId/logs',
     authenticateToken,
     logQueryLimiter,
@@ -28,6 +57,25 @@ router.get('/org/:orgId/logs',
     logsController.getOrgLogs
 );
 
+/**
+ * @swagger
+ * /api/logs/platform/logs:
+ *   get:
+ *     tags: [Audit Logs]
+ *     summary: Get platform audit logs (Admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 50 }
+ *     responses:
+ *       200: { description: Platform logs retrieved }
+ *       403: { description: Admin access required }
+ */
 router.get('/platform/logs',
     authenticateToken,
     logQueryLimiter,

@@ -145,6 +145,9 @@ router.patch('/admin/toggle-plan/:planId',
  *     summary: Initialize a default FREEMIUM subscription
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Subscription initialized }
+ *       400: { description: Subscription already exists }
  */
 router.post('/user/init',
     authenticateToken,
@@ -159,6 +162,9 @@ router.post('/user/init',
  *     summary: Get current user's active subscription
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Active subscription details }
+ *       404: { description: No active subscription found }
  */
 router.get('/user/my-subscription',
     authenticateToken,
@@ -182,6 +188,9 @@ router.get('/user/my-subscription',
  *             required: [targetPlanId]
  *             properties:
  *               targetPlanId: { type: string }
+ *     responses:
+ *       200: { description: Subscription upgraded successfully }
+ *       400: { description: Invalid plan or downgrade attempted }
  */
 router.post('/user/upgrade',
     authenticateToken,
@@ -205,6 +214,9 @@ router.post('/user/upgrade',
  *             required: [targetPlanId]
  *             properties:
  *               targetPlanId: { type: string }
+ *     responses:
+ *       200: { description: Subscription downgraded (scheduled for next billing cycle) }
+ *       400: { description: Invalid plan }
  */
 router.post('/user/downgrade',
     authenticateToken,
@@ -228,6 +240,8 @@ router.post('/user/downgrade',
  *             required: [billingCycle]
  *             properties:
  *               billingCycle: { type: string, enum: [monthly, yearly] }
+ *     responses:
+ *       200: { description: Billing cycle updated }
  */
 router.patch('/user/billing-cycle',
     authenticateToken,
@@ -242,6 +256,8 @@ router.patch('/user/billing-cycle',
  *     summary: Cancel current subscription
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Subscription cancelled }
  */
 router.post('/user/cancel',
     authenticateToken,
@@ -256,6 +272,8 @@ router.post('/user/cancel',
  *     summary: Reactivate a cancelled subscription
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Subscription reactivated }
  */
 router.post('/user/reactivate',
     authenticateToken,

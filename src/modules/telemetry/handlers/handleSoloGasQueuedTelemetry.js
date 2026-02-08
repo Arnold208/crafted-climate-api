@@ -63,7 +63,7 @@ async function handleGasSoloQueuedTelemetry(messageObj) {
         //
         // 1️⃣ Normalize timestamps (same logic as AQUA & ENV)
         //
-        const rawTelem = body.ts;
+        const rawTelem = body.ts || body.time;
         const rawTransport = messageObj.when;
 
         let telemTime = normalizeTimestamp(rawTelem);
@@ -76,6 +76,13 @@ async function handleGasSoloQueuedTelemetry(messageObj) {
             telemTime = Date.now();
         }
 
+        // 🔒 BATCH FIX: If purely second-based timestamp (from Notehub sometimes), 
+        // add random MS to prevent Redis key collision if multiple readings have same second.
+        // (Redis key is typically just the timestamp)
+        if (telemTime % 1000 === 0) {
+            telemTime += Math.floor(Math.random() * 999);
+        }
+
         //
         // 2️⃣ Parse numeric fields
         //
@@ -84,28 +91,88 @@ async function handleGasSoloQueuedTelemetry(messageObj) {
         //
         // 3️⃣ Build unified telemetry format
         //
+        //
+        // 3️⃣ Build unified telemetry format
+        //
+
+        // Helper: Convert to number, default to 0
+        const toNumber = (v) => {
+            const n = parseFloat(v);
+            return isNaN(n) ? 0 : n;
+        };
+
         const formattedData = {
-            timestamp: telemTime,
+            timestamp: telemTime, // Epoch MS
             telem_time: new Date(telemTime).toISOString(),
             transport_time: new Date(transportTime).toISOString(),
 
             auid,
 
-            // GasSolo data
-            temperature: getNum(body.temp),
-            humidity: getNum(body.humidity),
-            pressure: getNum(body.pressure),
-            aqi: getNum(body.aqi),
-            current: getNum(body.current),
-            eco2_ppm: getNum(body.eco2_ppm),
-            tvoc_ppb: getNum(body.tvoc_ppb),
+            // STRICT MAPPING (1:1 with Payload)
+
+            // Raw Payload Fields
+            comp_temp: toNumber(body.comp_temp),
+            comp_humi: toNumber(body.comp_humi),
+            // box_pres mapped below to box_pressure
+
+            // Box/Env specific
+            box_temperature: toNumber(body.box_temp),
+            box_humidity: toNumber(body.box_humi),
+            box_pressure: toNumber(body.box_pres),
+
+            // Gas Readings
+            aqi: toNumber(body.aqi),
+            current: toNumber(body.current),
+
+            // Strict Payload Gas Fields
+            eco2: toNumber(body.eco2),
+            tvoc: toNumber(body.tvoc),
+            // Legacy/Schema compatibility
+            eco2_ppm: toNumber(body.eco2),
+            tvoc_ppb: toNumber(body.tvoc),
+
+            // Generic / Dashboard Standard Fields
+            temperature: toNumber(body.comp_temp), // Best available ambient temp
+            humidity: toNumber(body.comp_humi),    // Best available ambient humidity
+            pressure: toNumber(body.box_pres),     // Best available pressure
 
             // Power
-            voltage: voltage,
-            battery: batteryPercentage(voltage),
+            voltage: toNumber(body.voltage),
+            battery: batteryPercentage(toNumber(body.voltage)),
+            brownout: toNumber(body.brownout),
 
-            error: body.err || "0000"
+            // Device Info
+            mode: body.mode || 'normal',
+            v_type: body.v_type || 'real',
+            ver: body.ver || '',
+            devmod: body.devmod || '',
+            boot: toNumber(body.boot),
+
+            // Errors
+            err_count: toNumber(body.err_count),
+            err_status: body.err_status || "0000",
+            error: body.error || "0000"
         };
+
+        // 🛡️ DATA QUALITY CHECK: Filter out "Zombie" packets (All zeros)
+        // These often occur during sensor initialization or hard faults.
+        // 🛡️ DATA QUALITY CHECK: Filter out "Zombie" packets
+        // A packet is invalid if BOTH Environment AND Gas Data are missing/zero.
+        // We allow voltage/current to be non-zero (power monitoring), but if sensors are dead, it's useless for dashboard.
+        const isEnvDead = (formattedData.comp_temp === 0 && formattedData.comp_humi === 0 && formattedData.pressure === 0);
+        const isGasDead = (formattedData.aqi === 0 && formattedData.eco2 === 0 && formattedData.tvoc === 0);
+
+        if (isEnvDead && isGasDead) {
+            console.warn(`🛑 DROPPED Zombie Telemetry for ${devid}:`, {
+                comp_temp: formattedData.comp_temp,
+                comp_humi: formattedData.comp_humi,
+                pressure: formattedData.pressure,
+                aqi: formattedData.aqi,
+                eco2: formattedData.eco2,
+                tvoc: formattedData.tvoc
+            });
+            return;
+        }
 
         //
         // 4️⃣ Tower metadata (unchanged)
@@ -135,6 +202,9 @@ async function handleGasSoloQueuedTelemetry(messageObj) {
         //
         checkThresholds(auid, formattedData);
 
+        //
+        // 7️⃣ Optional DB insert
+        //
         //
         // 7️⃣ Optional DB insert
         //

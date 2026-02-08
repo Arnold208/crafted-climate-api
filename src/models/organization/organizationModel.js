@@ -103,12 +103,24 @@ const organizationSchema = new mongoose.Schema(
       // Business details for verification
       businessDetails: {
         legalName: { type: String, default: "" },
-        registrationNumber: { type: String, default: "" },
-        taxId: { type: String, default: "" },
-        country: { type: String, default: "" },
+        tin: { type: String, default: "" },
+
+        businessType: {
+          type: String,
+          enum: [
+            "Sole Proprietorship",
+            "Partnership",
+            "Limited Liability Company (LLC)",
+            "Corporation",
+            "Non-Profit"
+          ],
+          default: "Sole Proprietorship" // fallback
+        },
+
         industry: { type: String, default: "" },
         website: { type: String, default: "" },
-        address: { type: String, default: "" }
+
+        location: { type: String, default: "" } // Single string address
       },
 
       // Uploaded verification documents
@@ -117,12 +129,18 @@ const organizationSchema = new mongoose.Schema(
           {
             type: {
               type: String,
-              enum: ["business_license", "tax_id", "incorporation_cert", "other"],
+              enum: [
+                "business_license",
+                "tax_certificate",
+                "workplace_exterior",
+                "authorization_letter",
+                "other"
+              ],
               required: true
             },
-            url: { type: String, required: true },      // S3/Azure Blob URL
+            url: { type: String, required: true },
             uploadedAt: { type: Date, default: Date.now },
-            uploadedBy: { type: String, required: true } // userid
+            uploadedBy: { type: String, required: true }
           },
           { _id: false }
         )

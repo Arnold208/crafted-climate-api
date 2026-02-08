@@ -5,11 +5,11 @@ const dotenv = require('dotenv');
 
 let envFile;
 
- 
+
 if (process.env.NODE_ENV === 'development') {
-  envFile = '.env.development';
+    envFile = '.env.development';
 } else {
-  envFile = '.env';   // default for production or if NODE_ENV not set
+    envFile = '.env';   // default for production or if NODE_ENV not set
 }
 
 dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
@@ -30,34 +30,22 @@ const transporter = nodemailer.createTransport({
     debug: false
 });
 
-async function sendEmail(to, subject, emailBody) {
-    const templatePath = path.join(__dirname, 'html/emailTemplate.html');
-    let htmlTemplate = fs.readFileSync(templatePath, 'utf-8');
-
-    htmlTemplate = htmlTemplate.replace('{{emailBody}}', emailBody);
-    htmlTemplate = htmlTemplate.replace('{{logoUrl}}', 'cid:logo');
-
-    const logoPath = path.join(__dirname, 'logo/splash.png');
-
+async function sendEmail(to, subject, htmlBody, attachments = []) {
     try {
-        const info = await transporter.sendMail({
+        const mailOptions = {
             from: process.env.SENDER,
             to,
             subject,
-            html: htmlTemplate,
-            attachments: [
-                {
-                    filename: 'logo.png',
-                    path: logoPath,
-                    cid: 'logo'
-                }
-            ]
-        });
+            html: htmlBody,
+            attachments: attachments
+        };
+
+        const info = await transporter.sendMail(mailOptions);
 
         // console.log('✅ Email sent:', info.messageId);
-        // console.log('📦 SMTP response:', info.response);
     } catch (error) {
         console.error('❌ Error sending email:', error);
+        throw error; // Re-throw to let caller handle it
     }
 }
 

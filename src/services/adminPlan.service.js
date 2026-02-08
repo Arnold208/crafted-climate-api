@@ -18,7 +18,7 @@ class AdminPlanService {
             query.isActive = filters.isActive;
         }
 
-        const plans = await Plan.find(query).sort({ priceMonthly: 1 }).lean();
+        const plans = await Plan.find(query).sort({ _id: 1 }).lean();
 
         return plans;
     }

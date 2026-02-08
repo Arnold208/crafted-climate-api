@@ -74,11 +74,11 @@ class SubscriptionService {
         return await getUserPlan(userid); // Using existing middleware helper which fetches sub+plan
     }
 
-    async upgradeSubscription(userid, targetPlanId) {
+    async upgradeSubscription(userid, subscriptionId, targetPlanId) {
         const targetPlan = await Plan.findOne({ planId: targetPlanId, isActive: true });
         if (!targetPlan) throw new Error("Target plan not found or inactive.");
 
-        const subscription = await UserSubscription.findOne({ userid });
+        const subscription = await UserSubscription.findOne({ subscriptionId, userid });
         if (!subscription) throw new Error("No active subscription found to upgrade");
 
         subscription.planId = targetPlanId;
@@ -90,11 +90,11 @@ class SubscriptionService {
         return await subscription.save();
     }
 
-    async downgradeSubscription(userid, targetPlanId) {
+    async downgradeSubscription(userid, subscriptionId, targetPlanId) {
         const plan = await Plan.findOne({ planId: targetPlanId });
         if (!plan) throw new Error("Plan not found.");
 
-        const subscription = await UserSubscription.findOne({ userid });
+        const subscription = await UserSubscription.findOne({ subscriptionId, userid });
         if (!subscription) throw new Error("No active subscription found to downgrade");
 
         subscription.planId = plan.planId;
@@ -116,8 +116,8 @@ class SubscriptionService {
         return await subscription.save();
     }
 
-    async cancelSubscription(userid) {
-        const subscription = await UserSubscription.findOne({ userid });
+    async cancelSubscription(userid, subscriptionId) {
+        const subscription = await UserSubscription.findOne({ subscriptionId, userid });
         if (!subscription) throw new Error("No active subscription found");
 
         subscription.status = "cancelled";

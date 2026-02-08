@@ -63,7 +63,7 @@ async function csrfProtection(req, res, next) {
     }
 
     // Get CSRF token from header or body
-    const token = req.headers['x-csrf-token'] || req.body._csrf;
+    const token = req.headers['x-csrf-token'] || (req.body && req.body._csrf);
 
     if (!token) {
         return res.status(403).json({

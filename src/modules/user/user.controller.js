@@ -10,7 +10,7 @@ class UserController {
             }
 
             const result = await userService.signup({
-                username, email, password, invitationId, contact, firstName, lastName,
+                username, email: email.toLowerCase(), password, invitationId, contact, firstName, lastName,
                 file: req.file
             });
 
@@ -35,7 +35,7 @@ class UserController {
                 return res.status(400).send({ message: 'Please provide email and password' });
             }
 
-            const result = await userService.login({ email, password });
+            const result = await userService.login({ email: email.toLowerCase(), password });
             return res.status(200).send(result);
         } catch (error) {
             console.error('[UserController] Login Error:', error.message);
@@ -54,7 +54,7 @@ class UserController {
             const { email, otp } = req.body;
             if (!email || !otp) return res.status(400).json({ message: 'Email and OTP required' });
 
-            const result = await userService.verifyOtp({ email, otp });
+            const result = await userService.verifyOtp({ email: email.toLowerCase(), otp });
             res.status(200).json(result);
         } catch (error) {
             if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
@@ -68,7 +68,7 @@ class UserController {
             const { email } = req.body;
             if (!email) return res.status(400).json({ message: 'Email is required' });
 
-            const result = await userService.resendOtp({ email });
+            const result = await userService.resendOtp({ email: email.toLowerCase() });
             res.status(200).json(result);
         } catch (error) {
             if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
@@ -112,7 +112,7 @@ class UserController {
             const { email } = req.body;
             if (!email) return res.status(400).json({ message: 'Email is required' });
 
-            const result = await userService.forgotPassword({ email });
+            const result = await userService.forgotPassword({ email: email.toLowerCase() });
             res.status(200).json(result);
         } catch (error) {
             if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
@@ -127,7 +127,7 @@ class UserController {
                 return res.status(400).json({ message: 'Email, OTP, and newPassword are required' });
             }
 
-            const result = await userService.resetPassword({ email, otp, newPassword });
+            const result = await userService.resetPassword({ email: email.toLowerCase(), otp, newPassword });
             res.status(200).json(result);
         } catch (error) {
             if (error.message.includes('Invalid') || error.message.includes('expired')) {

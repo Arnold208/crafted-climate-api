@@ -74,7 +74,13 @@ class SubscriptionController {
 
     async upgradeSubscription(req, res) {
         try {
-            const sub = await subscriptionService.upgradeSubscription(req.user.userid, req.body.targetPlanId);
+            // Use the subscription ID from the authenticated user context (ensured by middleware)
+            const subscriptionId = req.user.subscription;
+            if (!subscriptionId) {
+                return res.status(400).json({ message: "No active subscription found for this user." });
+            }
+
+            const sub = await subscriptionService.upgradeSubscription(req.user.userid, subscriptionId, req.body.targetPlanId);
             res.status(200).json({ message: "Subscription upgraded successfully", subscription: sub });
         } catch (err) {
             if (err.message.includes("not found")) return res.status(404).json({ message: err.message });
@@ -84,7 +90,12 @@ class SubscriptionController {
 
     async downgradeSubscription(req, res) {
         try {
-            const sub = await subscriptionService.downgradeSubscription(req.user.userid, req.body.targetPlanId);
+            const subscriptionId = req.user.subscription;
+            if (!subscriptionId) {
+                return res.status(400).json({ message: "No active subscription found for this user." });
+            }
+
+            const sub = await subscriptionService.downgradeSubscription(req.user.userid, subscriptionId, req.body.targetPlanId);
             res.status(200).json({ message: "Subscription downgraded successfully", subscription: sub });
         } catch (err) {
             if (err.message.includes("not found")) return res.status(404).json({ message: err.message });
@@ -104,7 +115,12 @@ class SubscriptionController {
 
     async cancelSubscription(req, res) {
         try {
-            const sub = await subscriptionService.cancelSubscription(req.user.userid);
+            const subscriptionId = req.user.subscription;
+            if (!subscriptionId) {
+                return res.status(400).json({ message: "No active subscription found for this user." });
+            }
+
+            const sub = await subscriptionService.cancelSubscription(req.user.userid, subscriptionId);
             res.status(200).json({ message: "Subscription cancelled", subscription: sub });
         } catch (err) {
             res.status(500).json({ message: "Internal server error", error: err.message });

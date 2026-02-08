@@ -75,6 +75,7 @@ module.exports = function checkOrgAccess(requiredPermission) {
             }
 
             // 7. Authorized
+            req.currentOrgRole = userOrgRole; // Fix: Pass role to downstream middleware
             return next();
 
         } catch (error) {

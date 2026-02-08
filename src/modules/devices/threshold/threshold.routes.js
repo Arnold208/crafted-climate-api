@@ -52,6 +52,8 @@ router.patch('/thresholds/:id/status',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Datapoint metadata retrieved }
  */
 router.get('/devices/:auid/metadata',
     authenticateToken,
@@ -70,6 +72,8 @@ router.get('/devices/:auid/metadata',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: List of thresholds }
  */
 router.get('/devices/:auid/thresholds',
     authenticateToken,
@@ -88,6 +92,8 @@ router.get('/devices/:auid/thresholds',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       201: { description: Threshold created }
  */
 router.post('/devices/:auid/thresholds',
     authenticateToken,
@@ -106,6 +112,9 @@ router.post('/devices/:auid/thresholds',
  *         name: id
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Threshold updated }
+ *       404: { description: Threshold not found }
  */
 router.put('/thresholds/:id',
     authenticateToken,
@@ -124,6 +133,9 @@ router.put('/thresholds/:id',
  *         name: id
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Threshold deleted }
+ *       404: { description: Threshold not found }
  */
 router.delete('/thresholds/:id',
     authenticateToken,
@@ -142,6 +154,8 @@ router.delete('/thresholds/:id',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Threshold parameters retrieved }
  */
 router.get('/devices/:auid/threshold-parameters',
     authenticateToken,

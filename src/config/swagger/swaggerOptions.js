@@ -102,12 +102,12 @@ socket.on('telemetry', (data) => console.log(data));
           description: 'Access token from login endpoint'
         },
 
-        // NEW — Required for all multi-tenant org-scoped routes
-        orgIdHeader: {
+        // Required for all multi-tenant org-scoped routes
+        organizationId: {
           type: 'apiKey',
           in: 'header',
           name: 'x-org-id',
-          description: 'Active Organization Context'
+          description: 'The unique Identifier (ID) of the target organization workspace.'
         },
 
         apiKeyAuth: {
@@ -162,7 +162,7 @@ socket.on('telemetry', (data) => console.log(data));
     // Default security
     security: [
       { bearerAuth: [] },
-      { orgIdHeader: [] }
+      { organizationId: [] }
     ],
 
     tags: [

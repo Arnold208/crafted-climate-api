@@ -5,12 +5,13 @@ function initializeMQTTClient(client, topics) {
     client.on("connect", () => {
         console.log("🔗 Connected to MQTT broker");
 
-        client.subscribe(topics, (err, granted) => {
+        // 🔒 HARDENING: Request QoS 1 to ensure at-least-once delivery
+        client.subscribe(topics, { qos: 1 }, (err, granted) => {
             if (err) {
                 console.error("❌ Subscription error:", err);
             } else {
-                console.log(`✅ Subscribed to topics: ${topics.join(", ")}`);
-                console.log("📜 Granted:", granted.map(g => g.topic).join(", "));
+                console.log(`✅ Subscribed to topics (QoS 1): ${topics.join(", ")}`);
+                console.log("📜 Granted:", granted.map(g => `${g.topic} (QoS ${g.qos})`).join(", "));
             }
         });
     });
@@ -70,8 +71,8 @@ function connectSecureMqtt() {
     const topics = [
         "eventroutes/Env-Telemetry-Dev",
         "eventroutes/Env-Telemetry",
-        "eventroutes/Aqua-Telemetry"
-        // Add more topics as needed
+        "eventroutes/Aqua-Telemetry",
+        "eventroutes/GasSolo-Telemetry"
     ];
 
     const mqttClient = createMqttClient();

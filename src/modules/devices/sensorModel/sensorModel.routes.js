@@ -22,6 +22,9 @@ const authenticateToken = require('../../../middleware/bearermiddleware');
  *     summary: Create a new sensor model with image
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       201: { description: Sensor model created }
+ *       400: { description: Missing fields or image }
  */
 router.post("/models",
     authenticateToken,
@@ -36,6 +39,8 @@ router.post("/models",
  *   get:
  *     tags: [Sensor Models]
  *     summary: Get all sensor models
+ *     responses:
+ *       200: { description: List of sensor models }
  */
 router.get("/models",
     verifyApiKey,
@@ -50,6 +55,8 @@ router.get("/models",
  *   get:
  *     tags: [Sensor Models]
  *     summary: Search and filter sensor models
+ *     responses:
+ *       200: { description: Search results }
  */
 router.get("/models/search",
     verifyApiKey,
@@ -64,6 +71,9 @@ router.get("/models/search",
  *   get:
  *     tags: [Sensor Models]
  *     summary: Get model by UUID
+ *     responses:
+ *       200: { description: Sensor model details }
+ *       404: { description: Model not found }
  */
 router.get("/models/uuid/:uuid",
     verifyApiKey,
@@ -78,6 +88,9 @@ router.get("/models/uuid/:uuid",
  *   get:
  *     tags: [Sensor Models]
  *     summary: Get a specific sensor model by name
+ *     responses:
+ *       200: { description: Sensor model details }
+ *       404: { description: Model not found }
  */
 router.get("/models/:model",
     verifyApiKey,
@@ -92,6 +105,9 @@ router.get("/models/:model",
  *   put:
  *     tags: [Sensor Models]
  *     summary: Update a model's image or description
+ *     responses:
+ *       200: { description: Model updated }
+ *       404: { description: Model not found }
  */
 router.put("/models/:model",
     verifyApiKey,
@@ -107,6 +123,9 @@ router.put("/models/:model",
  *   delete:
  *     tags: [Sensor Models]
  *     summary: Delete a model
+ *     responses:
+ *       200: { description: Model deleted }
+ *       404: { description: Model not found }
  */
 router.delete("/models/:model",
     verifyApiKey,

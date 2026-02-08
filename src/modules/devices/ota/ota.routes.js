@@ -22,6 +22,9 @@ const verifyApiKey = require('../../../middleware/apiKeymiddleware');
  *     summary: Upload firmware binary
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       201: { description: Firmware uploaded successfully }
+ *       400: { description: No file uploaded }
  */
 router.post("/upload-firmware",
     verifyApiKey,
@@ -37,6 +40,8 @@ router.post("/upload-firmware",
  *   get:
  *     tags: [Firmware]
  *     summary: Check for the latest firmware update
+ *     responses:
+ *       200: { description: Latest version check result }
  */
 router.get("/latest-update",
     verifyApiKey,
@@ -51,6 +56,8 @@ router.get("/latest-update",
  *   get:
  *     tags: [Firmware]
  *     summary: List all firmware uploads
+ *     responses:
+ *       200: { description: Firmware list retrieved }
  */
 router.get("/list-firmware",
     verifyApiKey,
@@ -70,6 +77,9 @@ router.get("/list-firmware",
  *         name: uuid
  *         required: true
  *         schema: { type: string }
+ *     responses:
+ *       200: { description: Firmware deleted }
+ *       404: { description: Firmware not found }
  */
 router.delete("/delete-firmware/:uuid",
     verifyApiKey,

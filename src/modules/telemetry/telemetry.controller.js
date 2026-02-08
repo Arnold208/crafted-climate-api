@@ -30,12 +30,33 @@ class TelemetryController {
             if (isNaN(limit) || limit <= 0) limit = 50;
             if (limit > 50) limit = 50;
 
-            const result = await telemetryService.getDeviceTelemetry(userid, auid, limit);
+            if (limit > 50) limit = 50;
+
+            // Pass Org Role for permission checks
+            const orgRole = req.currentOrgRole;
+            const result = await telemetryService.getDeviceTelemetry(userid, auid, limit, orgRole);
             return res.status(200).json(result);
 
         } catch (error) {
             // console.error('[TelemetryController] Get Error:', error);
             if (error.message === 'Device not found' || error.message === 'No telemetry found') return res.status(404).json({ message: error.message });
+            if (error.message === 'Unauthorized access') return res.status(403).json({ message: error.message });
+            return res.status(500).json({ message: 'Server error' });
+        }
+    }
+
+    // DELETE /api/telemetry/:userid/device/:auid
+    async deleteDeviceTelemetry(req, res) {
+        try {
+            const { userid, auid } = req.params;
+            const orgRole = req.currentOrgRole;
+
+            await telemetryService.deleteDeviceTelemetry(userid, auid, orgRole);
+            return res.status(200).json({ message: 'Device telemetry deleted successfully' });
+
+        } catch (error) {
+            console.error('[TelemetryController] Delete Error:', error);
+            if (error.message === 'Device not found') return res.status(404).json({ message: error.message });
             if (error.message === 'Unauthorized access') return res.status(403).json({ message: error.message });
             return res.status(500).json({ message: 'Server error' });
         }
@@ -119,6 +140,8 @@ class TelemetryController {
                 const row = columns.map((key) => {
                     const val = doc[key];
                     if (val instanceof Date) return escapeCsv(val.toISOString());
+                    // Use '-' as default for missing values to avoid "empty commas"
+                    if (val === null || val === undefined) return '-';
                     return escapeCsv(val);
                 }).join(',');
                 if (!res.write(row + '\n')) {
@@ -160,6 +183,22 @@ class TelemetryController {
         } catch (error) {
             console.error('[TelemetryController] Raw Data Error:', error);
             if (error.message.includes('Unknown model')) return res.status(404).json({ message: error.message });
+            return res.status(500).json({ message: 'Server error' });
+        }
+    }
+
+    // GET /api/telemetry/graph/:model/:auid
+    async getGraphData(req, res) {
+        try {
+            const { model, auid } = req.params;
+            const { start, end } = req.query;
+
+            const data = await telemetryService.getGraphData(auid, model, start, end);
+            res.json(data);
+        } catch (error) {
+            console.error('[TelemetryController] Graph Data Error:', error);
+            if (error.message.includes('Unknown model')) return res.status(404).json({ message: error.message });
+            if (error.message.includes('required')) return res.status(400).json({ message: error.message });
             return res.status(500).json({ message: 'Server error' });
         }
     }
