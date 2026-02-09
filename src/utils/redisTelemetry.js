@@ -1,4 +1,5 @@
 const { client: redisClient } = require('../config/redis/redis');
+const RegisterDevice = require('../models/devices/registerDevice');
 
 /**
  * Caches telemetry data and device metadata in Redis under the AUID hash.
@@ -22,8 +23,31 @@ async function cacheTelemetryToRedis(auid, telemetry, device) {
     console.log("⚠️ No date/timestamp found in telemetry, using Date.now()");
   }
 
-
   const redisHashKey = auid;
+
+  // ⚡ INSTANT STATUS SYNC (Offline -> Online)
+  // Check previous status in Redis to avoid spamming MongoDB on every packet
+  const prevMetaStr = await redisClient.hGet(redisHashKey, 'metadata');
+  let prevStatus = 'unknown';
+  if (prevMetaStr) {
+    try {
+      const prevMeta = JSON.parse(prevMetaStr);
+      prevStatus = prevMeta.status;
+    } catch (e) { }
+  }
+
+  // If device was offline (or unknown), sync "Online" to MongoDB immediately
+  if (prevStatus !== 'online') {
+    try {
+      await RegisterDevice.updateOne(
+        { auid },
+        { $set: { status: 'online', lastSeen: new Date(timestamp) } }
+      );
+      console.log(`🔄 [RedisTelemetry] Synced ${auid} to ONLINE in MongoDB`);
+    } catch (err) {
+      console.error(`❌ Failed to sync status for ${auid}:`, err.message);
+    }
+  }
 
   // ✅ Build metadata
   const metadata = {

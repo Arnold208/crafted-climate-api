@@ -245,7 +245,7 @@ const organizationSchema = new mongoose.Schema(
       planId: { type: String, default: null },
       status: {
         type: String,
-        enum: ["active", "inactive", "suspended"],
+        enum: ["active", "inactive", "suspended", "cancelled", "expired", "past_due"],
         default: "active"
       },
       subscribedAt: { type: Date, default: Date.now }

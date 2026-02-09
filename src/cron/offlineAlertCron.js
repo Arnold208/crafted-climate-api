@@ -15,7 +15,7 @@ const ALERT_CHECK_INTERVAL = process.env.OFFLINE_CHECK_INTERVAL || '* * * * *'; 
 // level = identifier for the stage
 const ALERT_STAGES = [
     { level: 1, minMinutes: 70, tag: 'WARNING' },
-    { level: 2, minMinutes: 300, tag: 'CRITICAL' }, // 5 hours
+    { level: 2, minMinutes: 600, tag: 'CRITICAL' }, // 10 hours
     { level: 3, minMinutes: 1440, tag: 'SEVERE' }   // 24 hours
 ];
 
@@ -49,8 +49,8 @@ function getStageConfig(stage, device, lastSeen) {
             templateSlug = 'device-offline-warning';
             break;
         case 2:
-            // Critical (5 Hours)
-            sms = `Urgent: ${nickname} has been offline for over 5 hours. Please inspect the device immediately to prevent data loss.`;
+            // Critical (10 Hours)
+            sms = `Urgent: ${nickname} has been offline for over 10 hours. Please inspect the device immediately to prevent data loss.`;
             templateSlug = 'device-offline-critical';
             break;
         case 3:

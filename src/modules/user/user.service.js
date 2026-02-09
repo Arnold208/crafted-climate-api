@@ -268,11 +268,14 @@ class UserService {
 
         // 2. Auto-Healing: If not found or inactive, check for ANY active subscription for this user
         if (!sub || sub.status !== 'active') {
-            const activeSub = await UserSubscription.findOne({
+            const activeSubs = await UserSubscription.find({
                 userid: user.userid,
                 status: 'active',
-                subscriptionScope: 'personal' // Prioritize personal
-            }).sort({ updatedAt: -1 }); // Get most recent
+                subscriptionScope: 'personal'
+            });
+
+            // Sort in memory to avoid Cosmos DB index error on updatedAt
+            const activeSub = activeSubs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
 
             if (activeSub) {
                 console.log(`[UserService] Healing: Updated user subscription pointer from ${user.subscription} to ${activeSub.subscriptionId}`);

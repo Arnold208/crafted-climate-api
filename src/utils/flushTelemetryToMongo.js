@@ -18,11 +18,31 @@ async function flushTelemetryToMongo(auid, model) {
   let lockAcquired = false;
 
   // helper: seconds/ms -> Date
+  // helper: seconds/ms/ISO-string -> Date
   const toDate = (v) => {
     if (v == null || v === 0) return undefined;
+
+    // 1. Handle Strings (ISO or numeric string)
+    if (typeof v === 'string') {
+      // If purely numeric string, parse as number
+      if (/^\d+$/.test(v)) {
+        // Proceed to numeric handling below
+        v = Number(v);
+      } else {
+        // Try parsing as Date String
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? undefined : d;
+      }
+    }
+
+    // 2. Handle Numbers (Seconds or MS)
     const n = Number(v);
     if (!Number.isFinite(n)) return undefined;
-    const ms = n < 1e12 ? n * 1000 : n; // if seconds, convert to ms
+
+    // Heuristic: If < 1e12 (Year 2001 in ms), assume Seconds. 
+    // e.g. 1700000000 (sec) vs 1700000000000 (ms)
+    // 1e12 is user-friendly cutoff (Sat Sep 08 2001)
+    const ms = n < 1e12 ? n * 1000 : n;
     const d = new Date(ms);
     return Number.isNaN(d.getTime()) ? undefined : d;
   };

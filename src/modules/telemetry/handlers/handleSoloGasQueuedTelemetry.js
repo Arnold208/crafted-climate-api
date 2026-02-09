@@ -69,16 +69,17 @@ async function handleGasSoloQueuedTelemetry(messageObj) {
         let telemTime = normalizeTimestamp(rawTelem);
         let transportTime = normalizeTimestamp(rawTransport);
 
+        // Fallbacks
         if (!isValidTimestamp(telemTime)) {
-            telemTime = transportTime;
+            // If telemetry time is invalid, try transport time
+            telemTime = isValidTimestamp(transportTime) ? transportTime : Date.now();
         }
-        if (!isValidTimestamp(telemTime)) {
-            telemTime = Date.now();
+        if (!isValidTimestamp(transportTime)) {
+            transportTime = Date.now();
         }
 
         // 🔒 BATCH FIX: If purely second-based timestamp (from Notehub sometimes), 
         // add random MS to prevent Redis key collision if multiple readings have same second.
-        // (Redis key is typically just the timestamp)
         if (telemTime % 1000 === 0) {
             telemTime += Math.floor(Math.random() * 999);
         }
@@ -95,10 +96,11 @@ async function handleGasSoloQueuedTelemetry(messageObj) {
         // 3️⃣ Build unified telemetry format
         //
 
-        // Helper: Convert to number, default to 0
+        // Helper: Convert to number, default to null (better for graphs than 0)
         const toNumber = (v) => {
+            if (v === null || v === undefined || v === '') return null;
             const n = parseFloat(v);
-            return isNaN(n) ? 0 : n;
+            return isNaN(n) ? null : n;
         };
 
         const formattedData = {
@@ -138,7 +140,7 @@ async function handleGasSoloQueuedTelemetry(messageObj) {
 
             // Power
             voltage: toNumber(body.voltage),
-            battery: batteryPercentage(toNumber(body.voltage)),
+            battery: batteryPercentage(toNumber(body.voltage) || 0), // fallback 0 for batt sizing if needed, or better logic
             brownout: toNumber(body.brownout),
 
             // Device Info

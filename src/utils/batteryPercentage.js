@@ -6,6 +6,7 @@
  * @returns {number} Battery percentage (0–100).
  */
 function batteryPercentage(voltage, minVoltage = 3.3, maxVoltage = 4.1) {
+  if (voltage == null || isNaN(voltage)) return 0;
   if (voltage < minVoltage) {
     return 0;
   } else if (voltage > maxVoltage) {
