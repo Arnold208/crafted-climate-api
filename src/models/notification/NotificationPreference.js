@@ -48,6 +48,12 @@ const NotificationPreferenceSchema = new mongoose.Schema({
         timezone: { type: String, default: 'UTC' }
     },
 
+    // List of device IDs to specifically mute
+    mutedDevices: {
+        type: [String],
+        default: []
+    },
+
     updatedAt: {
         type: Date,
         default: Date.now

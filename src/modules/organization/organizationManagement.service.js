@@ -17,7 +17,8 @@ const { getDefaultBenefits } = require('../../constants/partnerTiers');
 const emailService = require('./organizationEmail.service');
 const OrganizationRequest = require('../../models/organization/organizationRequestModel');
 const { v4: uuidv4 } = require('uuid');
-const { getDefaultPermissions } = require('../../utils/permissions'); // Need to ensure this exists or use logic
+const { getDefaultPermissions } = require('../../utils/permissions');
+const OrganizationService = require('./organization.service');
 
 class OrganizationManagementService {
 
@@ -66,9 +67,10 @@ class OrganizationManagementService {
         // 🔒 RATE LIMITING: Check 2x per 30 days limit (strict)
         const isPlatformAdmin = hasPlatformPermission(platformRole, 'platform:orgs:manage');
 
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
         if (!isPlatformAdmin) {
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
             const recentEdits = org.nameEditHistory.filter(edit =>
                 new Date(edit.editedAt) >= thirtyDaysAgo
@@ -103,7 +105,7 @@ class OrganizationManagementService {
         await org.save();
 
         // 🔒 CACHE INVALIDATION
-        await CacheService.invalidate(`org:${orgId}:meta`);
+        await OrganizationService.invalidateOrgCache(orgId);
 
         return {
             message: 'Organization name updated successfully',
@@ -295,6 +297,9 @@ class OrganizationManagementService {
             console.error('Email notification failed:', emailError);
         }
 
+        // 🔒 CACHE INVALIDATION
+        await OrganizationService.invalidateOrgCache(orgId);
+
         return {
             message: 'Business verification submitted successfully. Awaiting admin review.',
             verificationId: orgId,
@@ -364,6 +369,9 @@ class OrganizationManagementService {
         } catch (emailError) {
             console.error('Email notification failed:', emailError);
         }
+
+        // 🔒 CACHE INVALIDATION
+        await OrganizationService.invalidateOrgCache(orgId);
 
         return {
             message: 'Partner application submitted successfully. Awaiting admin review.',
@@ -565,6 +573,9 @@ class OrganizationManagementService {
         if (user) {
             await emailService.sendOrganizationApproved(user.email, newOrg.name);
         }
+
+        // 🔒 CACHE INVALIDATION
+        await OrganizationService.invalidateOrgCache(orgId);
 
         return { message: "Organization created and verified successfully", organization: newOrg };
     }

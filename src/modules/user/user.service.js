@@ -8,6 +8,7 @@ const Organization = require('../../models/organization/organizationModel');
 const Invitation = require('../../models/invitation/invitationModel');
 const Plan = require('../../models/subscriptions/Plan');
 const UserSubscription = require('../../models/subscriptions/UserSubscription');
+const NotificationPreference = require('../../models/notification/NotificationPreference');
 
 const { sendSMS } = require('../../config/sms/sms');
 const { sendEmail } = require('../../config/mail/nodemailer');
@@ -596,6 +597,189 @@ class UserService {
             throw error;
         }
     }
+    /**
+     * Update User Profile
+     */
+    async updateProfile(userId, updateData) {
+        const user = await User.findOne({ userid: userId });
+        if (!user) throw new Error('User not found');
+
+        // Handle Profile Picture Upload
+        if (updateData.file) {
+            const file = updateData.file;
+            const fileName = `profile-${Date.now()}-${file.originalname}`;
+            const blockBlobClient = containerClient.getBlockBlobClient(fileName);
+
+            // Upload new file
+            await blockBlobClient.upload(file.buffer, file.buffer.length, {
+                blobHTTPHeaders: { blobContentType: file.mimetype },
+            });
+
+            // 🗑️ Delete old profile picture if exists
+            if (user.profilePicture) {
+                try {
+                    // Extract blob name from URL
+                    const url = new URL(user.profilePicture);
+                    const pathParts = url.pathname.split('/');
+                    const oldBlobName = decodeURIComponent(pathParts.pop());
+
+                    if (oldBlobName && pathParts.includes('images')) {
+                        const oldBlobClient = containerClient.getBlockBlobClient(oldBlobName);
+                        // blockBlobClient.deleteIfExists() is available.
+                        await oldBlobClient.deleteIfExists();
+                        console.log(`[UserService] Deleted old profile picture: ${oldBlobName}`);
+                    }
+
+                } catch (err) {
+                    console.warn(`[UserService] Failed to delete old profile picture for ${userId}:`, err.message);
+                }
+            }
+
+            // Update user record with new signed URL
+            user.profilePicture = generateSignedUrl(fileName);
+        }
+
+        // Apply whitelisted updates (exclude 'file')
+        Object.keys(updateData).forEach(key => {
+            if (key === 'file') return; // Skip file object
+
+            if (key === 'socialLinks') {
+                if (typeof updateData.socialLinks === 'string') {
+                    try {
+                        updateData.socialLinks = JSON.parse(updateData.socialLinks);
+                    } catch (e) { }
+                }
+                user.socialLinks = { ...user.socialLinks, ...updateData.socialLinks };
+            } else {
+                user[key] = updateData[key];
+            }
+        });
+
+        await user.save();
+
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'USER_PROFILE_UPDATE',
+            userid: userId,
+            organizationId: user.currentOrganizationId,
+            details: { updatedFields: Object.keys(updateData) },
+            ipAddress: null
+        });
+
+        return this.getUserById(userId);
+    }
+
+    /**
+     * Update User Preferences
+     */
+    async updatePreferences(userId, { preferences, notificationSettings }) {
+        const user = await User.findOne({ userid: userId });
+        if (!user) throw new Error('User not found');
+
+        if (preferences) {
+            user.preferences = { ...user.preferences, ...preferences };
+        }
+
+        if (notificationSettings) {
+            user.notificationSettings = { ...user.notificationSettings, ...notificationSettings };
+
+            // Sync to NotificationPreference collection
+            let notiPrefs = await NotificationPreference.findOne({ userid: userId });
+            if (!notiPrefs) {
+                notiPrefs = new NotificationPreference({
+                    userid: userId,
+                    ...NotificationPreference.getDefaults()
+                });
+            }
+
+            if (notificationSettings.emailAlerts !== undefined) {
+                notiPrefs.preferences.email.enabled = notificationSettings.emailAlerts;
+            }
+            if (notificationSettings.pushAlerts !== undefined) {
+                notiPrefs.preferences.push.enabled = notificationSettings.pushAlerts;
+            }
+
+            notiPrefs.updatedAt = new Date();
+            await notiPrefs.save();
+        }
+
+        await user.save();
+        return this.getUserById(userId);
+    }
+
+    /**
+     * Mute a device
+     */
+    async muteDevice(userId, deviceId) {
+        let prefs = await NotificationPreference.findOne({ userid: userId });
+        if (!prefs) {
+            prefs = new NotificationPreference({
+                userid: userId,
+                ...NotificationPreference.getDefaults()
+            });
+        }
+
+        if (!prefs.mutedDevices.includes(deviceId)) {
+            prefs.mutedDevices.push(deviceId);
+            prefs.updatedAt = new Date();
+            await prefs.save();
+        }
+
+        return true;
+    }
+
+    /**
+     * Unmute a device
+     */
+    async unmuteDevice(userId, deviceId) {
+        const prefs = await NotificationPreference.findOne({ userid: userId });
+        if (prefs) {
+            prefs.mutedDevices = prefs.mutedDevices.filter(id => id !== deviceId);
+            prefs.updatedAt = new Date();
+            await prefs.save();
+        }
+        return true;
+    }
+
+    /**
+     * Get Muted Devices
+     */
+    async getMutedDevices(userId) {
+        const prefs = await NotificationPreference.findOne({ userid: userId });
+        return prefs ? prefs.mutedDevices : [];
+    }
+
+    /**
+     * Change Password
+     */
+    async changePassword(userId, oldPassword, newPassword) {
+        const user = await User.findOne({ userid: userId });
+        if (!user) throw new Error('User not found');
+
+        const validPassword = await bcrypt.compare(oldPassword, user.password);
+        if (!validPassword) {
+            throw new Error('Incorrect password');
+        }
+
+        user.password = await bcrypt.hash(newPassword, 10);
+        await user.save();
+
+        // AUDIT LOG
+        await createAuditLog({
+            action: 'USER_PASSWORD_CHANGE',
+            userid: userId,
+            organizationId: user.currentOrganizationId,
+            details: { method: 'settings' },
+            ipAddress: null
+        });
+
+        // Optionally revoke other sessions?
+        // user.refreshToken = ""; 
+        // await user.save();
+
+        return true;
+    }
+
     /**
      * ✨ USER CONTEXT AUTO-HEALING
      * Ensures user has a personal organization and an active currentOrganizationId.

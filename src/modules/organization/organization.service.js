@@ -87,6 +87,9 @@ class OrganizationService {
             ipAddress: null
         });
 
+        // INVALIDATION
+        await this.invalidateOrgCache(organizationId);
+
         return { organizationId };
     }
 
@@ -129,8 +132,7 @@ class OrganizationService {
         );
 
         // INVALIDATION
-        await CacheService.invalidate(`org:${orgId}:meta`);
-        await CacheService.invalidate(`user:${user.userid}:orgs`);
+        await this.invalidateOrgCache(orgId);
 
         // AUDIT LOG
         await createAuditLog({
@@ -202,8 +204,7 @@ class OrganizationService {
         );
 
         // INVALIDATION
-        await CacheService.invalidate(`org:${orgId}:meta`);
-        await CacheService.invalidate(`user:${useridToRemove}:orgs`);
+        await this.invalidateOrgCache(orgId);
 
         // AUDIT LOG
         await createAuditLog({
@@ -239,8 +240,7 @@ class OrganizationService {
         await org.save();
 
         // INVALIDATION
-        await CacheService.invalidate(`org:${orgId}:meta`);
-        await CacheService.invalidate(`user:${useridToUpdate}:orgs`);
+        await this.invalidateOrgCache(orgId);
 
         // AUDIT LOG
         await createAuditLog({
@@ -381,6 +381,33 @@ class OrganizationService {
 
         return { message: "Organization dissolved successfully. It is now suspended and scheduled for deletion.", organizationId: orgId };
     }
+    /**
+     * 🧹 CENTRALIZED CACHE INVALIDATION
+     * Invalidates:
+     * 1. Organization Metadata (org:{orgId}:meta) (info, profile)
+     * 2. All Collaborators' Org Lists (user:{userid}:orgs) (my-organizations)
+     */
+    async invalidateOrgCache(orgId) {
+        try {
+            // 1. Invalidate Org Metadata
+            await CacheService.invalidate(`org:${orgId}:meta`);
+
+            // 2. Invalidate User Lists for ALL collaborators
+            // We need to fetch the org to get the list of users
+            // We shouldn't throw here if org is missing, just skip.
+            const org = await Organization.findOne({ organizationId: orgId });
+            if (org && org.collaborators) {
+                const invalidationPromises = org.collaborators.map(c =>
+                    CacheService.invalidate(`user:${c.userid}:orgs`)
+                );
+                await Promise.all(invalidationPromises);
+                // console.log(`[Cache] Invalidated ${invalidationPromises.length} user lists for org ${orgId}`);
+            }
+        } catch (error) {
+            console.error(`[Cache] Error invalidating org ${orgId}:`, error);
+        }
+    }
+
 }
 
 module.exports = new OrganizationService();

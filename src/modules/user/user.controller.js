@@ -136,6 +136,118 @@ class UserController {
             res.status(500).json({ message: error.message });
         }
     }
+    async updateProfile(req, res) {
+        try {
+            const userId = req.user.userid;
+            const updateData = req.body;
+
+            // Handle Multipart/Form-Data parsing nuances
+            if (updateData.socialLinks && typeof updateData.socialLinks === 'string') {
+                try {
+                    updateData.socialLinks = JSON.parse(updateData.socialLinks);
+                } catch (e) {
+                    console.error("Failed to parse socialLinks:", e);
+                }
+            }
+
+            // Whitelist allowed fields for profile update
+            const allowedFields = ['firstName', 'lastName', 'contact', 'jobTitle', 'bio', 'socialLinks'];
+            const filteredUpdate = Object.keys(updateData)
+                .filter(key => allowedFields.includes(key))
+                .reduce((obj, key) => {
+                    // Filter out null, undefined, and empty strings
+                    if (updateData[key] !== null && updateData[key] !== undefined && updateData[key] !== "") {
+                        obj[key] = updateData[key];
+                    }
+                    return obj;
+                }, {});
+
+            // Pass file if present
+            if (req.file) {
+                filteredUpdate.file = req.file;
+            }
+
+            if (Object.keys(filteredUpdate).length === 0 && !req.file) {
+                return res.status(400).json({ message: 'No valid fields provided for update' });
+            }
+
+            const updatedUser = await userService.updateProfile(userId, filteredUpdate);
+            res.status(200).json({ message: 'Profile updated successfully', user: updatedUser });
+        } catch (error) {
+            res.status(500).json({ message: error.message });
+        }
+    }
+
+    async updatePreferences(req, res) {
+        try {
+            const userId = req.user.userid;
+            const { preferences, notificationSettings } = req.body;
+
+            if (!preferences && !notificationSettings) {
+                return res.status(400).json({ message: 'Provide preferences or notificationSettings to update' });
+            }
+
+            const updatedUser = await userService.updatePreferences(userId, { preferences, notificationSettings });
+            res.status(200).json({ message: 'Preferences updated successfully', user: updatedUser });
+        } catch (error) {
+            res.status(500).json({ message: error.message });
+        }
+    }
+
+    async changePassword(req, res) {
+        try {
+            const userId = req.user.userid;
+            const { oldPassword, newPassword } = req.body;
+
+            if (!oldPassword || !newPassword) {
+                return res.status(400).json({ message: 'Old and new passwords are required' });
+            }
+
+            if (oldPassword === newPassword) {
+                return res.status(400).json({ message: 'New password cannot be the same as the old password' });
+            }
+
+            await userService.changePassword(userId, oldPassword, newPassword);
+            res.status(200).json({ message: 'Password changed successfully' });
+        } catch (error) {
+            if (error.message === 'Incorrect password') {
+                return res.status(401).json({ message: error.message });
+            }
+            res.status(500).json({ message: error.message });
+        }
+    }
+
+    async muteDevice(req, res) {
+        try {
+            const userId = req.user.userid;
+            const { deviceId } = req.params;
+            await userService.muteDevice(userId, deviceId);
+            res.status(200).json({ message: 'Device muted successfully' });
+        } catch (error) {
+            res.status(500).json({ message: error.message });
+        }
+    }
+
+    async unmuteDevice(req, res) {
+        try {
+            const userId = req.user.userid;
+            const { deviceId } = req.params;
+            await userService.unmuteDevice(userId, deviceId);
+            res.status(200).json({ message: 'Device unmuted successfully' });
+        } catch (error) {
+            res.status(500).json({ message: error.message });
+        }
+    }
+
+    async getMutedDevices(req, res) {
+        try {
+            const userId = req.user.userid;
+            const muted = await userService.getMutedDevices(userId);
+            res.status(200).json({ mutedDevices: muted });
+        } catch (error) {
+            res.status(500).json({ message: error.message });
+        }
+    }
 }
 
 module.exports = new UserController();

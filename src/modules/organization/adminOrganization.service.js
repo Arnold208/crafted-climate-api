@@ -11,6 +11,7 @@ const { hasPlatformPermission } = require('../../constants/organizationPermissio
 const { getDefaultBenefits } = require('../../constants/partnerTiers');
 const CacheService = require('../common/cache.service');
 const emailService = require('./organizationEmail.service');
+const OrganizationService = require('./organization.service');
 
 class AdminOrganizationService {
 
@@ -80,7 +81,8 @@ class AdminOrganizationService {
         }
 
         await org.save();
-        await CacheService.invalidate(`org:${orgId}:meta`);
+        await org.save();
+        await OrganizationService.invalidateOrgCache(orgId);
 
         // 📧 Send email notification
         try {
@@ -132,6 +134,7 @@ class AdminOrganizationService {
         org.organizationTypeChangeRequest.rejectionReason = reason;
 
         await org.save();
+        await OrganizationService.invalidateOrgCache(orgId);
 
         // 📧 Send email notification
         try {
@@ -198,7 +201,8 @@ class AdminOrganizationService {
         org.businessVerification.verifiedAt = new Date();
 
         await org.save();
-        await CacheService.invalidate(`org:${orgId}:meta`);
+        await org.save();
+        await OrganizationService.invalidateOrgCache(orgId);
 
         // 📧 Send email notification
         try {
@@ -249,6 +253,7 @@ class AdminOrganizationService {
         org.businessVerification.rejectionReason = reason;
 
         await org.save();
+        await OrganizationService.invalidateOrgCache(orgId);
 
         // 📧 Send email notification
         try {
@@ -336,7 +341,8 @@ class AdminOrganizationService {
         org.partnerApplication.reviewedAt = new Date();
 
         await org.save();
-        await CacheService.invalidate(`org:${orgId}:meta`);
+        await org.save();
+        await OrganizationService.invalidateOrgCache(orgId);
 
         // 📧 Send email notification
         try {
@@ -388,6 +394,7 @@ class AdminOrganizationService {
         org.partnerApplication.rejectionReason = reason;
 
         await org.save();
+        await OrganizationService.invalidateOrgCache(orgId);
 
         // 📧 Send email notification
         try {
@@ -447,7 +454,8 @@ class AdminOrganizationService {
         };
 
         await org.save();
-        await CacheService.invalidate(`org:${orgId}:meta`);
+        await org.save();
+        await OrganizationService.invalidateOrgCache(orgId);
 
         // 📧 Send email notification
         try {

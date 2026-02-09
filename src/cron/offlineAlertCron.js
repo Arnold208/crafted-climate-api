@@ -2,7 +2,7 @@ const cron = require('node-cron');
 const { client: redis } = require('../config/redis/redis');
 const RegisterDevice = require('../models/devices/registerDevice');
 const User = require('../models/user/userModel');
-// const { sendEmail } = require('../config/mail/nodemailer'); // Handled by TemplateService now
+const NotificationPreference = require('../models/notification/NotificationPreference');
 const { sendSMS } = require('../config/sms/sms');
 const logger = require('../utils/logger');
 
@@ -156,8 +156,27 @@ async function checkOfflineDevices() {
                 // D1. Owner
                 const owner = await User.findOne({ userid: device.userid });
                 if (owner) {
-                    if (owner.email) emails.add(owner.email);
-                    if (owner.contact) phones.add(owner.contact);
+                    // Fetch consolidated preferences
+                    const prefs = await NotificationPreference.findOne({ userid: owner.userid });
+
+                    if (prefs) {
+                        // Check if device is muted
+                        if (prefs.mutedDevices && prefs.mutedDevices.includes(device.deviceId)) {
+                            console.log(`[OfflineAlert] Suppressed: Device ${device.deviceId} is muted for user ${owner.userid}`);
+                            continue;
+                        }
+
+                        // Check global settings
+                        const emailEnabled = prefs.preferences?.email?.enabled !== false;
+                        const pushEnabled = prefs.preferences?.push?.enabled !== false;
+
+                        if (emailEnabled) emails.add(owner.email);
+                        if (pushEnabled) phones.add(owner.contact);
+                    } else {
+                        // Fallback to default behavior if no prefs document
+                        if (owner.email) emails.add(owner.email);
+                        if (owner.contact) phones.add(owner.contact);
+                    }
                 }
 
                 // D2. Collaborators / Custom List

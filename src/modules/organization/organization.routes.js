@@ -540,6 +540,43 @@ router.post('/:orgId/devices/:auid/move',
     orgDevicesController.moveDevice
 );
 
+/**
+ * @swagger
+ * /api/org/{orgId}/devices/{auid}/transfer:
+ *   post:
+ *     summary: Transfer device to another organization
+ *     tags: [Organization Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *         description: Source Organization ID
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [targetOrgId]
+ *             properties:
+ *               targetOrgId: { type: string }
+ *     responses:
+ *       200: { description: Device transferred }
+ *       403: { description: User not member of target org }
+ */
+router.post('/:orgId/devices/:auid/transfer',
+    authenticateToken,
+    checkOrgAccess('org.devices.edit'),
+    orgDevicesController.transferDevice
+);
+
 // ========================================
 // 🆕 ORGANIZATION MANAGEMENT ROUTES
 // Name editing, verification, partner workflows

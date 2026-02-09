@@ -74,6 +74,46 @@ const userSchema = new mongoose.Schema({
   },
 
 
+  /**
+   * 👤 USER PROFILE DETAILS
+   */
+  jobTitle: { type: String, default: "" },
+  bio: { type: String, default: "" },
+  socialLinks: {
+    linkedin: { type: String, default: "" },
+    twitter: { type: String, default: "" },
+    website: { type: String, default: "" }
+  },
+
+  /**
+   * ⚙️ USER PREFERENCES (UI/UX)
+   */
+  preferences: {
+    theme: {
+      type: String,
+      enum: ['light', 'dark', 'system'],
+      default: 'system'
+    },
+    language: {
+      type: String,
+      default: 'en'
+    },
+    dashboardLayout: {
+      type: String,
+      enum: ['standard', 'compact'],
+      default: 'standard'
+    }
+  },
+
+  /**
+   * 🔔 NOTIFICATION SETTINGS
+   */
+  notificationSettings: {
+    emailAlerts: { type: Boolean, default: true },
+    pushAlerts: { type: Boolean, default: true },
+    marketingEmails: { type: Boolean, default: false }
+  },
+
   /** Devices owned or invited to */
   devices: [
     new mongoose.Schema(

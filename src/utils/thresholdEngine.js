@@ -1,5 +1,6 @@
 const Threshold = require('../models/threshold/threshold');
 const User = require('../models/user/userModel');
+const NotificationPreference = require('../models/notification/NotificationPreference');
 const registerNewDevice = require('../models/devices/registerDevice');
 
 const { sendSMS } = require("../config/sms/sms");
@@ -323,53 +324,63 @@ async function sendAlerts(owner, device, rule, smsMessage, emailMessage) {
     const recipients = new Set();
     const smsRecipients = new Set();
 
-    // 1. Check Device-Level Notification Preferences
-    // If user explicitly disabled alerts for this device, SKIP.
-    if (device.notificationPreferences?.offlineAlert === false) {
-      // Note: Using "offlineAlert" pref key maybe confusing for "threshold" alerts?
-      // Ideally we should have enabled: { offline: bool, threshold: bool }
-      // For now, let's assume if they turned off alerts, they meant ALL alerts.
-      // OR check if rule itself is enabled (checked prior).
-      // Let's proceed.
+    // 1. Fetch Notification Preferences for the owner
+    const prefs = await NotificationPreference.findOne({ userid: owner.userid });
+
+    // 2. Global Muting / Device Muting Checks
+    if (prefs) {
+      // Check if this specific device is muted
+      if (prefs.mutedDevices && prefs.mutedDevices.includes(device.deviceId)) {
+        console.log(`[ThresholdEngine] Alert suppressed: Device ${device.deviceId} is muted for user ${owner.userid}`);
+        return;
+      }
+
+      // Check global settings (Synced from User model)
+      // Check email preference
+      if (rule.alertChannels?.email && prefs.preferences?.email?.enabled === false) {
+        console.log(`[ThresholdEngine] Email alerts disabled globally for user ${owner.userid}`);
+        rule.alertChannels.email = false; // Override for this run
+      }
+
+      // Check push preference (mapped to SMS for threshold engine currently)
+      if (rule.alertChannels?.sms && prefs.preferences?.push?.enabled === false) {
+        console.log(`[ThresholdEngine] SMS/Push alerts disabled globally for user ${owner.userid}`);
+        rule.alertChannels.sms = false; // Override
+      }
     }
 
-    // 2. Add Owner
+    // 3. Add Owner
     if (owner) {
       if (owner.email) recipients.add(owner.email);
       if (owner.contact) smsRecipients.add(owner.contact);
     }
 
-    // 3. Add Explicit Recipients from Preferences
+    // 4. Add Explicit Recipients from Preferences
     if (device.notificationPreferences?.recipients?.length > 0) {
       device.notificationPreferences.recipients.forEach(e => recipients.add(e));
     }
 
-    // 4. Add Collaborators (Admins/Editors)
+    // 5. Add Collaborators (Admins/Editors)
     if (device.collaborators && device.collaborators.length > 0) {
       for (const collab of device.collaborators) {
-        // Filter by role/permission? Generally admins/editors want alerts. Viewers maybe not.
-        // Support staff should also get alerts.
         if (['device-admin', 'device-editor', 'device-support'].includes(collab.role) || collab.permissions?.includes('alerts')) {
           const u = await User.findOne({ userid: collab.userid });
           if (u) {
             if (u.email) recipients.add(u.email);
-            // SMS for collaborators? Maybe strictly email to save costs/spam.
-            // if (u.contact) smsRecipients.add(u.contact);
           }
         }
       }
     }
 
-    // 5. Send Emails
+    // 6. Send Emails
     if (rule.alertChannels?.email && recipients.size > 0) {
       console.log(`Sending email alert to ${recipients.size} recipients...`);
       for (const email of recipients) {
-        // Fire and forget or sequential to diagnose
         sendEmail(email, "ALERT from your CraftedClimate Sensor", emailMessage).catch(e => console.error(e.message));
       }
     }
 
-    // 6. Send SMS
+    // 7. Send SMS
     if (rule.alertChannels?.sms && smsRecipients.size > 0) {
       console.log(`Sending SMS alert to ${smsRecipients.size} contacts...`);
       for (const contact of smsRecipients) {

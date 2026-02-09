@@ -260,6 +260,182 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *       401:
  *         description: Unauthorized
  */
-router.get('/profile', authenticateToken, userController.getProfile);
+/**
+ * @swagger
+ * /api/user/profile:
+ *   patch:
+ *     tags: [User Settings]
+ *     summary: Update user profile details
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               profilePicture:
+ *                 type: string
+ *                 format: binary
+ *               firstName: { type: string, example: "Jane" }
+ *               lastName: { type: string, example: "Doe" }
+ *               contact: { type: string, example: "233501234567" }
+ *               jobTitle: { type: string, example: "Senior Environmental Engineer" }
+ *               bio: { type: string, example: "Passionate about climate action and data." }
+ *               socialLinks:
+ *                  type: object
+ *                  properties:
+ *                    linkedin: { type: string, example: "https://linkedin.com/in/janedoe" }
+ *                    twitter: { type: string, example: "https://twitter.com/janedoe" }
+ *                    website: { type: string, example: "https://janedoe.com" }
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: "Profile updated successfully" }
+ *                 user: { $ref: '#/components/schemas/User' }
+ */
+router.patch('/profile', authenticateToken, upload.single('profilePicture'), userController.updateProfile);
+
+/**
+ * @swagger
+ * /api/user/preferences:
+ *   patch:
+ *     tags: [User Settings]
+ *     summary: Update user preferences and notification settings
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               preferences:
+ *                 type: object
+ *                 properties:
+ *                   theme: { type: string, enum: ['light', 'dark', 'system'], example: "dark" }
+ *                   language: { type: string, example: "en" }
+ *                   dashboardLayout: { type: string, enum: ['standard', 'compact'], example: "compact" }
+ *               notificationSettings:
+ *                 type: object
+ *                 properties:
+ *                   emailAlerts: { type: boolean, example: true }
+ *                   pushAlerts: { type: boolean, example: false }
+ *                   marketingEmails: { type: boolean, example: false }
+ *     responses:
+ *       200:
+ *         description: Preferences updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: "Preferences updated successfully" }
+ *                 user: { $ref: '#/components/schemas/User' }
+ */
+router.patch('/preferences', authenticateToken, userController.updatePreferences);
+
+/**
+ * @swagger
+ * /api/user/security/password:
+ *   patch:
+ *     tags: [User Settings]
+ *     summary: Change user password
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [oldPassword, newPassword]
+ *             properties:
+ *               oldPassword: { type: string, format: password, example: "oldSecret123" }
+ *               newPassword: { type: string, format: password, example: "newSecret456" }
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: "Password changed successfully" }
+ *       400:
+ *         description: Validation error (e.g. same password)
+ *         content:
+ *           application/json:
+ *             schema: { type: object, properties: { message: { type: string, example: "New password cannot be the same as the old password" } } }
+ *       401:
+ *         description: Incorrect old password
+ *         content:
+ *           application/json:
+ *             schema: { type: object, properties: { message: { type: string, example: "Incorrect password" } } }
+ */
+router.patch('/security/password', authenticateToken, userController.changePassword);
+
+/**
+ * @swagger
+ * /api/user/devices/muted:
+ *   get:
+ *     tags: [User Settings]
+ *     summary: Get list of muted devices
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of muted device IDs
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 mutedDevices: { type: array, items: { type: string } }
+ */
+router.get('/devices/muted', authenticateToken, userController.getMutedDevices);
+
+/**
+ * @swagger
+ * /api/user/devices/{deviceId}/mute:
+ *   post:
+ *     tags: [User Settings]
+ *     summary: Mute a specific device
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: deviceId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Device muted successfully }
+ */
+router.post('/devices/:deviceId/mute', authenticateToken, userController.muteDevice);
+
+/**
+ * @swagger
+ * /api/user/devices/{deviceId}/unmute:
+ *   post:
+ *     tags: [User Settings]
+ *     summary: Unmute a specific device
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: deviceId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Device unmuted successfully }
+ */
+router.post('/devices/:deviceId/unmute', authenticateToken, userController.unmuteDevice);
 
 module.exports = router;

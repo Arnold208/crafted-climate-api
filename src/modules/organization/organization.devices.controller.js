@@ -192,6 +192,76 @@ class OrganizationDevicesController {
             res.status(500).json({ error: err.message });
         }
     }
+    // Transfer Device to Another Organization
+    async transferDevice(req, res) {
+        try {
+            const { orgId, auid } = req.params;
+            const { targetOrgId } = req.body;
+            const userId = req.user.userid;
+
+            if (!targetOrgId) return res.status(400).json({ message: 'Target organization ID is required' });
+
+            // 1. Validate Source Org (Middleware checkOrgAccess 'org.devices.edit' handles permission)
+            // But we must ensure device is actually in source org
+            const device = await RegisteredDevice.findOne({
+                auid,
+                organization: orgId,
+                deletedAt: null
+            });
+            if (!device) return res.status(404).json({ message: 'Device not found in source organization' });
+
+            // 2. Validate Target Org Existence & Membership
+            const targetOrg = await Organization.findOne({ organizationId: targetOrgId, deletedAt: null });
+            if (!targetOrg) return res.status(404).json({ message: 'Target organization not found' });
+
+            const targetMember = targetOrg.collaborators.find(c => c.userid === userId);
+            if (!targetMember) {
+                return res.status(403).json({ message: 'You must be a member of the target organization to transfer a device there.' });
+            }
+
+            // 3. Perform Transfer
+
+            // A. Update Device Record
+            device.organization = targetOrgId;
+            device.organizationId = targetOrgId; // New field
+            device.deployment = null; // Reset deployment
+            device.deploymentId = null; // Reset deployment
+
+            // Reset collaborators: Transferer becomes sole device-admin to ensure safety
+            device.collaborators = [{
+                userid: userId,
+                role: 'device-admin',
+                permissions: [],
+                addedAt: new Date()
+            }];
+
+            await device.save();
+
+            // B. Update Source Org (Pull)
+            await Organization.updateOne(
+                { organizationId: orgId },
+                { $pull: { devices: auid } }
+            );
+
+            // C. Update Target Org (Push)
+            await Organization.updateOne(
+                { organizationId: targetOrgId },
+                { $addToSet: { devices: auid } }
+            );
+
+            res.status(200).json({
+                message: 'Device transferred successfully',
+                device: {
+                    auid: device.auid,
+                    organizationId: targetOrgId
+                }
+            });
+
+        } catch (err) {
+            console.error("Transfer Error:", err);
+            res.status(500).json({ error: err.message });
+        }
+    }
 }
 
 module.exports = new OrganizationDevicesController();
