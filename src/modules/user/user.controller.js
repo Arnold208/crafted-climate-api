@@ -80,7 +80,10 @@ class UserController {
     async getProfile(req, res) {
         try {
             const user = await userService.getUserById(req.user.userid);
-            res.status(200).json(user);
+            res.status(200).json({
+                message: 'User profile retrieved successfully',
+                user
+            });
         } catch (error) {
             res.status(500).json({ message: error.message });
         }

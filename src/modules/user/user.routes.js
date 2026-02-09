@@ -246,7 +246,7 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  * @swagger
  * /api/user/profile:
  *   get:
- *     tags: [Authentication]
+ *     tags: [User Settings]
  *     summary: Get user profile
  *     security:
  *       - bearerAuth: []
@@ -256,10 +256,14 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/User'
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: "User profile retrieved successfully" }
+ *                 user: { $ref: '#/components/schemas/User' }
  *       401:
  *         description: Unauthorized
  */
+router.get('/profile', authenticateToken, userController.getProfile);
 /**
  * @swagger
  * /api/user/profile:
