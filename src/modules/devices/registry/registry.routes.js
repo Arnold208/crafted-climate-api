@@ -340,6 +340,52 @@ router.delete('/:userid/device/:auid/collaborators',
 
 /**
  * @swagger
+ * /api/devices/{userid}/device/{auid}/collaborators:
+ *   get:
+ *     tags: [Device Registry]
+ *     summary: List all collaborators of a device
+ *     security:
+ *       - bearerAuth: []
+ *       - organizationId: []
+ *     parameters:
+ *       - in: path
+ *         name: userid
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: List of collaborators with user details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   userid: { type: string }
+ *                   role: { type: string }
+ *                   permissions: { type: array, items: { type: string } }
+ *                   addedAt: { type: string, format: date-time }
+ *                   user:
+ *                     type: object
+ *                     properties:
+ *                       firstName: { type: string }
+ *                       lastName: { type: string }
+ *                       username: { type: string }
+ *                       email: { type: string }
+ *                       profilePicture: { type: string }
+ */
+router.get('/:userid/device/:auid/collaborators',
+    authenticateToken,
+    registryController.listCollaborators
+);
+
+/**
+ * @swagger
  * /api/devices/{userid}/device/{auid}/collaborators/permissions:
  *   post:
  *     tags: [Device Registry]

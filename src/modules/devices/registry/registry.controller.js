@@ -206,6 +206,23 @@ class RegistryController {
         }
     }
 
+    async listCollaborators(req, res) {
+        try {
+            const { auid } = req.params;
+            const device = await registryService.getDeviceByAuid(auid);
+            if (!device) return res.status(404).json({ message: 'Device not found' });
+
+            if (!await checkDeviceAccessCompatibility(req, device, 'view')) {
+                return res.status(403).json({ message: 'Forbidden' });
+            }
+
+            const collaborators = await registryService.getCollaborators(auid);
+            res.json(collaborators);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    }
+
     async getCollaboratorPermissions(req, res) {
         try {
             const { auid } = req.params;

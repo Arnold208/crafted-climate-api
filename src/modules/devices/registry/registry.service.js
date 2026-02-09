@@ -305,6 +305,35 @@ class RegistryService {
         return device.collaborators;
     }
 
+    async getCollaborators(auid) {
+        const device = await registerNewDevice.findOne({ auid });
+        if (!device) throw new Error('Device not found');
+
+        const collaboratorIds = device.collaborators.map(c => c.userid);
+        const users = await User.find({ userid: { $in: collaboratorIds } }, 'userid firstName lastName username email profilePicture status lastActive');
+
+        const hydratedCollaborators = device.collaborators.map(collab => {
+            const user = users.find(u => u.userid === collab.userid);
+            return {
+                userid: collab.userid,
+                role: collab.role,
+                permissions: collab.permissions,
+                addedAt: collab.addedAt,
+                user: user ? {
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    username: user.username,
+                    email: user.email,
+                    profilePicture: user.profilePicture,
+                    status: user.status,
+                    lastActive: user.lastActive
+                } : null
+            };
+        });
+
+        return hydratedCollaborators;
+    }
+
     async getCollaboratorPermissions(req, auid, email) {
         const device = await registerNewDevice.findOne({ auid });
         if (!device) throw new Error('Device not found');
