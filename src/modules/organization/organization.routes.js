@@ -222,7 +222,7 @@ router.post('/:orgId/add-user',
  *         application/json:
  *           schema:
  *             type: object
- *             required: [userid, newRole]
+ *             required: [email, newRole]
  *             properties:
  *               userid: { type: string }
  *               newRole: { type: string, enum: ['org-admin', 'org-support', 'org-user'] }
@@ -243,9 +243,81 @@ router.patch('/:orgId/update-user-role',
 
 /**
  * @swagger
+ * /api/org/{orgId}/members:
+ *   get:
+ *     summary: List all organization members
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: List of members with user details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   userid: { type: string }
+ *                   role: { type: string }
+ *                   user:
+ *                     type: object
+ *                     properties:
+ *                       firstName: { type: string }
+ *                       lastName: { type: string }
+ *                       username: { type: string }
+ *                       email: { type: string }
+ *                       profilePicture: { type: string }
+ */
+router.get('/:orgId/members',
+    authenticateToken,
+    checkOrgAccess("org.users.view"), // Assuming this permission exists or reuse org.read
+    organizationController.getMembers
+);
+
+/**
+ * @swagger
+ * /api/org/{orgId}/remove-user:
+ *   post:
+ *     summary: Remove a member from the organization (using Email)
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email: { type: string, format: email }
+ *     responses:
+ *       200:
+ *         description: User removed successfully
+ */
+router.post('/:orgId/remove-user',
+    authenticateToken,
+    checkOrgAccess("org.users.remove"),
+    organizationController.removeCollaborator
+);
+
+/**
+ * @swagger
  * /api/org/{orgId}/remove-user/{userid}:
  *   delete:
- *     summary: Remove a member from the organization
+ *     summary: Remove a member from the organization (Legacy)
  *     tags: [Organizations (Platform User)]
  *     security:
  *       - bearerAuth: []

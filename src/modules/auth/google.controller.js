@@ -41,6 +41,7 @@ exports.googleCallback = (req, res) => {
             currentOrganizationId: user.currentOrganizationId,
             personalOrganizationId: user.personalOrganizationId,
             subscriptionId: user.subscription,
+            profilePicture: user.profilePicture,
             // subscriptionTier: "..." // omitted to avoid extra DB query here, frontend usually fetches profile
         };
 

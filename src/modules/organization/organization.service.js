@@ -147,17 +147,36 @@ class OrganizationService {
         return { message: "User added", userid: user.userid, organization: org };
     }
 
-    async removeCollaborator(orgId, userid) {
+    async removeCollaborator(orgId, identifier) {
+        // identifier can be { userid } or { email }
         const org = await Organization.findOne({ organizationId: orgId, deletedAt: null });
         if (!org) throw new Error("Organization not found");
 
+        let useridToRemove = identifier.userid;
+
+        if (!useridToRemove && identifier.email) {
+            const user = await User.findOne({ email: identifier.email });
+            // If user not found by email, check if they are in the org "pending" or just fail?
+            // Assuming we only remove existing users.
+            if (!user) throw new Error("User with this email not found");
+            useridToRemove = user.userid;
+        }
+
+        if (!useridToRemove) throw new Error("User ID or Email required to remove collaborator");
+
         // Remove from Org
-        org.collaborators = org.collaborators.filter(c => c.userid !== userid);
+        const initialLength = org.collaborators.length;
+        org.collaborators = org.collaborators.filter(c => c.userid !== useridToRemove);
+
+        if (org.collaborators.length === initialLength) {
+            throw new Error("User is not a member of this organization");
+        }
+
         await org.save();
 
         // Remove from User
         await User.updateOne(
-            { userid },
+            { userid: useridToRemove },
             { $pull: { organization: orgId } }
         );
 
@@ -168,10 +187,10 @@ class OrganizationService {
         if (deploymentIds.length > 0) {
             await Deployment.updateMany(
                 { organizationId: orgId },
-                { $pull: { collaborators: { userid } } }
+                { $pull: { collaborators: { userid: useridToRemove } } }
             );
             await User.updateOne(
-                { userid },
+                { userid: useridToRemove },
                 { $pullAll: { deployments: deploymentIds } }
             );
         }
@@ -179,49 +198,89 @@ class OrganizationService {
         // Integrity Cleanup: Devices
         await RegisteredDevice.updateMany(
             { organizationId: orgId },
-            { $pull: { collaborators: { userid } } }
+            { $pull: { collaborators: { userid: useridToRemove } } }
         );
 
         // INVALIDATION
         await CacheService.invalidate(`org:${orgId}:meta`);
-        await CacheService.invalidate(`user:${userid}:orgs`);
+        await CacheService.invalidate(`user:${useridToRemove}:orgs`);
 
         // AUDIT LOG
         await createAuditLog({
             action: 'ORG_REMOVE_COLLABORATOR',
-            userid: userid, // The removed user
+            userid: useridToRemove, // The removed user
             organizationId: orgId,
-            details: { removedUserId: userid },
+            details: { removedUserId: useridToRemove, removedUserEmail: identifier.email },
             ipAddress: null
         });
 
         return { message: "User removed and cleaned up" };
     }
 
-    async updateCollaboratorRole(orgId, userid, newRole) {
+    async updateCollaboratorRole(orgId, identifier, newRole) {
+        // identifier: { userid } or { email }
         const org = await Organization.findOne({ organizationId: orgId, deletedAt: null });
         if (!org) throw new Error("Organization not found");
 
-        const member = org.collaborators.find(c => c.userid === userid);
+        let useridToUpdate = identifier.userid;
+
+        if (!useridToUpdate && identifier.email) {
+            const user = await User.findOne({ email: identifier.email });
+            if (!user) throw new Error("User not found");
+            useridToUpdate = user.userid;
+        }
+
+        if (!useridToUpdate) throw new Error("User ID or Email required");
+
+        const member = org.collaborators.find(c => c.userid === useridToUpdate);
         if (!member) throw new Error("User not in organization");
 
-        member.role = newRole;
         member.role = newRole;
         await org.save();
 
         // INVALIDATION
         await CacheService.invalidate(`org:${orgId}:meta`);
+        await CacheService.invalidate(`user:${useridToUpdate}:orgs`);
 
         // AUDIT LOG
         await createAuditLog({
             action: 'ORG_UPDATE_MEMBER_ROLE',
-            userid: userid,
+            userid: useridToUpdate,
             organizationId: orgId,
-            details: { newRole },
+            details: { newRole, email: identifier.email },
             ipAddress: null
         });
 
         return { message: "Role updated" };
+    }
+
+    async getOrganizationMembers(orgId) {
+        const org = await Organization.findOne({ organizationId: orgId, deletedAt: null });
+        if (!org) throw new Error("Organization not found");
+
+        const memberIds = org.collaborators.map(c => c.userid);
+        const users = await User.find({ userid: { $in: memberIds } }, 'userid firstName lastName username email profilePicture status lastActive');
+
+        const members = org.collaborators.map(collab => {
+            const user = users.find(u => u.userid === collab.userid);
+            return {
+                userid: collab.userid,
+                role: collab.role,
+                joinedAt: collab.joinedAt,
+                permissions: collab.permissions,
+                user: user ? {
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    username: user.username,
+                    email: user.email,
+                    profilePicture: user.profilePicture,
+                    status: user.status,
+                    lastActive: user.lastActive
+                } : null
+            };
+        });
+
+        return members;
     }
 
     async getUserOrganizations(userid) {

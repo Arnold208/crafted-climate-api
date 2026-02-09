@@ -297,6 +297,7 @@ class UserService {
                 userid: user.userid,
                 email: user.email,
                 username: user.username,
+                profilePicture: user.profilePicture,
                 platformRole: user.role,
                 organizations: user.organization,
                 currentOrganizationId: user.currentOrganizationId || null,

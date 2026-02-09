@@ -53,11 +53,23 @@ class OrganizationController {
 
     async removeCollaborator(req, res) {
         try {
-            const { orgId, userid } = req.params;
-            const result = await organizationService.removeCollaborator(orgId, userid);
+            const { orgId } = req.params;
+            const { userid, email } = req.body; // Accept email from body
+            // Legacy path param support? 
+            // If body is empty but param exists (for DELETE /:userid)
+            const paramUserId = req.params.userid;
+
+            const identifier = {};
+            if (userid) identifier.userid = userid;
+            else if (email) identifier.email = email;
+            else if (paramUserId) identifier.userid = paramUserId;
+            else return res.status(400).json({ message: "User ID or Email is required" });
+
+            const result = await organizationService.removeCollaborator(orgId, identifier);
             return res.status(200).json(result);
         } catch (error) {
             if (error.message.includes("not found")) return res.status(404).json({ message: error.message });
+            if (error.message.includes("not a member")) return res.status(404).json({ message: error.message });
             return res.status(500).json({ message: error.message });
         }
     }
@@ -65,13 +77,29 @@ class OrganizationController {
     async updateCollaboratorRole(req, res) {
         try {
             const { orgId } = req.params;
-            const { userid, newRole } = req.body; // Check inconsistent usage: body vs payload. Route def uses body.
-            // Note: Route previously used 'role' or 'newRole'. Standardize to 'role' or 'newRole'.
-            // Swagger used 'newRole'. 
-            const roleToUpdate = newRole || req.body.role;
+            const { userid, email, newRole, role } = req.body;
 
-            const result = await organizationService.updateCollaboratorRole(orgId, userid, roleToUpdate);
+            const roleToUpdate = newRole || role;
+            if (!roleToUpdate) return res.status(400).json({ message: "New role is required" });
+
+            const identifier = {};
+            if (userid) identifier.userid = userid;
+            else if (email) identifier.email = email;
+            else return res.status(400).json({ message: "User ID or Email is required" });
+
+            const result = await organizationService.updateCollaboratorRole(orgId, identifier, roleToUpdate);
             return res.status(200).json(result);
+        } catch (error) {
+            if (error.message.includes("not found")) return res.status(404).json({ message: error.message });
+            return res.status(500).json({ message: error.message });
+        }
+    }
+
+    async getMembers(req, res) {
+        try {
+            const { orgId } = req.params;
+            const members = await organizationService.getOrganizationMembers(orgId);
+            return res.status(200).json(members);
         } catch (error) {
             if (error.message.includes("not found")) return res.status(404).json({ message: error.message });
             return res.status(500).json({ message: error.message });
