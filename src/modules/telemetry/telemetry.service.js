@@ -217,15 +217,38 @@ class TelemetryService {
         if (minModel) query.model = minModel.toLowerCase();
 
         const skip = (Math.max(1, page) - 1) * limit;
-        const devices = await registerNewDevice.find(query, { auid: 1 }).skip(skip).limit(limit).lean();
+        const devices = await registerNewDevice.find(query).skip(skip).limit(limit).lean();
 
         const result = await Promise.all(
-            devices.map(async ({ auid }) => {
+            devices.map(async (device) => {
                 try {
-                    const all = await redisClient.hGetAll(auid);
+                    const all = await redisClient.hGetAll(device.auid);
                     if (!all || Object.keys(all).length === 0) return null;
 
-                    const metadata = all.metadata ? JSON.parse(all.metadata) : null;
+                    let metadata = all.metadata ? JSON.parse(all.metadata) : null;
+
+                    // Ensure image is included in metadata
+                    if (metadata && !metadata.image && device.image) {
+                        metadata.image = device.image;
+                    } else if (!metadata) {
+                        // If no metadata in Redis, construct from device record
+                        metadata = {
+                            auid: device.auid,
+                            nickname: device.nickname,
+                            availability: device.availability,
+                            status: device.status,
+                            battery: device.battery,
+                            location: device.location,
+                            model: device.model,
+                            type: device.type,
+                            serial: device.serial,
+                            mac: device.mac,
+                            image: device.image,
+                            collaborators: device.collaborators,
+                            statusUpdatedAt: device.statusUpdatedAt
+                        };
+                    }
+
                     const entries = [];
                     for (const [field, value] of Object.entries(all)) {
                         if (field === 'metadata' || field === 'flushed') continue;

@@ -28,20 +28,24 @@ const checkFeatureAccess = require('../../../middleware/subscriptions/checkFeatu
  * @swagger
  * /api/devices/public-map:
  *   get:
- *     tags: [Public]
- *     summary: Get all public devices for map display (Rate Limited: 100 req/15min)
+ *     tags:
+ *       - Public
+ *     summary: Get all public devices for map display (Rate Limited - 100 req/15min)
  *     parameters:
  *       - in: query
  *         name: model
- *         schema: { type: string }
+ *         schema:
+ *           type: string
  *         description: Filter by sensor model
  *       - in: query
  *         name: status
- *         schema: { type: string }
+ *         schema:
+ *           type: string
  *         description: Filter by status (online/offline)
  *       - in: query
  *         name: online
- *         schema: { type: string }
+ *         schema:
+ *           type: string
  *         description: Filter by online status (true/false)
  *     responses:
  *       200:
@@ -56,20 +60,31 @@ const checkFeatureAccess = require('../../../middleware/subscriptions/checkFeatu
  *                   metadata:
  *                     type: object
  *                     properties:
- *                       auid: { type: string }
- *                       nickname: { type: string }
- *                       model: { type: string }
- *                       type: { type: string }
- *                       status: { type: string }
- *                       image: { type: string }
- *                       battery: { type: number }
- *                       lastSeen: { type: string }
+ *                       auid:
+ *                         type: string
+ *                       nickname:
+ *                         type: string
+ *                       model:
+ *                         type: string
+ *                       type:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                       image:
+ *                         type: string
+ *                       battery:
+ *                         type: number
+ *                       lastSeen:
+ *                         type: string
  *                   location:
  *                     type: object
  *                     properties:
- *                       latitude: { type: number }
- *                       longitude: { type: number }
- *                   telemetry: { type: object }
+ *                       latitude:
+ *                         type: number
+ *                       longitude:
+ *                         type: number
+ *                   telemetry:
+ *                     type: object
  *       429:
  *         description: Too many requests
  */
@@ -79,7 +94,8 @@ router.get('/public-map', publicMapLimiter, registryController.getPublicDevices)
  * @swagger
  * /api/devices/public-map/models:
  *   get:
- *     tags: [Public]
+ *     tags:
+ *       - Public
  *     summary: Get list of available sensor models in public devices
  *     responses:
  *       200:
