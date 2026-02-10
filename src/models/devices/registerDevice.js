@@ -80,7 +80,7 @@ const registerNewDeviceSchema = new mongoose.Schema({
 
         role: {
           type: String,
-          enum: ["device-admin", "device-support", "device-user"],
+          enum: ["device-admin", "device-support", "device-user", "viewer", "editor", "admin", "support", "user"],
           default: "device-user"
         },
 

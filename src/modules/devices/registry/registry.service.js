@@ -516,7 +516,7 @@ class RegistryService {
         if (device.deploymentId) {
             await Deployment.updateOne(
                 { deploymentid: device.deploymentId },
-                { $pull: { devices: device.devid } } // Note: deployment uses devid usually
+                { $pull: { devices: auid } }
             );
         }
 

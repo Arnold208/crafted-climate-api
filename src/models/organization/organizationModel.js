@@ -262,7 +262,7 @@ const organizationSchema = new mongoose.Schema(
 
           role: {
             type: String,
-            enum: ["org-admin", "org-support", "org-user"],
+            enum: ["org-admin", "org-support", "org-user", "viewer", "editor", "admin", "support", "user"],
             default: "org-user"
           },
 

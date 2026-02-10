@@ -68,6 +68,7 @@ class DeploymentService {
         if (!deployment) throw new Error('Deployment not found');
 
         // Unassign devices
+        const deviceIds = deployment.devices; // Store before clearing
         await RegisteredDevice.updateMany(
             { deployment: deploymentId },
             { $set: { deployment: null, deploymentId: null } }
@@ -75,6 +76,12 @@ class DeploymentService {
 
         deployment.deletedAt = new Date();
         await deployment.save();
+
+        // CACHE INVALIDATION
+        const CacheService = require('../../../modules/common/cache.service');
+        for (const auid of deviceIds) {
+            await CacheService.invalidate(`device:${auid}:meta`);
+        }
 
         return { message: "Deployment deleted successfully" };
     }
@@ -107,6 +114,13 @@ class DeploymentService {
                 console.warn(`[Deployment] Failed to sync collaborator to device ${auid}:`, err.message);
             }
         }
+
+        // CACHE INVALIDATION
+        const CacheService = require('../../../modules/common/cache.service');
+        for (const auid of deployment.devices) {
+            await CacheService.invalidate(`device:${auid}:meta`);
+        }
+
         return deployment.collaborators;
     }
 
@@ -129,6 +143,13 @@ class DeploymentService {
                 console.warn(`[Deployment] Failed to remove collaborator from device ${auid}:`, err.message);
             }
         }
+
+        // CACHE INVALIDATION
+        const CacheService = require('../../../modules/common/cache.service');
+        for (const auid of deployment.devices) {
+            await CacheService.invalidate(`device:${auid}:meta`);
+        }
+
         return deployment.collaborators;
     }
 
@@ -168,6 +189,10 @@ class DeploymentService {
             }
         }
 
+        // CACHE INVALIDATION
+        const CacheService = require('../../../modules/common/cache.service');
+        await CacheService.invalidate(`device:${auid}:meta`);
+
         return { message: 'Device added successfully to deployment' };
     }
 
@@ -187,34 +212,12 @@ class DeploymentService {
         deployment.devices = deployment.devices.filter(id => id !== auid);
         await deployment.save();
 
-        // Device remains in organization, so we strictly do NOT remove from org
-        // Sync logic in original code removed from org.devices which might be wrong if devices belong to org? 
-        // Original code: { $pull: { devices: auid } }
-        // Wait, if I remove it from org.devices, the device is orphaned from Org? 
-        // Original code comment: // (Device remains in org.devices even though it's removed from deployment)
-        // BUT the code did: { $pull: { devices: auid } }. This looks like a BUG in original code or INTENTIONAL?
-        // Re-reading original Code: 
-        //   // 🔗 REFERENTIAL INTEGRITY: Ensure organization devices array is still synced
-        //   // (Device remains in org.devices even though it's removed from deployment)
-        //   await Organization.findOneAndUpdate(..., { $pull: { devices: auid } } ...)
-        // That comment says "remains" but code does "$pull". 
-        // However, `addDeviceToDeployment` adds to org.devices via `$addToSet`. 
-        // `registerDevice` also adds to org.devices.
-        // If I pull it here, I am removing it from the Org entirely? That seems wrong for just removing from deployment.
-        // But I must follow the original logic unless obviously broken. 
-        // Actually, looking closely, `addDeviceToDeployment` DOES add to org.devices. 
-        // If `registerDevice` adds it, then `add` is redundant (safe via addToSet). 
-        // If `remove` pulls it, then we lose the record that device is in Org.
-        // CHECK: `registerDevice` (in userdevice.js/registry.service.js) adds to Org. 
-        // So hitting `removeDeviceFromDeployment` causing removal from Org seems like a SIDE EFFECT.
-        // Refactoring guideline: "leaving no part of the original codebase untouched or broken."
-        // If I fix it, I might break expected behavior. 
-        // Let's stick to the code:
-        await Organization.findOneAndUpdate(
-            { organizationId },
-            { $pull: { devices: auid } },
-            { new: true }
-        );
+        // FIX: Device remains in organization, so we strictly do NOT remove from org
+        // Removed the Organization.findOneAndUpdate pull logic.
+
+        // CACHE INVALIDATION
+        const CacheService = require('../../../modules/common/cache.service');
+        await CacheService.invalidate(`device:${auid}:meta`);
 
         return { message: 'Device removed successfully from deployment' };
     }

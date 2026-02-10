@@ -55,7 +55,7 @@ const deploymentSchema = new mongoose.Schema({
         userid: String, // keep old naming
         role: {
           type: String,
-          enum: ["deployment-admin", "deployment-support", "deployment-user"],
+          enum: ["deployment-admin", "deployment-support", "deployment-user", "viewer", "editor", "admin", "support", "user"],
           default: "deployment-user"
         },
         addedAt: { type: Date, default: Date.now }
