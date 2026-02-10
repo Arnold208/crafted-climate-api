@@ -1,9 +1,20 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const registryController = require('./registry.controller');
 
 const authenticateToken = require('../../../middleware/bearermiddleware');
+const checkDeviceAccessCompatibility = require('../../../middleware/devices/checkDeviceAccessCompatibility');
 const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess');
+
+// Rate limiter for public endpoints
+const publicMapLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // 100 requests per window
+    message: { error: 'Too many requests from this IP, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
 const checkFeatureAccess = require('../../../middleware/subscriptions/checkFeatureAccess');
 
 /**
@@ -17,30 +28,24 @@ const checkFeatureAccess = require('../../../middleware/subscriptions/checkFeatu
  * @swagger
  * /api/devices/public-map:
  *   get:
- *     tags: [Devices, Device Registry]
- *     summary: Get Public Sensors for Map
- *     description: Retrieve all devices marked as public, including metadata and latest telemetry.
+ *     tags: [Public]
+ *     summary: Get all public devices for map display (Rate Limited: 100 req/15min)
  *     parameters:
  *       - in: query
  *         name: model
- *         schema:
- *           type: string
- *           enum: [env, aqua, gas-solo]
+ *         schema: { type: string }
  *         description: Filter by sensor model
  *       - in: query
  *         name: status
- *         schema:
- *           type: string
- *           enum: [online, offline, all]
- *         description: Filter by connection status
+ *         schema: { type: string }
+ *         description: Filter by status (online/offline)
  *       - in: query
  *         name: online
- *         schema:
- *           type: boolean
- *         description: Alias for status=online (true) or status=offline (false)
+ *         schema: { type: string }
+ *         description: Filter by online status (true/false)
  *     responses:
  *       200:
- *         description: List of public devices
+ *         description: List of public devices with metadata, location, and telemetry
  *         content:
  *           application/json:
  *             schema:
@@ -48,16 +53,48 @@ const checkFeatureAccess = require('../../../middleware/subscriptions/checkFeatu
  *               items:
  *                 type: object
  *                 properties:
- *                   auid: { type: string }
- *                   nickname: { type: string }
- *                   location: { type: object }
- *                   image: { type: string }
- *                   model: { type: string }
- *                   status: { type: string }
- *                   lastSeen: { type: number }
+ *                   metadata:
+ *                     type: object
+ *                     properties:
+ *                       auid: { type: string }
+ *                       nickname: { type: string }
+ *                       model: { type: string }
+ *                       type: { type: string }
+ *                       status: { type: string }
+ *                       image: { type: string }
+ *                       battery: { type: number }
+ *                       lastSeen: { type: string }
+ *                   location:
+ *                     type: object
+ *                     properties:
+ *                       latitude: { type: number }
+ *                       longitude: { type: number }
  *                   telemetry: { type: object }
+ *       429:
+ *         description: Too many requests
  */
-router.get('/public-map', registryController.getPublicDevices);
+router.get('/public-map', publicMapLimiter, registryController.getPublicDevices);
+
+/**
+ * @swagger
+ * /api/devices/public-map/models:
+ *   get:
+ *     tags: [Public]
+ *     summary: Get list of available sensor models in public devices
+ *     responses:
+ *       200:
+ *         description: List of sensor models
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 models:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ */
+router.get('/public-map/models', publicMapLimiter, registryController.getPublicSensorModels);
 
 /**
  * @swagger

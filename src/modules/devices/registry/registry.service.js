@@ -441,16 +441,19 @@ class RegistryService {
                     }
                 }
 
-                // Construct Public Response Object
+                // Construct Public Response Object (Enhanced for Map Display)
                 return {
-                    auid: device.auid,
-                    devid: device.devid,
-                    nickname: device.nickname,
+                    metadata: {
+                        auid: device.auid,
+                        nickname: device.nickname,
+                        model: device.model,
+                        type: device.type,
+                        status: device.status, // online/offline from device registry
+                        image: device.image,
+                        battery: device.battery || 0,
+                        lastSeen: latestTelemetry?.transport_time || latestTelemetry?.timestamp || null
+                    },
                     location: device.location ? JSON.parse(device.location) : null,
-                    image: device.image,
-                    model: device.model,
-                    status: device.status, // online/offline from device registry (managed by heartbeat)
-                    lastSeen: latestTelemetry?.transport_time || latestTelemetry?.timestamp || null,
                     telemetry: latestTelemetry
                 };
             } catch (err) {
@@ -460,6 +463,15 @@ class RegistryService {
         }));
 
         return results.filter(Boolean);
+    }
+
+    /**
+     * Get Public Sensor Models
+     * Returns: List of distinct sensor models available in public devices
+     */
+    async getPublicSensorModels() {
+        const models = await registerNewDevice.distinct('model', { availability: 'public' });
+        return models.filter(Boolean).sort();
     }
 
 

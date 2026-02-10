@@ -261,9 +261,32 @@ class RegistryController {
         try {
             const { model, status, online } = req.query;
             const devices = await registryService.getPublicDevices({ model, status, online });
+
+            // Audit Log
+            const createAuditLog = require('../../utils/auditLogger');
+            await createAuditLog({
+                action: 'PUBLIC_MAP_ACCESS',
+                userid: null, // Public endpoint
+                details: {
+                    filters: { model, status, online },
+                    resultCount: devices.length
+                },
+                ipAddress: req.ip || req.connection.remoteAddress
+            });
+
             res.status(200).json(devices);
         } catch (error) {
             console.error("Public map error:", error);
+            res.status(500).json({ error: error.message });
+        }
+    }
+
+    async getPublicSensorModels(req, res) {
+        try {
+            const models = await registryService.getPublicSensorModels();
+            res.status(200).json({ models });
+        } catch (error) {
+            console.error("Public sensor models error:", error);
             res.status(500).json({ error: error.message });
         }
     }
