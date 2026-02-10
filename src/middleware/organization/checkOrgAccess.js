@@ -36,8 +36,10 @@ module.exports = function checkOrgAccess(requiredPermission) {
             } else {
                 // 3. Load the organization (Fallback)
                 // Note: ideally we should use verifyOrgMembership upstream everywhere
+                console.log(`[DEBUG OrgAccess] Resolving Org: ${orgId} for User: ${user.userid}`);
                 const organization = await Organization.findOne({ organizationId: orgId, deletedAt: null });
                 if (!organization) {
+                    console.warn(`[DEBUG OrgAccess] Org ${orgId} not found`);
                     return res.status(404).json({ message: "Organization not found" });
                 }
 
@@ -75,6 +77,7 @@ module.exports = function checkOrgAccess(requiredPermission) {
             }
 
             // 7. Authorized
+            console.log(`[DEBUG OrgAccess] Authorized. Role: ${userOrgRole} for Permission: ${requiredPermission}`);
             req.currentOrgRole = userOrgRole; // Fix: Pass role to downstream middleware
             return next();
 

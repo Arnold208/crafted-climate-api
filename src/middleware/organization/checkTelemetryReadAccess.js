@@ -13,8 +13,23 @@ module.exports = async function checkTelemetryReadAccess(req, res, next) {
       return res.status(404).json({ message: "Device not found" });
     }
 
+    // 0 — COLLABORATOR OVERRIDE (Explicit Device Access)
+    // If user is a direct collaborator on this device, allow access regardless of Organization context.
+    const collaborator = device.collaborators.find(c => c.userid === user.userid);
+    if (collaborator) {
+      // req.deviceCollaborator = collaborator; // Optional: Attach for downstream use
+      req.device = device;
+      return next();
+    }
+
+    // console.log(`[DEBUG TelemetryAccess] User: ${user.userid}, Org: ${orgId}, DeviceOrg: ${device.organizationId || device.organization}`);
+    // console.log(`[DEBUG TelemetryAccess] OrgRole: ${req.currentOrgRole}`);
+
     // 2 — Tenant isolation
-    if (device.organization !== orgId) {
+    // Support both new organizationId and old organization field
+    const deviceOrgId = device.organizationId || device.organization;
+    if (deviceOrgId !== orgId) {
+      console.warn(`[DEBUG TelemetryAccess] Tenant Mismatch! DeviceOrg: ${deviceOrgId} !== RequestOrg: ${orgId}`);
       return res.status(403).json({
         message: "Forbidden: Device belongs to another organization"
       });
