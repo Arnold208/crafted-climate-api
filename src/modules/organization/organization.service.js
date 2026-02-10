@@ -284,17 +284,14 @@ class OrganizationService {
     }
 
     async getUserOrganizations(userid) {
-        // OPTIMIZATION: Cache User's Org List (1h)
-        // Invalidation: add/remove collaborator
-        return await CacheService.getOrSet(`user:${userid}:orgs`, async () => {
-            const user = await User.findOne({ userid });
-            if (!user) throw new Error("User not found");
+        // DIRECT FETCH (Cache disabled for debugging)
+        const user = await User.findOne({ userid });
+        if (!user) throw new Error("User not found");
 
-            return await Organization.find({
-                organizationId: { $in: user.organization },
-                deletedAt: null
-            });
-        }, 3600);
+        return await Organization.find({
+            organizationId: { $in: user.organization },
+            deletedAt: null
+        });
     }
 
     async getOrganizationInfo(orgId) {
@@ -361,15 +358,8 @@ class OrganizationService {
 
         await org.save();
 
-        // Remove from all users' lists (Optional, or keep for history?)
-        // Usually we keep the link but filter by deletedAt in queries.
-        // But for 'switchOrganization' safety, we might want to remove strict dependency.
-        // For now, let's keep the link so they can see "Deleted Org" in history if we ever build that. 
-        // But invalidating cache is crucial.
-
-        await CacheService.invalidate(`org:${orgId}:meta`);
-        // We can't easily invalidate ALL users' org lists without scanning. 
-        // But individually they will refresh on next fetch.
+        // Invalidate Cache for all members
+        await this.invalidateOrgCache(orgId);
 
         await createAuditLog({
             action: 'ORG_DISSOLVE',
@@ -389,6 +379,7 @@ class OrganizationService {
      */
     async invalidateOrgCache(orgId) {
         try {
+            console.log(`[OrganizationService] Invalidating cache for Org: ${orgId}`);
             // 1. Invalidate Org Metadata
             await CacheService.invalidate(`org:${orgId}:meta`);
 
@@ -397,9 +388,12 @@ class OrganizationService {
             // We shouldn't throw here if org is missing, just skip.
             const org = await Organization.findOne({ organizationId: orgId });
             if (org && org.collaborators) {
-                const invalidationPromises = org.collaborators.map(c =>
-                    CacheService.invalidate(`user:${c.userid}:orgs`)
-                );
+                console.log(`[OrganizationService] Found ${org.collaborators.length} collaborators to invalidate.`);
+                const invalidationPromises = org.collaborators.map(c => {
+                    const key = `user:${c.userid}:orgs`;
+                    console.log(`[OrganizationService] Invalidating user list cache: ${key}`);
+                    return CacheService.invalidate(key);
+                });
                 await Promise.all(invalidationPromises);
                 // console.log(`[Cache] Invalidated ${invalidationPromises.length} user lists for org ${orgId}`);
             }

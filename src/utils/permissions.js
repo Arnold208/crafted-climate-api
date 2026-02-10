@@ -46,6 +46,7 @@ const ORG_PERMISSIONS = {
     "org.devices.edit",
     "org.devices.remove",
     "org.telemetry.read",
+    "org.telemetry.export", // Explicit export permission
 
     /* Thresholds */
     "org.thresholds.create",

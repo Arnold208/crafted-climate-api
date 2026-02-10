@@ -192,8 +192,10 @@ class TelemetryController {
         try {
             const { model, auid } = req.params;
             const { start, end } = req.query;
+            const userid = req.user.userid;
+            const organizationId = req.currentOrgId;
 
-            const data = await telemetryService.getGraphData(auid, model, start, end);
+            const data = await telemetryService.getGraphData(auid, model, start, end, userid, organizationId);
             res.json(data);
         } catch (error) {
             console.error('[TelemetryController] Graph Data Error:', error);

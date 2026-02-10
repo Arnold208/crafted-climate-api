@@ -303,7 +303,7 @@ router.get('/db/:model/:auid',
  */
 router.get('/db/:model/:auid/csv',
     authenticateToken,
-    checkOrgAccess("org.devices.view"),
+    checkOrgAccess("org.telemetry.export"),
     checkTelemetryReadAccess,
     csvRouteLimiter,
     checkPlanFeature('export'),

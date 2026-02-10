@@ -64,7 +64,6 @@ const organizationSchema = new mongoose.Schema(
      */
     planType: {
       type: String,
-      enum: ["personal", "enterprise"],
       default: "personal"
     },
 

@@ -12,7 +12,7 @@ const PLAN_FEATURES = {
   // ------------------------------------
   free: {
     maxDevices: 3,
-    maxDataRetentionDays: 30, // 1 Month
+    maxDataRetentionDays: 1, // 24 Hours (Freemium Limitation)
 
     // Capabilities
     device_read: true,
@@ -85,7 +85,7 @@ const PLAN_FEATURES = {
   // Alias for 'free' during migration
   freemium: {
     maxDevices: 3,
-    maxDataRetentionDays: 30,
+    maxDataRetentionDays: 1,
     device_read: true,
     device_update: false,
     export: false,

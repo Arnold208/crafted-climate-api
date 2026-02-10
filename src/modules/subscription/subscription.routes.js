@@ -4,6 +4,7 @@ const subscriptionController = require('./subscription.controller');
 
 const authenticateToken = require('../../middleware/bearermiddleware');
 const authorizeRoles = require('../../middleware/rbacMiddleware');
+const checkOrgAccess = require('../../middleware/organization/checkOrgAccess');
 
 /**
  * @swagger
@@ -409,6 +410,225 @@ router.get('/pricing/calculate',
 router.get('/pricing/tiers',
     authenticateToken,
     subscriptionController.getEnterpriseTiers
+);
+
+// --- Organization Subscription Management ---
+
+/**
+ * @swagger
+ * /api/subscriptions/org/{orgId}/current:
+ *   get:
+ *     summary: Get organization subscription
+ *     tags: [Organization Subscriptions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Subscription details }
+ *       404: { description: No active subscription }
+ */
+router.get('/org/:orgId/current',
+    authenticateToken,
+    checkOrgAccess('org.billing.view'),
+    subscriptionController.getOrgSubscription
+);
+
+/**
+ * @swagger
+ * /api/subscriptions/org/{orgId}/upgrade:
+ *   post:
+ *     summary: Upgrade organization subscription
+ *     tags: [Organization Subscriptions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [targetPlanId]
+ *             properties:
+ *               targetPlanId: { type: string }
+ *     responses:
+ *       200: { description: Upgraded }
+ */
+router.post('/org/:orgId/upgrade',
+    authenticateToken,
+    checkOrgAccess('org.billing.update'),
+    subscriptionController.upgradeOrgSubscription
+);
+
+/**
+ * @swagger
+ * /api/subscriptions/org/{orgId}/downgrade:
+ *   post:
+ *     summary: Downgrade organization subscription
+ *     tags: [Organization Subscriptions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [targetPlanId]
+ *             properties:
+ *               targetPlanId: { type: string }
+ *     responses:
+ *       200: { description: Downgraded }
+ */
+router.post('/org/:orgId/downgrade',
+    authenticateToken,
+    checkOrgAccess('org.billing.update'),
+    subscriptionController.downgradeOrgSubscription
+);
+
+/**
+ * @swagger
+ * /api/subscriptions/org/{orgId}/billing-cycle:
+ *   patch:
+ *     summary: Update organization billing cycle
+ *     tags: [Organization Subscriptions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [billingCycle]
+ *             properties:
+ *               billingCycle: { type: string, enum: [monthly, yearly] }
+ *     responses:
+ *       200: { description: Cycle updated }
+ */
+router.patch('/org/:orgId/billing-cycle',
+    authenticateToken,
+    checkOrgAccess('org.billing.update'),
+    subscriptionController.updateOrgBillingCycle
+);
+
+/**
+ * @swagger
+ * /api/subscriptions/org/{orgId}/cancel:
+ *   post:
+ *     summary: Cancel organization subscription
+ *     tags: [Organization Subscriptions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Cancelled }
+ */
+router.post('/org/:orgId/cancel',
+    authenticateToken,
+    checkOrgAccess('org.billing.update'),
+    subscriptionController.cancelOrgSubscription
+);
+
+/**
+ * @swagger
+ * /api/subscriptions/org/{orgId}/reactivate:
+ *   post:
+ *     summary: Reactivate organization subscription
+ *     tags: [Organization Subscriptions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Reactivated }
+ */
+router.post('/org/:orgId/reactivate',
+    authenticateToken,
+    checkOrgAccess('org.billing.update'),
+    subscriptionController.reactivateOrgSubscription
+);
+
+/**
+ * @swagger
+ * /api/subscriptions/debug-fix-plan/{orgId}:
+ *   get:
+ *     summary: Debug - Force Update Organization Plan Type
+ *     tags: [Organization Subscriptions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Plan type updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 orgId: { type: string }
+ *                 planId: { type: string }
+ *                 planName: { type: string }
+ *                 oldPlanType: { type: string }
+ *                 newPlanType: { type: string }
+ *       404: { description: Org or Plan not found }
+ */
+router.get('/debug-fix-plan/:orgId',
+    authenticateToken,
+    subscriptionController.debugFixPlanType
+);
+
+/**
+ * @swagger
+ * /api/subscriptions/verify-plan/{orgId}:
+ *   get:
+ *     summary: Debug - Verify Organization Plan and Collaboration Status
+ *     tags: [Organization Subscriptions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Plan verification details
+ *       404: { description: Organization not found }
+ */
+router.get('/verify-plan/:orgId',
+    authenticateToken,
+    subscriptionController.verifyOrgPlan
 );
 
 module.exports = router;

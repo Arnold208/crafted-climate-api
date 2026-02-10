@@ -331,7 +331,7 @@ class TelemetryService {
  * - Sorts Ascending (Chronological)
  * - Higher limit than pagination
  */
-    async getGraphData(auid, model, start, end) {
+    async getGraphData(auid, model, start, end, userid, organizationId) {
         const resolvedModel = this._resolveModelKey(model);
         const M = MODEL_MAP[resolvedModel];
         if (!M) throw new Error(`Unknown model '${model}'`);
@@ -341,11 +341,23 @@ class TelemetryService {
         }
 
         const query = {
-            auid,
-            transport_time: {
-                $gte: new Date(start),
-                $lte: new Date(end)
-            }
+            auid
+        };
+
+        // 🛡️ Data Retention Enforcement
+        const enforceDataRetention = require('../../middleware/subscriptions/enforceDataRetention');
+        const retentionFilter = await enforceDataRetention(userid, organizationId);
+
+        let effectiveStart = new Date(start);
+        const retentionGte = retentionFilter.transport_time?.$gte;
+
+        if (retentionGte && retentionGte > effectiveStart) {
+            effectiveStart = retentionGte;
+        }
+
+        query.transport_time = {
+            $gte: effectiveStart,
+            $lte: new Date(end)
         };
 
         // Limit to 5000 points to prevent browser crash, but allow high res
