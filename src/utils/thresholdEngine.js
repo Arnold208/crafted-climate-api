@@ -321,68 +321,79 @@ function buildEmailMessage(nickname, rule, value) {
 // ======================================================
 async function sendAlerts(owner, device, rule, smsMessage, emailMessage) {
   try {
+    // 0. Global Check: Is notification enabled for this sensor?
+    if (device.notificationPreferences?.enabled === false) {
+      console.log(`[ThresholdEngine] All notifications disabled for device ${device.auid}`);
+      return;
+    }
+
     const recipients = new Set();
     const smsRecipients = new Set();
 
-    // 1. Fetch Notification Preferences for the owner
-    const prefs = await NotificationPreference.findOne({ userid: owner.userid });
+    /**
+     * Helper to add user to recipient lists if their personal preferences allow it.
+     */
+    const addUserIfAllowed = async (userId, email, contact) => {
+      if (!userId) return;
 
-    // 2. Global Muting / Device Muting Checks
-    if (prefs) {
-      // Check if this specific device is muted
-      if (prefs.mutedDevices && prefs.mutedDevices.includes(device.deviceId)) {
-        console.log(`[ThresholdEngine] Alert suppressed: Device ${device.deviceId} is muted for user ${owner.userid}`);
+      const prefs = await NotificationPreference.findOne({ userid: userId });
+
+      // Check if this specific device is muted for this user
+      // Note: Using device.auid as the canonical internal identifier for muting
+      if (prefs && prefs.mutedDevices && (prefs.mutedDevices.includes(device.auid) || prefs.mutedDevices.includes(device.devid))) {
+        console.log(`[ThresholdEngine] Alert suppressed: Device ${device.auid} is muted for user ${userId}`);
         return;
       }
 
-      // Check global settings (Synced from User model)
-      // Check email preference
-      if (rule.alertChannels?.email && prefs.preferences?.email?.enabled === false) {
-        console.log(`[ThresholdEngine] Email alerts disabled globally for user ${owner.userid}`);
-        rule.alertChannels.email = false; // Override for this run
+      // Check Email Channel
+      if (rule.alertChannels?.email) {
+        const emailEnabled = prefs ? prefs.preferences?.email?.enabled !== false : true;
+        if (emailEnabled && email) recipients.add(email);
       }
 
-      // Check push preference (mapped to SMS for threshold engine currently)
-      if (rule.alertChannels?.sms && prefs.preferences?.push?.enabled === false) {
-        console.log(`[ThresholdEngine] SMS/Push alerts disabled globally for user ${owner.userid}`);
-        rule.alertChannels.sms = false; // Override
+      // Check SMS Channel (Mapped to push preference currently)
+      if (rule.alertChannels?.sms) {
+        const smsEnabled = prefs ? prefs.preferences?.push?.enabled !== false : true;
+        if (smsEnabled && contact) smsRecipients.add(contact);
       }
-    }
+    };
 
-    // 3. Add Owner
+    // 1. Add Owner
     if (owner) {
-      if (owner.email) recipients.add(owner.email);
-      if (owner.contact) smsRecipients.add(owner.contact);
+      await addUserIfAllowed(owner.userid, owner.email, owner.contact);
     }
 
-    // 4. Add Explicit Recipients from Preferences
+    // 2. Add Explicit Recipients from Preferences (Custom list - usually emails only)
     if (device.notificationPreferences?.recipients?.length > 0) {
       device.notificationPreferences.recipients.forEach(e => recipients.add(e));
     }
 
-    // 5. Add Collaborators (Admins/Editors)
+    // 3. Add Collaborators (Admins/Support/with Alert permissions)
     if (device.collaborators && device.collaborators.length > 0) {
       for (const collab of device.collaborators) {
-        if (['device-admin', 'device-editor', 'device-support'].includes(collab.role) || collab.permissions?.includes('alerts')) {
-          const u = await User.findOne({ userid: collab.userid });
+        const isEligible = ['device-admin', 'device-support'].includes(collab.role) ||
+          collab.permissions?.includes('alerts');
+
+        if (isEligible) {
+          const u = await User.findOne({ userid: collab.userid }).select("userid email contact");
           if (u) {
-            if (u.email) recipients.add(u.email);
+            await addUserIfAllowed(u.userid, u.email, u.contact);
           }
         }
       }
     }
 
-    // 6. Send Emails
-    if (rule.alertChannels?.email && recipients.size > 0) {
-      console.log(`Sending email alert to ${recipients.size} recipients...`);
+    // 4. Send Emails
+    if (recipients.size > 0) {
+      console.log(`Sending email alert for ${device.auid} to ${recipients.size} recipients...`);
       for (const email of recipients) {
-        sendEmail(email, "ALERT from your CraftedClimate Sensor", emailMessage).catch(e => console.error(e.message));
+        sendEmail(email, `CraftedClimate ALERT: ${device.nickname || device.auid}`, emailMessage).catch(e => console.error(e.message));
       }
     }
 
-    // 7. Send SMS
-    if (rule.alertChannels?.sms && smsRecipients.size > 0) {
-      console.log(`Sending SMS alert to ${smsRecipients.size} contacts...`);
+    // 5. Send SMS
+    if (smsRecipients.size > 0) {
+      console.log(`Sending SMS alert for ${device.auid} to ${smsRecipients.size} contacts...`);
       for (const contact of smsRecipients) {
         sendSMS(contact, smsMessage).catch(e => console.error(e.message));
       }

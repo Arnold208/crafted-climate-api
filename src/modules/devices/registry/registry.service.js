@@ -185,6 +185,7 @@ class RegistryService {
             // Because it's a subdocument in Mongoose, direct assignment works but merge is safer for UX
             if (!device.notificationPreferences) device.notificationPreferences = {};
 
+            if (typeof newPrefs.enabled === 'boolean') device.notificationPreferences.enabled = newPrefs.enabled;
             if (typeof newPrefs.offlineAlert === 'boolean') device.notificationPreferences.offlineAlert = newPrefs.offlineAlert;
             if (newPrefs.alertThresholdMinutes) device.notificationPreferences.alertThresholdMinutes = newPrefs.alertThresholdMinutes;
             if (Array.isArray(newPrefs.recipients)) device.notificationPreferences.recipients = newPrefs.recipients;

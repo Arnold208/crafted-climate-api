@@ -53,8 +53,24 @@ async function checkDeviceAccessCompatibility(req, device, requiredPermission = 
   // ──────────────────────────────────────────────────────────
 
   if (device.collaborators && Array.isArray(device.collaborators)) {
-    const isCollaborator = device.collaborators.some(c => c.userid === userId);
-    if (isCollaborator) {
+    const collaborator = device.collaborators.find(c => c.userid === userId);
+
+    if (collaborator) {
+      // 1. If explicit permissions are required (e.g., 'edit'), check role
+      if (requiredPermission === 'edit') {
+        const allowedRoles = ['device-admin', 'admin', 'editor'];
+        if (allowedRoles.includes(collaborator.role)) {
+          return true;
+        }
+        // Fallback: check if they have explicit 'edit' permission in permissions array
+        if (collaborator.permissions && collaborator.permissions.includes('edit')) {
+          return true;
+        }
+        // If not, deny access for edit operation
+        return false;
+      }
+
+      // 2. Default: Allow access for 'view' or unspecified permission
       return true;
     }
   }

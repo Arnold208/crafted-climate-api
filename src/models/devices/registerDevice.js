@@ -108,6 +108,7 @@ const registerNewDeviceSchema = new mongoose.Schema({
    * Status & Alerting
    */
   notificationPreferences: {
+    enabled: { type: Boolean, default: true },
     offlineAlert: { type: Boolean, default: true },
     alertThresholdMinutes: { type: Number, default: 30 },
     recipients: [{ type: String }] // emails

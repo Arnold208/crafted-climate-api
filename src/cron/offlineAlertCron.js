@@ -147,58 +147,71 @@ async function checkOfflineDevices() {
                 }
 
                 // Check preferences
-                if (device.notificationPreferences?.offlineAlert === false) continue;
+                if (device.notificationPreferences?.enabled === false || device.notificationPreferences?.offlineAlert === false) {
+                    console.log(`[OfflineAlert] Suppressed: Notifications disabled for device ${device.auid}`);
+                    continue;
+                }
 
                 // Gather Recipients
                 const emails = new Set();
                 const phones = new Set();
 
+                /**
+                 * Helper to add user to alert lists if their preferences allow it
+                 */
+                const addUserIfAllowed = async (userId, userEmail, userContact) => {
+                    if (!userId) return;
+                    const prefs = await NotificationPreference.findOne({ userid: userId });
+
+                    if (prefs) {
+                        // Check if device is muted for THIS user
+                        // We check both auid and devid for backward compatibility
+                        const isMuted = prefs.mutedDevices && (prefs.mutedDevices.includes(device.auid) || prefs.mutedDevices.includes(device.devid));
+                        if (isMuted) {
+                            logger.debug(`[OfflineAlert] User ${userId} has muted device ${device.auid}. Skipping.`);
+                            return;
+                        }
+
+                        // Check channel preferences
+                        const emailEnabled = prefs.preferences?.email?.enabled !== false;
+                        const pushEnabled = prefs.preferences?.push?.enabled !== false; // Mapping push to SMS
+
+                        if (emailEnabled && userEmail) emails.add(userEmail);
+                        if (pushEnabled && userContact) phones.add(userContact);
+                    } else {
+                        // Default: Notify if no preference record exists
+                        if (userEmail) emails.add(userEmail);
+                        if (userContact) phones.add(userContact);
+                    }
+                };
+
                 // D1. Owner
                 const owner = await User.findOne({ userid: device.userid });
                 if (owner) {
-                    // Fetch consolidated preferences
-                    const prefs = await NotificationPreference.findOne({ userid: owner.userid });
-
-                    if (prefs) {
-                        // Check if device is muted
-                        if (prefs.mutedDevices && prefs.mutedDevices.includes(device.deviceId)) {
-                            console.log(`[OfflineAlert] Suppressed: Device ${device.deviceId} is muted for user ${owner.userid}`);
-                            continue;
-                        }
-
-                        // Check global settings
-                        const emailEnabled = prefs.preferences?.email?.enabled !== false;
-                        const pushEnabled = prefs.preferences?.push?.enabled !== false;
-
-                        if (emailEnabled) emails.add(owner.email);
-                        if (pushEnabled) phones.add(owner.contact);
-                    } else {
-                        // Fallback to default behavior if no prefs document
-                        if (owner.email) emails.add(owner.email);
-                        if (owner.contact) phones.add(owner.contact);
-                    }
+                    await addUserIfAllowed(owner.userid, owner.email, owner.contact);
                 }
 
-                // D2. Collaborators / Custom List
+                // D2. Custom Recipients list (Usually emails, added directly)
                 if (device.notificationPreferences?.recipients?.length > 0) {
                     device.notificationPreferences.recipients.forEach(e => emails.add(e));
                 }
 
-                // Add Device Collaborators
+                // D3. Collaborators
                 if (device.collaborators?.length > 0) {
                     for (const c of device.collaborators) {
                         if (['device-admin', 'device-support'].includes(c.role)) {
                             const u = await User.findOne({ userid: c.userid });
                             if (u) {
-                                if (u.email) emails.add(u.email);
-                                if (u.contact) phones.add(u.contact);
+                                await addUserIfAllowed(u.userid, u.email, u.contact);
                             }
                         }
                     }
                 }
 
                 // E. Send Alert
-                await sendStageAlert(device, Array.from(emails), Array.from(phones), targetStage, lastSeen);
+                if (emails.size > 0 || phones.size > 0) {
+                    await sendStageAlert(device, Array.from(emails), Array.from(phones), targetStage, lastSeen);
+                }
 
                 // F. Update Context
                 await redis.hSet(contextKey, {
