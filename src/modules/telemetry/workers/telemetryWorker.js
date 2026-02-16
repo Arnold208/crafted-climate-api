@@ -4,6 +4,7 @@ const path = require('path');
 const { handleEnvQueuedTelemetry } = require("../handlers/handleEnvQueuedTelemetry");
 const { handleGasSoloQueuedTelemetry } = require("../handlers/handleSoloGasQueuedTelemetry");
 const { handleAquaQueuedTelemetry } = require('../handlers/handleAquaQueuedTelemetry');
+const { handleFlowQueuedTelemetry } = require('../handlers/handleFlowQueuedTelemetry');
 // 🔒 PRODUCTION HARDENING: Redis client for deduplication
 const { client: redisClient } = require('../../../config/redis/redis');
 const logger = require('../../../utils/logger');
@@ -92,6 +93,12 @@ function startTelemetryWorker() {
             if (devmod === 'GAS-SOLO') {
                 console.log('🧪 Processing GAS-SOLO telemetry');
                 await handleGasSoloQueuedTelemetry(data);
+                return;
+            }
+
+            if (devmod === 'FLOW') {
+                console.log('💧 Processing FLOW telemetry');
+                await handleFlowQueuedTelemetry(data);
                 return;
             }
 

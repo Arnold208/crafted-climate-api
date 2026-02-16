@@ -22,6 +22,30 @@ const authenticateToken = require('../../../middleware/bearermiddleware');
  *     summary: Create a new sensor model with image
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               model:
+ *                 type: string
+ *                 description: Name of the sensor model (e.g., SCD4x)
+ *               description:
+ *                 type: string
+ *                 description: Brief description of the sensor
+ *               version:
+ *                 type: string
+ *                 description: Version of the model (defaults to 1.0)
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: Image file for the sensor model
+ *             required:
+ *               - model
+ *               - description
+ *               - image
  *     responses:
  *       201: { description: Sensor model created }
  *       400: { description: Missing fields or image }
@@ -105,6 +129,20 @@ router.get("/models/:model",
  *   put:
  *     tags: [Sensor Models]
  *     summary: Update a model's image or description
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               description:
+ *                 type: string
+ *                 description: Updated description
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: New image file
  *     responses:
  *       200: { description: Model updated }
  *       404: { description: Model not found }

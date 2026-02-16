@@ -56,17 +56,18 @@ async function checkDeviceAccessCompatibility(req, device, requiredPermission = 
     const collaborator = device.collaborators.find(c => c.userid === userId);
 
     if (collaborator) {
-      // 1. If explicit permissions are required (e.g., 'edit'), check role
-      if (requiredPermission === 'edit') {
+      // 1. If explicit permissions are required (e.g., 'edit', 'org.devices.control'), check role
+      if (requiredPermission === 'edit' || requiredPermission === 'org.devices.control') {
         const allowedRoles = ['device-admin', 'admin', 'editor'];
         if (allowedRoles.includes(collaborator.role)) {
           return true;
         }
-        // Fallback: check if they have explicit 'edit' permission in permissions array
-        if (collaborator.permissions && collaborator.permissions.includes('edit')) {
+        // Fallback: check if they have explicit permission in permissions array
+        const permKey = requiredPermission === 'org.devices.control' ? 'control' : 'edit';
+        if (collaborator.permissions && (collaborator.permissions.includes(permKey) || collaborator.permissions.includes('edit'))) {
           return true;
         }
-        // If not, deny access for edit operation
+        // If not, deny access for write operations
         return false;
       }
 

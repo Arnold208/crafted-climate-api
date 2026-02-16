@@ -510,6 +510,10 @@ router.delete('/:orgId/devices/:auid/remove',
  * /api/org/{orgId}/devices/{auid}/move:
  *   post:
  *     summary: Move device to another deployment
+ *     description: |
+ *       Moves a device between deployments **within the same organization**.
+ *       - Preserves all organization-level collaborators.
+ *       - Updates the project site/deployment association.
  *     tags: [Organization Devices]
  *     security:
  *       - bearerAuth: []
@@ -545,6 +549,11 @@ router.post('/:orgId/devices/:auid/move',
  * /api/org/{orgId}/devices/{auid}/transfer:
  *   post:
  *     summary: Transfer device to another organization
+ *     description: |
+ *       Transfers ownership of a device to a **different organization**.
+ *       - **Resets Deployment**: Device is detached from its current site.
+ *       - **Wipes Collaborators**: All previous collaborators are removed for privacy.
+ *       - **New Admin**: The user performing the transfer becomes the sole admin in the target org.
  *     tags: [Organization Devices]
  *     security:
  *       - bearerAuth: []

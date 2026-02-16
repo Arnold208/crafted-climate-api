@@ -24,6 +24,7 @@ const subscriptionRoutes = require('./modules/subscription/subscription.routes')
 const logsRoutes = require('./modules/logs/logs.routes');
 const testRoutes = require('./modules/test/test.routes');
 const adminRoutes = require('./modules/admin/admin.routes');
+const flowRoutes = require('./modules/devices/flow/flow.routes');
 
 // PLATFORM ADMIN - CORS MANAGEMENT
 const corsAdminRoutes = require('./modules/admin/cors.routes');
@@ -209,6 +210,7 @@ app.use('/api/org', organizationRoutes);
 
 // NEW DEVICES
 app.use('/api/telemetry', telemetryRoutes);
+app.use('/api/devices/flow', flowRoutes);
 app.use('/api/devices', devicesRoutes);
 app.use('/api', thresholdRoutes);
 

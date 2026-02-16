@@ -44,6 +44,7 @@ const ORG_PERMISSIONS = {
     "org.devices.add",
     "org.devices.view",
     "org.devices.edit",
+    "org.devices.control", // Added control permission
     "org.devices.remove",
     "org.telemetry.read",
     "org.telemetry.export", // Explicit export permission
@@ -89,6 +90,7 @@ const ORG_PERMISSIONS = {
     /* Devices */
     "org.devices.view",
     "org.devices.edit",         // can update alias, location, not remove
+    "org.devices.control",      // can control device (pumps, etc)
 
     /* Thresholds */
     "org.thresholds.view",
@@ -129,7 +131,8 @@ const ORG_PERMISSIONS = {
 
     /* Notecard Configuration - Read & Update only */
     "org.notecard.view",
-    "org.notecard.edit"
+    "org.notecard.edit",
+    "org.devices.control" // org-users can also control devices shared with them
   ]
 };
 

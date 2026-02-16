@@ -207,7 +207,7 @@ router.get('/public/telemetry', publicTelemetryLimiter, telemetryController.getP
  *         required: true
  *         schema:
  *           type: string
- *           enum: [env, aqua, gas-solo]
+ *           enum: [env, aqua, gas-solo, flow]
  *           default: env
  *         description: Telemetry model (e.g. "env").
  *       - in: path
@@ -272,7 +272,7 @@ router.get('/db/:model/:auid',
  *         required: true
  *         schema:
  *           type: string
- *           enum: [env, aqua, gas-solo]
+ *           enum: [env, aqua, gas-solo, flow]
  *           default: env
  *         description: Telemetry model (currently only "env").
  *       - in: path

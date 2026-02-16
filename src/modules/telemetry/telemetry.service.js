@@ -4,6 +4,7 @@ const registerNewDevice = require('../../models/devices/registerDevice');
 const EnvTelemetry = require('../../models/telemetry/envModel');
 const AquaTelemetry = require('../../models/telemetry/aquaModel');
 const GasSoloTelemetry = require('../../models/telemetry/gasSoloModel');
+const FlowTelemetry = require('../../models/telemetry/flowModel');
 const SensorModel = require('../../models/devices/deviceModels');
 
 const { mapTelemetryData } = require('../../utils/telemetryMapper');
@@ -15,7 +16,8 @@ const MODEL_MAP = {
     env: EnvTelemetry,
     aqua: AquaTelemetry,
     'gas-solo': GasSoloTelemetry,
-    'gassolo': GasSoloTelemetry // Alias for safety
+    'gassolo': GasSoloTelemetry, // Alias for safety
+    flow: FlowTelemetry
 };
 
 const CSV_COLUMNS = {
@@ -33,6 +35,13 @@ const CSV_COLUMNS = {
         'aqi', 'current', 'eco2_ppm', 'tvoc_ppb', 'voltage', 'battery', 'error', 'err_count',
         'mode', 'v_type', 'ver', 'devmod', 'boot', 'brownout',
         'comp_temp', 'comp_humi', 'eco2', 'tvoc', 'err_status'
+    ],
+    flow: [
+        'fid', 'transport_time', 'telem_time', 'mode', 'pump', 'hcode',
+        'tank_full', 'tank_empty', 'tank_mm', 'tank_l',
+        'flow_lpm', 'flow_hz', 'bat_v', 'bat_ma',
+        'solar_v', 'solar_ma', 'solar_mw', 'pump_ma', 'pump_mw',
+        'next_cycle', 'wifi_rssi', 'cell_rssi', 'error'
     ],
     // Alias to match the above array reference if needed, but robust lookup is better
 };

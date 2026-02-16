@@ -15,7 +15,7 @@ class OrgApiKeyController {
             const userid = req.user.userid;
 
             // Verify user belongs to organization
-            if (!req.user.organization.includes(orgId)) {
+            if (!req.user.organization || !req.user.organization.includes(orgId)) {
                 return res.status(403).json({
                     success: false,
                     message: 'You do not have access to this organization'
@@ -59,7 +59,7 @@ class OrgApiKeyController {
             const { orgId } = req.params;
 
             // Verify user belongs to organization
-            if (!req.user.organization.includes(orgId)) {
+            if (!req.user.organization || !req.user.organization.includes(orgId)) {
                 return res.status(403).json({
                     success: false,
                     message: 'You do not have access to this organization'
@@ -91,7 +91,7 @@ class OrgApiKeyController {
             const userid = req.user.userid;
 
             // Verify user belongs to organization
-            if (!req.user.organization.includes(orgId)) {
+            if (!req.user.organization || !req.user.organization.includes(orgId)) {
                 return res.status(403).json({
                     success: false,
                     message: 'You do not have access to this organization'
@@ -121,7 +121,7 @@ class OrgApiKeyController {
             const userid = req.user.userid;
 
             // Verify user belongs to organization
-            if (!req.user.organization.includes(orgId)) {
+            if (!req.user.organization || !req.user.organization.includes(orgId)) {
                 return res.status(403).json({
                     success: false,
                     message: 'You do not have access to this organization'
@@ -145,7 +145,7 @@ class OrgApiKeyController {
             const { orgId, keyId } = req.params;
 
             // Verify user belongs to organization
-            if (!req.user.organization.includes(orgId)) {
+            if (!req.user.organization || !req.user.organization.includes(orgId)) {
                 return res.status(403).json({
                     success: false,
                     message: 'You do not have access to this organization'

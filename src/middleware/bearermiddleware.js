@@ -24,7 +24,7 @@ function authenticateToken(req, res, next) {
 
     try {
       // System-wide suspension check: Fetch user from DB
-      const user = await User.findOne({ userid: decoded.userid }).select('userid deletedAt role platformRole organizations currentOrganizationId email username firstName lastName subscription');
+      const user = await User.findOne({ userid: decoded.userid }).select('userid deletedAt role platformRole organization currentOrganizationId email username firstName lastName subscription');
 
       if (!user) {
         return res.status(401).json({ error: "Unauthorized: User not found" });
