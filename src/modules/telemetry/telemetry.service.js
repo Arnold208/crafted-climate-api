@@ -53,9 +53,6 @@ class TelemetryService {
         return m;
     }
 
-    /**
-     * Ingest telemetry data
-     */
     async ingestTelemetry(modelName, deviceId, payload) {
         modelName = this._resolveModelKey(modelName);
         let device;
@@ -118,11 +115,13 @@ class TelemetryService {
      * Get Telemetry (Redis -> Mongo Fallback)
      */
     async getDeviceTelemetry(userid, auid, limit = 50, orgRole = null) {
-        // 1. Check Access
         const device = await registerNewDevice.findOne({ auid });
         if (!device) {
             throw new Error('Device not found'); // 404
         }
+
+        // Setup Guard
+        this._checkFlowConfigStatus(device);
 
         const isOwner = device.userid === userid;
         const isCollaborator = device.collaborators?.some(c => c.userid === userid);
@@ -302,6 +301,10 @@ class TelemetryService {
             if (end) query.transport_time.$lte = new Date(isNaN(end) ? end : Number(end));
         }
 
+        // Setup Guard (Check Flow Config)
+        const device = await registerNewDevice.findOne({ auid });
+        if (device) this._checkFlowConfigStatus(device);
+
         const data = await M.find(query).limit(limit).lean();
         return data;
     }
@@ -332,6 +335,10 @@ class TelemetryService {
             if (end) query.transport_time.$lte = new Date(isNaN(end) ? end : Number(end));
         }
 
+        // Setup Guard (Check Flow Config)
+        const device = await registerNewDevice.findOne({ auid });
+        if (device) this._checkFlowConfigStatus(device);
+
         const cursor = M.find(query)
             .sort({ transport_time: -1 })
             .select(columns.join(' '))
@@ -349,6 +356,10 @@ class TelemetryService {
         const resolvedModel = this._resolveModelKey(model);
         const M = MODEL_MAP[resolvedModel];
         if (!M) throw new Error(`Unknown model '${model}'`);
+
+        // Setup Guard (Check Flow Config)
+        const device = await registerNewDevice.findOne({ auid });
+        if (device) this._checkFlowConfigStatus(device);
 
         return await M.find({ auid })
             .sort({ transport_time: -1 })
@@ -389,6 +400,10 @@ class TelemetryService {
             $gte: effectiveStart,
             $lte: new Date(end)
         };
+
+        // Setup Guard (Check Flow Config)
+        const device = await registerNewDevice.findOne({ auid });
+        if (device) this._checkFlowConfigStatus(device);
 
         // Limit to 5000 points to prevent browser crash, but allow high res
         // Sort Ascending (1) for charts
@@ -454,6 +469,16 @@ class TelemetryService {
         );
 
         return finalData;
+    }
+
+    /**
+     * Setup Guard for Flow Devices
+     * Throws an error if device is Flow and requires configuration.
+     */
+    _checkFlowConfigStatus(device) {
+        if (device.model?.toLowerCase() === 'flow' && device.setup?.requires_configuration === true) {
+            throw new Error('Device requires configuration. Please complete setup before requesting telemetry.');
+        }
     }
 }
 
