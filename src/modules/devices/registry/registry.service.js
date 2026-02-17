@@ -191,6 +191,45 @@ class RegistryService {
             if (Array.isArray(newPrefs.recipients)) device.notificationPreferences.recipients = newPrefs.recipients;
         }
 
+        // Flow Sensor Specialized Configuration
+        if (device.model?.toLowerCase() === 'flow') {
+            if (reqBody.power_system) {
+                const ps = reqBody.power_system;
+                if (!device.power_system) device.power_system = {};
+                if (ps.architecture) device.power_system.architecture = ps.architecture;
+                if (ps.capabilities) {
+                    if (typeof ps.capabilities.solar === 'boolean') device.power_system.capabilities.solar = ps.capabilities.solar;
+                    if (typeof ps.capabilities.battery === 'boolean') device.power_system.capabilities.battery = ps.capabilities.battery;
+                    if (typeof ps.capabilities.ac_input === 'boolean') device.power_system.capabilities.ac_input = ps.capabilities.ac_input;
+                }
+            }
+
+            if (reqBody.setup) {
+                const s = reqBody.setup;
+                if (!device.setup) device.setup = {};
+
+                if (typeof s.is_configured === 'boolean') device.setup.is_configured = s.is_configured;
+                if (typeof s.requires_configuration === 'boolean') device.setup.requires_configuration = s.requires_configuration;
+
+                if (typeof s.wifi_configured === 'boolean') device.setup.wifi_configured = s.wifi_configured;
+                if (typeof s.api_key_generated === 'boolean') device.setup.api_key_generated = s.api_key_generated;
+                if (typeof s.tank_calibrated === 'boolean') device.setup.tank_calibrated = s.tank_calibrated;
+
+                if (s.tank_height_mm !== undefined) {
+                    device.setup.tank_height_mm = s.tank_height_mm;
+                    device.setup.last_calibration_update = new Date();
+                }
+                if (s.tank_volume_l !== undefined) {
+                    device.setup.tank_volume_l = s.tank_volume_l;
+                    device.setup.last_calibration_update = new Date();
+                }
+
+                if (s.is_configured && !device.setup.setup_completed_at) {
+                    device.setup.setup_completed_at = new Date();
+                }
+            }
+        }
+
         await device.save();
         await CacheService.invalidate(`device:${auid}:meta`);
         return device;

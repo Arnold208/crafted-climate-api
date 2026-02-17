@@ -3,11 +3,11 @@ const registerNewDevice = require('../../../models/devices/registerDevice');
 
 class FlowService {
     async getDeviceConfig(auid) {
+        const device = await registerNewDevice.findOne({ auid });
+        if (!device) throw new Error("Device not found");
+
         let config = await FlowConfig.findOne({ auid });
         if (!config) {
-            const device = await registerNewDevice.findOne({ auid });
-            if (!device) throw new Error("Device not found");
-
             config = new FlowConfig({
                 auid: device.auid,
                 devid: device.devid,
@@ -16,7 +16,13 @@ class FlowService {
             });
             await config.save();
         }
-        return config;
+
+        // Return a combined object (Mongoose toObject + specialized metadata)
+        const configObj = config.toObject();
+        configObj.power_system = device.power_system || {};
+        configObj.setup = device.setup || {};
+
+        return configObj;
     }
 
     async updatePumpState(auid, pump, mode) {

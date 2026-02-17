@@ -33,7 +33,7 @@ async function handleFlowQueuedTelemetry(messageObj) {
     }
 
     try {
-        const foundDevice = await registerNewDevice.findOne({ devid }).select("-_id");
+        const foundDevice = await registerNewDevice.findOne({ devid }).select("-__v");
         if (!foundDevice) {
             console.warn(`❌ Device not registered: ${devid}`);
             return;
@@ -49,6 +49,11 @@ async function handleFlowQueuedTelemetry(messageObj) {
         if (!isValidTimestamp(transportTime)) transportTime = Date.now();
         if (!isValidTimestamp(telemTime)) telemTime = transportTime;
 
+        // A. Configuration Check
+        if (foundDevice.setup?.is_configured === false) {
+            console.warn(`⚠️ Device ${devid} reporting telemetry but is NOT yet configured.`);
+        }
+
         const formattedData = {
             auid,
             devid,
@@ -60,13 +65,36 @@ async function handleFlowQueuedTelemetry(messageObj) {
             health: body.health || "0000",
             tank_full: body.tank_full ?? body.tf,
             tank_empty: body.tank_empty ?? body.te,
-            tank_mm: body.tank_mm ?? body.tmm,
-            tank_l: body.tank_l ?? body.tl,
-            bat_v: body.bat_v ?? body.v,
-            bat_ma: body.bat_ma ?? body.c,
-            bat_mw: body.bat_mw,
+            tank_mm: body.tank_mm ?? body.tmm ?? 0,
+            tank_l: body.tank_l ?? body.tl ?? 0,
+            bat_v: body.bat_v ?? body.v ?? 0,
+            bat_ma: body.bat_ma ?? body.c ?? 0,
+            bat_mw: body.bat_mw ?? 0,
             next_cycle: (body.next_cycle || body.nc) ? new Date(normalizeTimestamp(body.next_cycle || body.nc)) : null
         };
+
+        // B. Tank Calculation (Server-Side Override)
+        const setup = foundDevice.setup || {};
+        if (setup.tank_height_mm && setup.tank_volume_l) {
+            const rawMm = formattedData.tank_mm;
+            let percentage = (rawMm / setup.tank_height_mm) * 100;
+            percentage = Math.min(100, Math.max(0, percentage)); // Cap 0-100
+
+            const liters = (percentage / 100) * setup.tank_volume_l;
+
+            formattedData.tank_percentage = parseFloat(percentage.toFixed(2));
+            formattedData.tank_l = parseFloat(liters.toFixed(2));
+            console.log(`🧮 Server-side Tank Calc for ${devid}: ${percentage.toFixed(1)}% (${liters.toFixed(1)}L)`);
+        }
+
+        // C. Power-Based Filtering
+        const pwr = foundDevice.power_system?.capabilities || { solar: true, battery: true, ac_input: false };
+
+        if (pwr.battery === false) {
+            delete formattedData.bat_v;
+            delete formattedData.bat_ma;
+            delete formattedData.bat_mw;
+        }
 
         const towerFields = [
             "tower_when", "tower_lat", "tower_lon", "tower_country",
@@ -83,10 +111,6 @@ async function handleFlowQueuedTelemetry(messageObj) {
         await cacheTelemetryToRedis(auid, formattedData, foundDevice);
         publishToAUID(auid, formattedData);
         checkThresholds(auid, formattedData);
-
-        // Optional: Save to DB if needed immediately, though workers usually handle persistence 
-        // or a separate process flushes Redis to Mongo.
-        // await FlowTelemetry.create(formattedData);
 
     } catch (err) {
         console.error("❌ handleFlowQueuedTelemetry Error:", err.message);

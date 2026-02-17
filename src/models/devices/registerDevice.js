@@ -114,6 +114,38 @@ const registerNewDeviceSchema = new mongoose.Schema({
     recipients: [{ type: String }] // emails
   },
 
+  /**
+   * Flow Sensor Specific - Power & Setup
+   */
+  power_system: {
+    architecture: {
+      type: String,
+      enum: ['SOLAR', 'AC', 'HYBRID'],
+      default: 'SOLAR'
+    },
+    capabilities: {
+      solar: { type: Boolean, default: true },
+      battery: { type: Boolean, default: true },
+      ac_input: { type: Boolean, default: false }
+    }
+  },
+
+  setup: {
+    requires_configuration: { type: Boolean, default: true },
+    is_configured: { type: Boolean, default: false },
+
+    wifi_configured: { type: Boolean, default: false },
+    api_key_generated: { type: Boolean, default: false },
+
+    tank_calibrated: { type: Boolean, default: false },
+
+    tank_height_mm: { type: Number, default: null },
+    tank_volume_l: { type: Number, default: null },
+
+    setup_completed_at: { type: Date, default: null },
+    last_calibration_update: { type: Date, default: null }
+  },
+
   deletedAt: { type: Date, default: null, index: true }
 }, { versionKey: false });
 
