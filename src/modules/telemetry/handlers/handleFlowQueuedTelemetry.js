@@ -41,13 +41,13 @@ async function handleFlowQueuedTelemetry(messageObj) {
 
         const auid = foundDevice.auid;
         const rawTelem = body.timestamp || body.ts || body.time;
-        const rawTransport = messageObj.when;
+        const rawTransport = messageObj.receivedAt || messageObj.when;
 
         let telemTime = normalizeTimestamp(rawTelem);
         let transportTime = normalizeTimestamp(rawTransport);
 
+        if (!isValidTimestamp(transportTime)) transportTime = Date.now();
         if (!isValidTimestamp(telemTime)) telemTime = transportTime;
-        if (!isValidTimestamp(telemTime)) telemTime = Date.now();
 
         const formattedData = {
             auid,
