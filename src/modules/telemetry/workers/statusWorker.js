@@ -23,6 +23,7 @@ function startStatusWorker() {
         host: process.env.REDIS_HOST || '127.0.0.1',
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
         password: process.env.REDIS_PASSWORD || undefined,
+        maxRetriesPerRequest: null, // REQUIRED for BullMQ workers
     };
 
     // TTLs
@@ -59,6 +60,8 @@ function startStatusWorker() {
                 job?.data?.devid ??
                 job?.data?.deviceId ??
                 job?.data?.body?.deviceId;
+
+            console.log(`📥 [StatusWorker] Received job ${job.id} for devid: ${devid}`);
 
             if (!devid) {
                 // Ignore silently; DO NOT job.remove() here
@@ -130,6 +133,7 @@ function startStatusWorker() {
             tx.del(`device:${auid}:alert_state`);
 
             await tx.exec();
+            console.log(`✅ [StatusWorker] Status update complete for job ${job.id}`);
             return;
 
             return;
@@ -144,6 +148,8 @@ function startStatusWorker() {
             // lockDuration: 30000,
         }
     );
+
+    console.log('✅ Status Worker initialized and listening to "status" queue');
 
     const logger = require('../../../utils/logger');
 

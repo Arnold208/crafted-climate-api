@@ -25,6 +25,7 @@ function startTelemetryWorker() {
         host: process.env.REDIS_HOST || '127.0.0.1',
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
         password: process.env.REDIS_PASSWORD || undefined,
+        maxRetriesPerRequest: null, // REQUIRED for BullMQ workers
     };
 
     const worker = new Worker(
@@ -32,6 +33,7 @@ function startTelemetryWorker() {
         async job => {
             const data = job.data || {};
             const body = data.body;
+            console.log(`📥 [Worker] Received job ${job.id} for transport: ${data.transport || 'unknown'}`);
 
             // 🔒 Rule: if there's no body, it is NOT telemetry → skip
             if (!body) return;
@@ -76,33 +78,23 @@ function startTelemetryWorker() {
             if (devid == '2af0' || devid == '2af1' || devid == '2af2') {
                 console.log('🌿 Processing Afriset ENV telemetry');
                 await handleEnvQueuedTelemetry(data);
-                return;
-            }
-
-            if (devmod === 'ENV') {
+            } else if (devmod === 'ENV') {
                 console.log('🌿 Processing ENV telemetry');
                 await handleEnvQueuedTelemetry(data);
-                return;
-            }
-
-            if (devmod === 'AQUA') {
+            } else if (devmod === 'AQUA') {
                 console.log('🌿 Processing AQUA telemetry');
-                await handleAquaQueuedTelemetry(data)
-                return;
-            }
-            if (devmod === 'GAS-SOLO') {
+                await handleAquaQueuedTelemetry(data);
+            } else if (devmod === 'GAS-SOLO') {
                 console.log('🧪 Processing GAS-SOLO telemetry');
                 await handleGasSoloQueuedTelemetry(data);
-                return;
-            }
-
-            if (devmod === 'FLOW') {
-                console.log('💧 Processing FLOW telemetry');
+            } else if (devmod === 'FLOW') {
+                console.log(`💧 [${data.transport || 'MQTT'}] Processing FLOW telemetry: ${devid}`);
                 await handleFlowQueuedTelemetry(data);
-                return;
+            } else {
+                console.log(`⚠️ [Worker] Unknown devmod "${devmod}" for job ${job.id}`);
             }
 
-            // Anything with body but unknown devmod → skip quietly (per your rule)
+            console.log(`✅ [Worker] Logic complete for job ${job.id}`);
             return;
         },
         // 🔥 PRODUCTION HARDENING: Worker configuration
@@ -115,6 +107,8 @@ function startTelemetryWorker() {
             lockDuration: 30000,
         }
     );
+
+    console.log('✅ Telemetry Worker initialized and listening to "telemetry" queue');
 
     worker.on('completed', job => console.log(`✅ Job ${job.id} completed`));
     worker.on('failed', (job, err) => console.error(`❌ Job ${job?.id} failed:`, err.message));

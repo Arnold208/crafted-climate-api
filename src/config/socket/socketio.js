@@ -7,6 +7,8 @@ const { client: redisClient } = require("../redis/redis");
 const apiKeyService = require("../../services/apiKey.service");
 const { checkDeviceAccessCompatibility } = require("../../middleware/devices/checkDeviceAccessCompatibility");
 const RegisterDevice = require("../../models/devices/registerDevice");
+const { nanoid } = require("nanoid");
+const { telemetryQueue, statusQueue, subscriptionQueue } = require("../queue/bullMQ/bullqueue");
 
 const JWT_SECRET = process.env.ACCESS_TOKEN_SECRET;
 let io;
@@ -195,6 +197,47 @@ function setupRealtime(server) {
 
       socket.to(auid).emit("telemetry", payload);
       console.log(`📊 Telemetry broadcast: ${auid}`);
+
+      // 🔥 INTEGRATION: Hand off to BullMQ pipeline for metadata, caching, and batch flushing
+      try {
+        const device = await RegisterDevice.findOne({ auid });
+        if (device) {
+          const body = {
+            devid: device.devid,
+            devmod: device.model || 'FLOW',
+            ...payload,
+            ts: payload.timestamp || payload.ts || Date.now(),
+          };
+
+          const jobPayload = {
+            body,
+            transport: 'socketio',
+            receivedAt: new Date().toISOString(),
+            event: `sid_${nanoid(10)}` // Force uniqueness for Socket.io events
+          };
+
+          // Queue for processing (metadata + caching)
+          await telemetryQueue.add('processTelemetry', jobPayload, {
+            removeOnComplete: true,
+            removeOnFail: { age: 24 * 3600 },
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 1000 }
+          });
+          console.log(`📦 [BullMQ] Telemetry job added for ${device.devid}`);
+
+          // Queue for status update (online flip)
+          await statusQueue.add('processStatus', {
+            body: { devid: device.devid }
+          }, {
+            removeOnComplete: true,
+            removeOnFail: true
+          });
+          console.log(`🔔 [BullMQ] Status update job added for ${device.devid}`);
+        }
+      } catch (err) {
+        console.error("❌ Socket.io Telemetry Queueing Error:", err.message);
+      }
+
       ack?.({ ok: true });
     });
 

@@ -6,13 +6,15 @@ const { flushTelemetryToMongo } = require('../utils/flushTelemetryToMongo');
 // Mongoose models
 const EnvTelemetry = require('../models/telemetry/envModel');
 const GasSoloTelem = require('../models/telemetry/gasSoloModel');
-const AquaTelem = require('../models/telemetry/aquaModel')
+const AquaTelem = require('../models/telemetry/aquaModel');
+const FlowTelem = require('../models/telemetry/flowModel');
 
 /** Map metadata.model -> Mongo model (lowercase keys) */
 const MODEL_MAP = {
     'env': EnvTelemetry,
     'gas-solo': GasSoloTelem,
-    'aqua': AquaTelem
+    'aqua': AquaTelem,
+    'flow': FlowTelem
 };
 
 /* -------------------- helpers -------------------- */

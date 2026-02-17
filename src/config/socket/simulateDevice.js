@@ -1,7 +1,7 @@
 const { io } = require("socket.io-client");
 
 // --- CONFIGURATION ---
-const SERVER_URL = "https://cctelemetry-api-prod-c5b7aqawfxeybvbd.eastus-01.azurewebsites.net"; // Update with your actual server URL
+const SERVER_URL = "http://localhost:3000"; // Update with your actual server URL
 const API_KEY = "ck_live_0af5efa2_403ae10b1807a67d7fa1d82276bd912f8f4c0a32cce8e0d7f7cdc0bc339690c6";         // Replace with a valid API key
 const AUID = "GH-Q50ZKMBMVMDJUHMFQQBIT";        // Replace with the device AUID
 
@@ -56,11 +56,17 @@ setInterval(() => {
     if (socket.connected) {
         const telemetry = {
             auid: AUID,
-            tank_l: Math.floor(Math.random() * 500),
-            flow_lpm: (Math.random() * 20).toFixed(2),
+            tank_mm: Math.floor(Math.random() * 500),
+            tank_l: parseFloat((Math.random() * 100).toFixed(2)),
+            tank_full: false,
+            tank_empty: false,
             pump: true,
-            bat_v: 3.8,
-            timestamp: Date.now()
+            manual: false,
+            bat_v: parseFloat((3.7 + Math.random() * 0.5).toFixed(2)),
+            bat_ma: Math.floor(Math.random() * 1000),
+            bat_mw: Math.floor(Math.random() * 5000),
+            health: "0000",
+            timestamp: Math.floor(Date.now() / 1000)
         };
 
         socket.emit("telemetry:emit", telemetry, (ack) => {

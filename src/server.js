@@ -51,9 +51,12 @@ connectRedis()
         // 🔥 LAZY LOAD APP: Ensure Redis is connected before loading app (and rate limiters)
         const app = require('./app');
 
+        console.log('👷 Starting background workers...');
         startTelemetryWorker();
         startStatusWorker();       // 🆕 Start status worker for heartbeats
         startSubscriptionWorker(); // 🆕 Start subscription worker
+
+        console.log('⏱️ Starting background crons...');
         startFlushDirectCron();
         startOfflineAlertCron();
         startSubscriptionCheckCron(); // 🆕 Start subscription cron

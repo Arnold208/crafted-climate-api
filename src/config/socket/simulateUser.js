@@ -37,10 +37,12 @@ socket.on("telemetry", (data) => {
 });
 
 // Simulate sending a command every 15 seconds
+let pumpState = true;
 setInterval(() => {
     if (socket.connected) {
-        const command = { pump: Math.random() > 0.5 }; // Randomly toggle pump
-        console.log(`📤 Sending command to ${AUID}:`, command);
+        pumpState = !pumpState; // Toggle state
+        const command = { pump: pumpState };
+        console.log(`📤 Sending command to ${AUID} (${pumpState ? 'ON' : 'OFF'}):`, command);
 
         socket.emit("command:send", { auid: AUID, command }, (ack) => {
             if (ack?.ok) {
@@ -54,8 +56,4 @@ setInterval(() => {
 
 socket.on("connect_error", (err) => {
     console.error("❌ Connection error:", err.message);
-});
-
-socket.on("disconnect", (reason) => {
-    console.log("🔌 Disconnected:", reason);
 });

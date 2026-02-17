@@ -40,7 +40,7 @@ async function handleFlowQueuedTelemetry(messageObj) {
         }
 
         const auid = foundDevice.auid;
-        const rawTelem = body.ts || body.time;
+        const rawTelem = body.timestamp || body.ts || body.time;
         const rawTransport = messageObj.when;
 
         let telemTime = normalizeTimestamp(rawTelem);
@@ -49,32 +49,23 @@ async function handleFlowQueuedTelemetry(messageObj) {
         if (!isValidTimestamp(telemTime)) telemTime = transportTime;
         if (!isValidTimestamp(telemTime)) telemTime = Date.now();
 
-        const bat_v = parseFloat(body.v);
         const formattedData = {
-            fid: devid,
+            auid,
+            devid,
             timestamp: telemTime,
             telem_time: new Date(telemTime).toISOString(),
             transport_time: new Date(transportTime).toISOString(),
-            mode: body.mode || "AUTO",
             pump: body.pump === true || body.pump === "true",
-            hcode: body.hc || "0000",
-            tank_full: body.tf === true || body.tf === "true",
-            tank_empty: body.te === true || body.te === "true",
-            tank_mm: +body.tmm || 0,
-            tank_l: +body.tl || 0,
-            flow_lpm: +body.fl || 0,
-            flow_hz: +body.fhz || 0,
-            bat_v: isNaN(bat_v) ? 0 : bat_v,
-            bat_ma: +body.c || 0,
-            solar_v: +body.sv || 0,
-            solar_ma: +body.sma || 0,
-            solar_mw: +body.smw || 0,
-            pump_ma: +body.pm || 0,
-            pump_mw: +body.pw || 0,
-            next_cycle: body.nc ? new Date(normalizeTimestamp(body.nc)) : null,
-            wifi_rssi: +body.rssi || 0,
-            error: body.err || "0000",
-            auid
+            manual: body.manual === true || body.manual === "true",
+            health: body.health || "0000",
+            tank_full: body.tank_full ?? body.tf,
+            tank_empty: body.tank_empty ?? body.te,
+            tank_mm: body.tank_mm ?? body.tmm,
+            tank_l: body.tank_l ?? body.tl,
+            bat_v: body.bat_v ?? body.v,
+            bat_ma: body.bat_ma ?? body.c,
+            bat_mw: body.bat_mw,
+            next_cycle: (body.next_cycle || body.nc) ? new Date(normalizeTimestamp(body.next_cycle || body.nc)) : null
         };
 
         const towerFields = [

@@ -67,6 +67,18 @@ const modelKeyMaps = {
     nc: 'next_cycle',
     rssi: 'wifi_rssi',
     err: 'error',
+    // Descriptive Keys
+    tank_mm: 'tank_mm',
+    tank_l: 'tank_l',
+    tank_full: 'tank_full',
+    tank_empty: 'tank_empty',
+    pump: 'pump',
+    manual: 'manual',
+    bat_v: 'bat_v',
+    bat_ma: 'bat_ma',
+    bat_mw: 'bat_mw',
+    health: 'health',
+    timestamp: 'date',
   },
 };
 

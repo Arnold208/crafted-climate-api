@@ -15,6 +15,7 @@ dotenv.config({ path: path.resolve(__dirname, `../../../../${envFile}`) });
 const { flushTelemetryToMongo } = require('../../../utils/flushTelemetryToMongo');
 const EnvTelemetry = require('../../../models/telemetry/envModel');
 const GasSoloTelemetry = require('../../../models/telemetry/gasSoloModel');
+const FlowTelemetry = require('../../../models/telemetry/flowModel');
 
 const MODEL_MAP = {
     'env': EnvTelemetry,
@@ -22,6 +23,7 @@ const MODEL_MAP = {
     'crowdsense-env': EnvTelemetry,
     'gas-solo': GasSoloTelemetry,
     'gassolo': GasSoloTelemetry,
+    'flow': FlowTelemetry,
 };
 
 function startFlushWorker() {

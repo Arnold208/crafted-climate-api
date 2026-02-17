@@ -37,11 +37,9 @@ const CSV_COLUMNS = {
         'comp_temp', 'comp_humi', 'eco2', 'tvoc', 'err_status'
     ],
     flow: [
-        'fid', 'transport_time', 'telem_time', 'mode', 'pump', 'hcode',
+        'auid', 'devid', 'transport_time', 'telem_time', 'pump', 'manual', 'health',
         'tank_full', 'tank_empty', 'tank_mm', 'tank_l',
-        'flow_lpm', 'flow_hz', 'bat_v', 'bat_ma',
-        'solar_v', 'solar_ma', 'solar_mw', 'pump_ma', 'pump_mw',
-        'next_cycle', 'wifi_rssi', 'cell_rssi', 'error'
+        'bat_v', 'bat_ma', 'bat_mw', 'next_cycle'
     ],
     // Alias to match the above array reference if needed, but robust lookup is better
 };
