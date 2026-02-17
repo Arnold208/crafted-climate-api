@@ -39,6 +39,7 @@ class TelemetryController {
 
         } catch (error) {
             // console.error('[TelemetryController] Get Error:', error);
+            if (error.message.includes('requires configuration')) return res.status(403).json({ message: error.message });
             if (error.message === 'Device not found' || error.message === 'No telemetry found') return res.status(404).json({ message: error.message });
             if (error.message === 'Unauthorized access') return res.status(403).json({ message: error.message });
             return res.status(500).json({ message: 'Server error' });
@@ -106,6 +107,7 @@ class TelemetryController {
 
         } catch (error) {
             console.error('[TelemetryController] DB Fetch Error:', error);
+            if (error.message.includes('requires configuration')) return res.status(403).json({ message: error.message });
             if (error.message.includes('Unknown model')) return res.status(404).json({ message: error.message });
             return res.status(500).json({ message: 'Server error' });
         }
@@ -164,6 +166,7 @@ class TelemetryController {
         } catch (error) {
             console.error('[TelemetryController] CSV Error:', error);
             if (cursor && typeof cursor.close === 'function') cursor.close().catch(() => { });
+            if (error.message.includes('requires configuration')) return res.status(403).json({ message: error.message });
             if (error.message.includes('Unknown model')) return res.status(404).json({ message: error.message });
             return res.status(500).json({ message: 'Server error' });
         }
@@ -182,6 +185,7 @@ class TelemetryController {
             res.json(data);
         } catch (error) {
             console.error('[TelemetryController] Raw Data Error:', error);
+            if (error.message.includes('requires configuration')) return res.status(403).json({ message: error.message });
             if (error.message.includes('Unknown model')) return res.status(404).json({ message: error.message });
             return res.status(500).json({ message: 'Server error' });
         }
@@ -199,6 +203,7 @@ class TelemetryController {
             res.json(data);
         } catch (error) {
             console.error('[TelemetryController] Graph Data Error:', error);
+            if (error.message.includes('requires configuration')) return res.status(403).json({ message: error.message });
             if (error.message.includes('Unknown model')) return res.status(404).json({ message: error.message });
             if (error.message.includes('required')) return res.status(400).json({ message: error.message });
             return res.status(500).json({ message: 'Server error' });
