@@ -1,9 +1,9 @@
 const { io } = require("socket.io-client");
 
 // --- CONFIGURATION ---
-const SERVER_URL = ""; // Update with your actual server URL
-const TOKEN = "";       // Replace with a valid JWT token
-const AUID = "";      // Replace with the device AUID to monitor/control
+const SERVER_URL = "http://localhost:3000"; // Update with your actual server URL
+const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyaWQiOiJGVU9KVTJHWDg2IiwiZW1haWwiOiJhcm5vbGQua2lta3BlQGFmcmlsb2dpY3NvbHV0aW9ucy5jb20iLCJ1c2VybmFtZSI6ImFybm9sZDIwOCIsInBsYXRmb3JtUm9sZSI6ImFkbWluIiwib3JnYW5pemF0aW9ucyI6WyJvcmctZTRjOTE5NWEtY2ViYy00NDFiLTgwYTEtY2FiYTUzZDk5NGE2Iiwib3JnLTY1NzQ5NDAwLTE4MWItNGQzMi1hODU1LWU2M2Y1ZDkwNzAyOCJdLCJjdXJyZW50T3JnYW5pemF0aW9uSWQiOiJvcmctZTRjOTE5NWEtY2ViYy00NDFiLTgwYTEtY2FiYTUzZDk5NGE2IiwiaWF0IjoxNzcxMzQ2NzI5LCJleHAiOjE3NzEzODI3Mjl9.hv47dX2pBmIdKz5vWoPr-qqwwf0qjiuX2ZADLAVy6Ec";       // Replace with a valid JWT token
+const AUID = "GH-Q50ZKMBMVMDJUHMFQQBIT";      // Replace with the device AUID to monitor/control
 
 const socket = io(SERVER_URL, {
     auth: { token: TOKEN },

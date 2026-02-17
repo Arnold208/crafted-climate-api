@@ -1,9 +1,9 @@
 const { io } = require("socket.io-client");
 
 // --- CONFIGURATION ---
-const SERVER_URL = ""; // Update with your actual server URL
-const API_KEY = "";         // Replace with a valid API key
-const AUID = "";        // Replace with the device AUID
+const SERVER_URL = "https://cctelemetry-api-prod-c5b7aqawfxeybvbd.eastus-01.azurewebsites.net"; // Update with your actual server URL
+const API_KEY = "ck_live_0af5efa2_403ae10b1807a67d7fa1d82276bd912f8f4c0a32cce8e0d7f7cdc0bc339690c6";         // Replace with a valid API key
+const AUID = "GH-Q50ZKMBMVMDJUHMFQQBIT";        // Replace with the device AUID
 
 const socket = io(SERVER_URL, {
     auth: { apiKey: API_KEY },

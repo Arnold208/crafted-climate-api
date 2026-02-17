@@ -215,7 +215,6 @@ app.use('/api/devices', devicesRoutes);
 app.use('/api', thresholdRoutes);
 
 app.use('/api/subscriptions', subscriptionRoutes);
-app.use('/api/subscriptions', subscriptionRoutes);
 const adminPlanRoutes = require('./modules/admin/adminPlan.routes');
 app.use('/api/admin/plans', adminPlanRoutes);
 const analyticsRoutes = require('./modules/analytics/analytics.routes');

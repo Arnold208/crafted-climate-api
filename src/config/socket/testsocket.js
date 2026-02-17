@@ -1,11 +1,11 @@
 const { io } = require("socket.io-client");
 
 const SERVER_URL = "https://cctelemetry-api-prod-c5b7aqawfxeybvbd.eastus-01.azurewebsites.net";
-const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGUyOWZhMzU2ZmQ4MjUyMGZkYmIxODMiLCJyb2xlIjoidXNlciIsInVzZXJpZCI6IjFWWTZLWEpGQUMiLCJlbWFpbCI6Imdlb3JnaW5hQHZlcnRldG93ZXIuY29tIiwidXNlcm5hbWUiOiJnZW9yZ2luYSIsImlhdCI6MTc2MzY4MzE4MCwiZXhwIjoxNzYzNjg2NzgwfQ.8Gt7R94dIRquUxmAEdn8oLvA-VHz2s2GBOHGQ7zAwkI"
+const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyaWQiOiJGVU9KVTJHWDg2IiwiZW1haWwiOiJhcm5vbGQua2lta3BlQGFmcmlsb2dpY3NvbHV0aW9ucy5jb20iLCJ1c2VybmFtZSI6ImFybm9sZDIwOCIsInBsYXRmb3JtUm9sZSI6ImFkbWluIiwib3JnYW5pemF0aW9ucyI6WyJvcmctZTRjOTE5NWEtY2ViYy00NDFiLTgwYTEtY2FiYTUzZDk5NGE2Iiwib3JnLTY1NzQ5NDAwLTE4MWItNGQzMi1hODU1LWU2M2Y1ZDkwNzAyOCJdLCJjdXJyZW50T3JnYW5pemF0aW9uSWQiOiJvcmctZTRjOTE5NWEtY2ViYy00NDFiLTgwYTEtY2FiYTUzZDk5NGE2IiwiaWF0IjoxNzcxMzQ2NzI5LCJleHAiOjE3NzEzODI3Mjl9.hv47dX2pBmIdKz5vWoPr-qqwwf0qjiuX2ZADLAVy6Ec"
 
 const socket = io(SERVER_URL, {
   transports: ["websocket"],
-  auth: { token: TOKEN },  
+  auth: { token: TOKEN },
 });
 
 socket.on("connect", () => {
