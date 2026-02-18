@@ -17,10 +17,25 @@ socket.on("connect", () => {
     socket.emit("join", AUID, (response) => {
         if (response.ok) {
             console.log(`🏠 Joined room: ${response.room}`);
+
+            // 🔥 Trigger 2: Explicitly request time sync after join confirmed
+            console.log("⏱️ Requesting manual time sync...");
+            socket.emit("time:request", AUID);
         } else {
             console.error("❌ Join failed:", response.error);
         }
     });
+});
+
+// ── TIME SYNC LISTENER ──
+socket.on("time:sync", (data) => {
+    console.log("🕒 [Time Sync Received]:", data);
+    const serverTimestamp = data.timestamp;
+    if (serverTimestamp > 1700000000) {
+        console.log("✅ RTC update simulation: Clock synchronized with server UTC.");
+    } else {
+        console.warn("⚠️ Invalid timestamp received. RTC NOT updated.");
+    }
 });
 
 socket.on("disconnect", (reason) => {

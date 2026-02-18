@@ -145,6 +145,12 @@ function setupRealtime(server) {
 
         // Explicit event for IoT clients that don't track ACK IDs
         socket.emit("join:success", { ok: true, room: auid });
+
+        // 🔥 Trigger 1: Push server time immediately on join
+        socket.emit("time:sync", {
+          timestamp: Math.floor(Date.now() / 1000)
+        });
+        console.log(`[Socket ${socket.id}] ⏱️ Time sync pushed on join for ${auid}`);
       } catch (err) {
         console.error("Join error:", err);
         ack?.({ ok: false, error: "Join failed" });
@@ -239,6 +245,17 @@ function setupRealtime(server) {
       }
 
       ack?.({ ok: true });
+    });
+
+    // ── TIME SYNC: DEVICE REQUEST ──
+    socket.on("time:request", (data) => {
+      // Data might be [auid] or just auid string
+      const auid = Array.isArray(data) ? data[0] : data;
+
+      socket.emit("time:sync", {
+        timestamp: Math.floor(Date.now() / 1000)
+      });
+      console.log(`[Socket ${socket.id}] ⏱️ Time sync sent on request (${auid || 'unknown AUID'})`);
     });
 
     // ── LEAVE ──
