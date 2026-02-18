@@ -38,6 +38,7 @@ const CSV_COLUMNS = {
     ],
     flow: [
         'auid', 'devid', 'transport_time', 'telem_time', 'pump', 'manual', 'health',
+        'sensor_ok', 'sleeping',
         'tank_full', 'tank_empty', 'tank_mm', 'tank_l',
         'bat_v', 'bat_ma', 'bat_mw', 'next_cycle'
     ],

@@ -78,6 +78,10 @@ const modelKeyMaps = {
     bat_ma: 'bat_ma',
     bat_mw: 'bat_mw',
     health: 'health',
+    sensor_ok: 'sensor_ok',
+    sleeping: 'sleeping',
+    sok: 'sensor_ok',
+    slp: 'sleeping',
     timestamp: 'date',
   },
 };

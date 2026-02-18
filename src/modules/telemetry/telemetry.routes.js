@@ -89,6 +89,10 @@ router.post('/:model', ingestRouteLimiter, enforceTelemetryIngestion, telemetryC
  *                 telemetry:
  *                   type: array
  *                   items: { type: object }
+ *       403:
+ *         description: Forbidden - Device requires configuration
+ *       404:
+ *         description: Not Found
  */
 router.get('/:userid/device/:auid',
     authenticateToken,
@@ -243,6 +247,8 @@ router.get('/public/telemetry', publicTelemetryLimiter, telemetryController.getP
  *                 telemetry:
  *                   type: array
  *                   items: { type: object }
+ *       403:
+ *         description: Forbidden - Device requires configuration
  *       404:
  *         description: No telemetry data found for the given device or model.
  *       500:
@@ -295,7 +301,9 @@ router.get('/db/:model/:auid',
  *           text/csv:
  *             schema:
  *               type: string
- *               example: "auid,transport_time,telem_time,temperature,humidity,pressure,altitude,pm1,pm2_5,pm10,pm1s,pm2_5s,pm10s,lux,uv,sound,aqi,battery,error\nGH-XXXX,2025-09-23T18:00:00.000Z,2025-09-23T18:00:00.000Z,28.7,65.9,1009.43,0,0,0,0,0,0,0,15.67,38,0,0,27.5,00001"
+ *               example: "auid,transport_time,telem_time,pump,manual,health,sensor_ok,sleeping,tank_full,tank_empty,tank_mm,tank_l,bat_v,bat_ma,bat_mw,next_cycle\nGH-XXXX,2025-09-23T18:00:00.000Z,2025-09-23T18:00:00.000Z,false,false,0000,true,false,false,false,220,16.8,13.02,44.1,573.2,2025-09-23T18:30:00.000Z"
+ *       403:
+ *         description: Forbidden - Device requires configuration
  *       404:
  *         description: Unknown model.
  *       500:

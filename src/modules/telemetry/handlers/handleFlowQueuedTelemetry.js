@@ -70,6 +70,8 @@ async function handleFlowQueuedTelemetry(messageObj) {
             bat_v: body.bat_v ?? body.v ?? 0,
             bat_ma: body.bat_ma ?? body.c ?? 0,
             bat_mw: body.bat_mw ?? 0,
+            sensor_ok: body.sensor_ok ?? true,
+            sleeping: body.sleeping ?? false,
             next_cycle: (body.next_cycle || body.nc) ? new Date(normalizeTimestamp(body.next_cycle || body.nc)) : null
         };
 

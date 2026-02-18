@@ -25,6 +25,8 @@ const flowTelemetrySchema = new mongoose.Schema({
   bat_v: { type: Number, default: 0 },
   bat_ma: { type: Number, default: 0 },
   bat_mw: { type: Number, default: 0 },
+  sensor_ok: { type: Boolean, default: true },
+  sleeping: { type: Boolean, default: false },
 
   // Metdata / Tower Info
   next_cycle: { type: Date },

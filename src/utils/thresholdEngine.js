@@ -158,6 +158,13 @@ function getUnitForDatapoint(dp) {
     npk_n: "mg/kg",
     npk_p: "mg/kg",
     npk_k: "mg/kg",
+
+    // Flow / Pump
+    tank_mm: "mm",
+    tank_l: "L",
+    tank_percentage: "%",
+    bat_ma: "mA",
+    bat_mw: "mW"
   };
 
   return unitMap[dp] || "";
@@ -201,6 +208,17 @@ function prettyName(dp) {
     npk_n: "Nitrogen (N)",
     npk_p: "Phosphorus (P)",
     npk_k: "Potassium (K)",
+
+    // Flow / Pump
+    tank_mm: "Tank Height",
+    tank_l: "Tank Volume",
+    tank_percentage: "Tank Percentage",
+    bat_ma: "Battery Current",
+    bat_mw: "Battery Power",
+    sensor_ok: "Sensor Health",
+    sleeping: "Sleep Mode",
+    pump: "Pump Active",
+    manual: "Manual Mode"
   };
 
   return map[dp] || dp.toUpperCase();
