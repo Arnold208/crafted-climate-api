@@ -83,6 +83,22 @@ const modelKeyMaps = {
     sok: 'sensor_ok',
     slp: 'sleeping',
     timestamp: 'date',
+
+    // Pump Session (Nested object keys mapping)
+    duration_s: 'pump_session.duration_s',
+    avg_ma: 'pump_session.avg_ma',
+    avg_mw: 'pump_session.avg_mw',
+    min_v: 'pump_session.min_v',
+    max_v: 'pump_session.max_v',
+    samples: 'pump_session.samples',
+
+    // Short Keys for Session
+    ps_dur: 'pump_session.duration_s',
+    ps_ama: 'pump_session.avg_ma',
+    ps_amw: 'pump_session.avg_mw',
+    ps_minv: 'pump_session.min_v',
+    ps_maxv: 'pump_session.max_v',
+    ps_sam: 'pump_session.samples',
   },
 };
 

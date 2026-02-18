@@ -52,26 +52,63 @@ socket.on("disconnect", (reason) => {
 });
 
 // Simulate sending telemetry every 10 seconds after joining
+let counter = 0;
 setInterval(() => {
     if (socket.connected) {
-        const telemetry = {
+        counter++;
+        let telemetry = {
             auid: AUID,
-            tank_mm: Math.floor(Math.random() * 500),
-            tank_l: parseFloat((Math.random() * 100).toFixed(2)),
+            tank_mm: 220,
+            tank_l: 16.80,
             tank_full: false,
             tank_empty: false,
-            pump: true,
+            pump: false,
             manual: false,
-            bat_v: parseFloat((3.7 + Math.random() * 0.5).toFixed(2)),
-            bat_ma: Math.floor(Math.random() * 1000),
-            bat_mw: Math.floor(Math.random() * 5000),
+            bat_v: 13.02,
+            bat_ma: 44.10,
+            bat_mw: 573.20,
             health: "0000",
-            timestamp: Math.floor(Date.now() / 1000)
+            sensor_ok: true,
+            sleeping: false,
+            next_cycle: Math.floor(Date.now() / 1000) + 1800,
+            timestamp: Math.floor(Date.now() / 1000),
+            pump_session: null
         };
 
+        // Cycle through scenarios
+        const scenario = counter % 5;
+        if (scenario === 1) { // Pump START
+            telemetry.pump = true;
+            telemetry.bat_v = 12.89;
+            telemetry.bat_ma = 850.40;
+            telemetry.bat_mw = 10962.00;
+        } else if (scenario === 2) { // Pump STOP (with session summary)
+            telemetry.timestamp += 60;
+            telemetry.pump_session = {
+                duration_s: 173,
+                avg_ma: 854.20,
+                avg_mw: 10891.00,
+                min_v: 12.21,
+                max_v: 12.89,
+                samples: 17
+            };
+        } else if (scenario === 3) { // Going to sleep
+            telemetry.sleeping = true;
+            telemetry.next_cycle += 3600;
+        } else if (scenario === 4) { // Health fault
+            telemetry.tank_mm = 0;
+            telemetry.tank_l = 0;
+            telemetry.bat_v = 0.00;
+            telemetry.bat_ma = 0.00;
+            telemetry.bat_mw = 0.00;
+            telemetry.health = "0110";
+            telemetry.sensor_ok = false;
+        }
+
+        console.log(`📤 Emitting scenario ${scenario}:`, JSON.stringify(telemetry, null, 2));
         socket.emit("telemetry:emit", telemetry, (ack) => {
             if (ack?.ok) {
-                console.log("📤 Telemetry emitted successfully");
+                console.log("✅ Telemetry emitted successfully");
             } else {
                 console.error("❌ Telemetry emission failed:", ack?.error);
             }

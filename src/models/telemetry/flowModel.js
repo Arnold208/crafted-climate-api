@@ -27,6 +27,22 @@ const flowTelemetrySchema = new mongoose.Schema({
   bat_mw: { type: Number, default: 0 },
   sensor_ok: { type: Boolean, default: true },
   sleeping: { type: Boolean, default: false },
+  pump_session: {
+    duration_s: { type: Number },
+    avg_ma: { type: Number },
+    avg_mw: { type: Number },
+    min_v: { type: Number },
+    max_v: { type: Number },
+    samples: { type: Number }
+  },
+
+  // Flattened for CSV Export / Trends
+  ps_duration: { type: Number },
+  ps_avg_ma: { type: Number },
+  ps_avg_mw: { type: Number },
+  ps_min_v: { type: Number },
+  ps_max_v: { type: Number },
+  ps_samples: { type: Number },
 
   // Metdata / Tower Info
   next_cycle: { type: Date },

@@ -301,7 +301,7 @@ router.get('/db/:model/:auid',
  *           text/csv:
  *             schema:
  *               type: string
- *               example: "auid,transport_time,telem_time,pump,manual,health,sensor_ok,sleeping,tank_full,tank_empty,tank_mm,tank_l,bat_v,bat_ma,bat_mw,next_cycle\nGH-XXXX,2025-09-23T18:00:00.000Z,2025-09-23T18:00:00.000Z,false,false,0000,true,false,false,false,220,16.8,13.02,44.1,573.2,2025-09-23T18:30:00.000Z"
+ *               example: "auid,transport_time,telem_time,pump,manual,health,sensor_ok,sleeping,tank_full,tank_empty,tank_mm,tank_l,bat_v,bat_ma,bat_mw,next_cycle,ps_duration,ps_avg_ma,ps_avg_mw,ps_min_v,ps_max_v,ps_samples\nGH-XXXX,2025-09-23T18:00:00.000Z,2025-09-23T18:00:00.000Z,false,false,0000,true,false,false,false,220,16.8,13.02,44.1,573.2,2025-09-23T18:30:00.000Z,173,854.2,10891,12.21,12.89,173"
  *       403:
  *         description: Forbidden - Device requires configuration
  *       404:

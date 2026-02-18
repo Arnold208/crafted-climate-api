@@ -72,7 +72,22 @@ async function handleFlowQueuedTelemetry(messageObj) {
             bat_mw: body.bat_mw ?? 0,
             sensor_ok: body.sensor_ok ?? true,
             sleeping: body.sleeping ?? false,
-            next_cycle: (body.next_cycle || body.nc) ? new Date(normalizeTimestamp(body.next_cycle || body.nc)) : null
+            next_cycle: (body.next_cycle || body.nc) ? new Date(normalizeTimestamp(body.next_cycle || body.nc)) : null,
+            pump_session: body.pump_session ? {
+                duration_s: body.pump_session.duration_s ?? body.ps_dur ?? 0,
+                avg_ma: body.pump_session.avg_ma ?? body.ps_ama ?? 0,
+                avg_mw: body.pump_session.avg_mw ?? body.ps_amw ?? 0,
+                min_v: body.pump_session.min_v ?? body.ps_minv ?? 0,
+                max_v: body.pump_session.max_v ?? body.ps_maxv ?? 0,
+                samples: body.pump_session.samples ?? body.ps_sam ?? 0
+            } : null,
+            // Flattened for CSV compatibility
+            ps_duration: body.pump_session?.duration_s ?? body.ps_dur ?? 0,
+            ps_avg_ma: body.pump_session?.avg_ma ?? body.ps_ama ?? 0,
+            ps_avg_mw: body.pump_session?.avg_mw ?? body.ps_amw ?? 0,
+            ps_min_v: body.pump_session?.min_v ?? body.ps_minv ?? 0,
+            ps_max_v: body.pump_session?.max_v ?? body.ps_maxv ?? 0,
+            ps_samples: body.pump_session?.samples ?? body.ps_sam ?? 0
         };
 
         // B. Tank Calculation (Server-Side Override)

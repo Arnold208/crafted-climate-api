@@ -164,7 +164,15 @@ function getUnitForDatapoint(dp) {
     tank_l: "L",
     tank_percentage: "%",
     bat_ma: "mA",
-    bat_mw: "mW"
+    bat_mw: "mW",
+
+    // Pump Session
+    ps_duration: "s",
+    ps_avg_ma: "mA",
+    ps_avg_mw: "mW",
+    ps_min_v: "V",
+    ps_max_v: "V",
+    ps_samples: ""
   };
 
   return unitMap[dp] || "";
@@ -218,7 +226,15 @@ function prettyName(dp) {
     sensor_ok: "Sensor Health",
     sleeping: "Sleep Mode",
     pump: "Pump Active",
-    manual: "Manual Mode"
+    manual: "Manual Mode",
+
+    // Pump Session
+    ps_duration: "Session Duration",
+    ps_avg_ma: "Session Avg Current",
+    ps_avg_mw: "Session Avg Power",
+    ps_min_v: "Session Min Voltage",
+    ps_max_v: "Session Max Voltage",
+    ps_samples: "Session Samples"
   };
 
   return map[dp] || dp.toUpperCase();

@@ -40,7 +40,8 @@ const CSV_COLUMNS = {
         'auid', 'devid', 'transport_time', 'telem_time', 'pump', 'manual', 'health',
         'sensor_ok', 'sleeping',
         'tank_full', 'tank_empty', 'tank_mm', 'tank_l',
-        'bat_v', 'bat_ma', 'bat_mw', 'next_cycle'
+        'bat_v', 'bat_ma', 'bat_mw', 'next_cycle',
+        'ps_duration', 'ps_avg_ma', 'ps_avg_mw', 'ps_min_v', 'ps_max_v', 'ps_samples'
     ],
     // Alias to match the above array reference if needed, but robust lookup is better
 };
