@@ -57,6 +57,15 @@ class FlowController {
             return res.status(500).send({ message: "Sync failed", error: err.message });
         }
     }
+
+    async updateSetup(req, res) {
+        try {
+            const updated = await flowService.updateDeviceSetup(req.params.auid, req.body);
+            return res.status(200).send({ message: "Device setup updated", data: updated });
+        } catch (err) {
+            return res.status(500).send({ message: "Failed to update setup", error: err.message });
+        }
+    }
 }
 
 module.exports = new FlowController();

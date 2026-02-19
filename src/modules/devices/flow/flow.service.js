@@ -72,6 +72,11 @@ class FlowService {
             }))
         };
     }
+
+    async updateDeviceSetup(auid, reqBody) {
+        const registryService = require('../registry/registry.service');
+        return await registryService.updateDevice(null, auid, reqBody);
+    }
 }
 
 module.exports = new FlowService();

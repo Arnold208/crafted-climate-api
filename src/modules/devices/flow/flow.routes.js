@@ -167,4 +167,49 @@ router.delete('/:auid/schedules/:scheduleId', authenticateToken, checkOrgAccess(
  */
 router.get('/sync/:devid', flowController.syncConfig);
 
+/**
+ * @swagger
+ * /api/devices/flow/{auid}/setup:
+ *   put:
+ *     tags: [Flow Hub]
+ *     summary: Update device setup and configuration
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               setup:
+ *                 type: object
+ *                 properties:
+ *                   requires_configuration: { type: boolean }
+ *                   is_configured: { type: boolean }
+ *                   wifi_configured: { type: boolean }
+ *                   api_key_generated: { type: boolean }
+ *                   tank_calibrated: { type: boolean }
+ *                   tank_height_mm: { type: integer }
+ *                   tank_volume_l: { type: integer }
+ *               power_system:
+ *                 type: object
+ *                 properties:
+ *                   architecture: { type: string }
+ *                   capabilities:
+ *                     type: object
+ *                     properties:
+ *                       solar: { type: boolean }
+ *                       battery: { type: boolean }
+ *                       ac_input: { type: boolean }
+ *     responses:
+ *       200: { description: Setup updated }
+ */
+router.put('/:auid/setup', authenticateToken, checkOrgAccess("org.devices.control"), flowController.updateSetup);
+
 module.exports = router;
