@@ -6,6 +6,7 @@ const scheduleSchema = new mongoose.Schema({
     name: { type: String, default: "Irrigation Schedule" },
     startTime: { type: String, required: true }, // HH:mm
     durationMinutes: { type: Number, required: true },
+    intervalMinutes: { type: Number, default: 0 },
     days: {
         type: [String],
         enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],

@@ -115,13 +115,20 @@ router.post('/:auid/op-mode', authenticateToken, checkOrgAccess("org.devices.con
  *       required: true
  *       content:
  *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name: { type: string }
- *               startTime: { type: string, example: "08:00" }
- *               durationMinutes: { type: integer }
- *               days: { type: array, items: { type: string } }
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 name: { type: string }
+ *                 startTime: { type: string, example: "08:00" }
+ *                 durationMinutes: { type: integer, example: 3 }
+ *                 intervalMinutes: { type: integer, example: 60 }
+ *                 days: { type: array, items: { type: string }, example: ["Monday", "Wednesday"] }
+ *             example:
+ *               name: "Morning Irrigation"
+ *               startTime: "08:00"
+ *               durationMinutes: 5
+ *               intervalMinutes: 120
+ *               days: ["Monday", "Wednesday", "Friday"]
  *     responses:
  *       201: { description: Schedule added }
  */
@@ -147,7 +154,21 @@ router.post('/:auid/schedules', authenticateToken, checkOrgAccess("org.devices.c
  *     requestBody:
  *       content:
  *         application/json:
- *           schema: { type: object }
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string }
+ *               startTime: { type: string, example: "08:00" }
+ *               durationMinutes: { type: integer, example: 3 }
+ *               intervalMinutes: { type: integer, example: 60 }
+ *               days: { type: array, items: { type: string } }
+ *               enabled: { type: boolean }
+ *           example:
+ *             startTime: "09:30"
+ *             durationMinutes: 10
+ *             intervalMinutes: 180
+ *             days: ["Monday", "Wednesday", "Friday"]
+ *             enabled: true
  *     responses:
  *       200: { description: Schedule updated }
  */
@@ -177,21 +198,21 @@ router.delete('/:auid/schedules/:scheduleId', authenticateToken, checkOrgAccess(
 
 /**
  * @swagger
- * /api/devices/flow/sync/{devid}:
+ * /api/devices/flow/sync/{auid}:
  *   get:
  *     tags: [Flow Hub]
  *     summary: Device Synchronization Endpoint (Public/Internal)
- *     description: Endpoint for the physical device to fetch its desired state and schedules.
+ *     description: Endpoint for the physical device to fetch its desired state and schedules using its AUID.
  *     parameters:
  *       - in: path
- *         name: devid
+ *         name: auid
  *         required: true
  *         schema: { type: string }
  *     responses:
  *       200: { description: Sync data retrieved }
  *       404: { description: Config not found }
  */
-router.get('/sync/:devid', flowController.syncConfig);
+router.get('/sync/:auid', flowController.syncConfig);
 
 /**
  * @swagger

@@ -105,7 +105,7 @@ const modelKeyMaps = {
 };
 
 // System-level fields that should always be included even if not in datapoints[]
-const systemFields = ['date', 'error', 'battery', 'aqi'];
+const systemFields = ['date', 'error', 'battery', 'aqi', 'op_mode', 'sleep_enabled', 'stop_reason'];
 
 function mapTelemetryData(model, body, datapoints) {
   const keyMap = modelKeyMaps[model.toLowerCase()];

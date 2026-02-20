@@ -93,8 +93,8 @@ class FlowService {
         return await config.save();
     }
 
-    async getSyncConfig(devid) {
-        const config = await FlowConfig.findOne({ devid });
+    async getSyncConfig(auid) {
+        const config = await FlowConfig.findOne({ auid });
         if (!config) return null;
 
         return {
@@ -104,6 +104,7 @@ class FlowService {
                 id: s.id,
                 st: s.startTime,
                 du: s.durationMinutes,
+                in: s.intervalMinutes || 0,
                 days: s.days
             }))
         };

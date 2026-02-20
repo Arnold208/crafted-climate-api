@@ -62,6 +62,7 @@ async function handleFlowQueuedTelemetry(messageObj) {
             transport_time: new Date(transportTime).toISOString(),
             pump: body.pump === true || body.pump === "true",
             manual: body.manual === true || body.manual === "true",
+            op_mode: body.op_mode || body.mode,
             health: body.health || "0000",
             tank_full: body.tank_full ?? body.tf,
             tank_empty: body.tank_empty ?? body.te,
@@ -72,6 +73,8 @@ async function handleFlowQueuedTelemetry(messageObj) {
             bat_mw: body.bat_mw ?? 0,
             sensor_ok: body.sensor_ok ?? true,
             sleeping: body.sleeping ?? false,
+            sleep_enabled: body.sleep_enabled ?? false,
+            stop_reason: body.stop_reason || "none",
             next_cycle: (body.next_cycle || body.nc) ? new Date(normalizeTimestamp(body.next_cycle || body.nc)) : null,
             pump_session: body.pump_session ? {
                 duration_s: body.pump_session.duration_s ?? body.ps_dur ?? 0,

@@ -59,8 +59,8 @@ class FlowController {
 
     async syncConfig(req, res) {
         try {
-            const devid = req.params.devid || req.query.devid;
-            const syncData = await flowService.getSyncConfig(devid);
+            const auid = req.params.auid || req.query.auid;
+            const syncData = await flowService.getSyncConfig(auid);
             if (!syncData) return res.status(404).send({ message: "Config not found" });
             return res.status(200).send(syncData);
         } catch (err) {
