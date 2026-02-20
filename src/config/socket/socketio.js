@@ -280,4 +280,14 @@ function publishToAUID(auid, data) {
   io.to(auid).emit("telemetry", data);
 }
 
-module.exports = { setupRealtime, publishToAUID };
+function sendCommandToAUID(auid, command, from = 'system') {
+  if (!io) return;
+  console.log(`📡 [SocketIO] Sending command to ${auid}:`, JSON.stringify(command));
+  io.to(auid).emit("command:receive", {
+    auid,
+    command,
+    from
+  });
+}
+
+module.exports = { setupRealtime, publishToAUID, sendCommandToAUID };

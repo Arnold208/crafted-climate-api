@@ -21,7 +21,7 @@ const flowConfigSchema = new mongoose.Schema({
     // Desired State (Shadow)
     desiredState: {
         pump: { type: Boolean, default: false },
-        mode: { type: String, enum: ["AUTO", "MANUAL"], default: "AUTO" }
+        op_mode: { type: String, enum: ["schedule", "remote", "manual"], default: "schedule" }
     },
 
     // Irrigation Schedules

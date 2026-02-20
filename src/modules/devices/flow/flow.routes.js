@@ -66,11 +66,37 @@ router.get('/:auid/config', authenticateToken, checkOrgAccess("org.devices.view"
  *             type: object
  *             properties:
  *               pump: { type: boolean }
- *               mode: { type: string, enum: [AUTO, MANUAL] }
+ *               op_mode: { type: string, enum: ["schedule", "remote", "manual"] }
  *     responses:
  *       200: { description: Pump state updated }
  */
 router.post('/:auid/pump', authenticateToken, checkOrgAccess("org.devices.control"), flowController.updatePump);
+
+/**
+ * @swagger
+ * /api/devices/flow/{auid}/op-mode:
+ *   post:
+ *     tags: [Flow Hub]
+ *     summary: Update Device Operation Mode
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               op_mode: { type: string, enum: ["schedule", "remote", "manual"] }
+ *     responses:
+ *       200: { description: Operation mode updated }
+ */
+router.post('/:auid/op-mode', authenticateToken, checkOrgAccess("org.devices.control"), flowController.updateOpMode);
 
 /**
  * @swagger

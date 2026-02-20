@@ -11,6 +11,7 @@ const flowTelemetrySchema = new mongoose.Schema({
   // Shared Sensor Payload Fields
   pump: { type: Boolean, default: false },
   manual: { type: Boolean, default: false },
+  op_mode: { type: String, enum: ["schedule", "remote", "manual"] },
 
   // Tank Status
   tank_full: { type: Boolean, default: false },
@@ -27,6 +28,8 @@ const flowTelemetrySchema = new mongoose.Schema({
   bat_mw: { type: Number, default: 0 },
   sensor_ok: { type: Boolean, default: true },
   sleeping: { type: Boolean, default: false },
+  sleep_enabled: { type: Boolean, default: false },
+  stop_reason: { type: String, default: "none" },
   pump_session: {
     duration_s: { type: Number },
     avg_ma: { type: Number },

@@ -37,8 +37,8 @@ const CSV_COLUMNS = {
         'comp_temp', 'comp_humi', 'eco2', 'tvoc', 'err_status'
     ],
     flow: [
-        'auid', 'devid', 'transport_time', 'telem_time', 'pump', 'manual', 'health',
-        'sensor_ok', 'sleeping',
+        'auid', 'devid', 'transport_time', 'telem_time', 'pump', 'manual', 'op_mode', 'health',
+        'sensor_ok', 'sleeping', 'sleep_enabled', 'stop_reason',
         'tank_full', 'tank_empty', 'tank_mm', 'tank_l',
         'bat_v', 'bat_ma', 'bat_mw', 'next_cycle',
         'ps_duration', 'ps_avg_ma', 'ps_avg_mw', 'ps_min_v', 'ps_max_v', 'ps_samples'

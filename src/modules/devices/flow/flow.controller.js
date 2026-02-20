@@ -12,11 +12,21 @@ class FlowController {
 
     async updatePump(req, res) {
         try {
-            const { pump, mode } = req.body;
-            const updated = await flowService.updatePumpState(req.params.auid, pump, mode);
+            const { pump, op_mode } = req.body;
+            const updated = await flowService.updatePumpState(req.params.auid, pump, op_mode);
             return res.status(200).send({ message: "Pump state updated", data: updated });
         } catch (err) {
             return res.status(500).send({ message: "Failed to update pump", error: err.message });
+        }
+    }
+
+    async updateOpMode(req, res) {
+        try {
+            const { op_mode } = req.body;
+            const updated = await flowService.updateOpMode(req.params.auid, op_mode);
+            return res.status(200).send({ message: "Operation mode updated", data: updated });
+        } catch (err) {
+            return res.status(500).send({ message: "Failed to update mode", error: err.message });
         }
     }
 
