@@ -34,11 +34,6 @@ function isValidTimestamp(ts) {
     return !isNaN(d.getTime()) && d.getFullYear() >= 2020;
 }
 
-function getNum(v, def = 0) {
-    const n = parseFloat(v);
-    return isNaN(n) ? def : n;
-}
-
 //
 // --- MAIN HANDLER ----------------------------------------
 //
@@ -62,57 +57,72 @@ async function handleEnvQueuedTelemetry(messageObj) {
         const auid = foundDevice.auid;
 
         //
-        // --- TIMESTAMP PROCESSING (same as AQUA) --------------
+        // 1️⃣ Normalize timestamps (same logic as GasSolo)
         //
-        const rawTelem = body.ts;
+        const rawTelem = body.ts || body.time;   // 'ts' legacy first, 'time' is Notehub standard
         const rawTransport = messageObj.when;
 
         let telemTime = normalizeTimestamp(rawTelem);
         let transportTime = normalizeTimestamp(rawTransport);
 
+        // Fallbacks: telem → transport → now
         if (!isValidTimestamp(telemTime)) {
-            telemTime = transportTime;
+            telemTime = isValidTimestamp(transportTime) ? transportTime : Date.now();
+        }
+        if (!isValidTimestamp(transportTime)) {
+            transportTime = Date.now();
         }
 
-        if (!isValidTimestamp(telemTime)) {
-            telemTime = Date.now();
+        // 🔒 BATCH FIX: Notehub batches often share the same whole-second epoch.
+        // Add random sub-second jitter so Redis keys don't collide across batch entries.
+        if (telemTime % 1000 === 0) {
+            telemTime += Math.floor(Math.random() * 999);
         }
 
         //
-        // --- BUILD FORMATTED PAYLOAD -------------------------
+        // 2️⃣ Parse numeric fields (null-safe — better for graphs than 0)
         //
-        const voltage = getNum(body.voltage);
+        const toNumber = (v) => {
+            if (v === null || v === undefined || v === '') return null;
+            const n = parseFloat(v);
+            return isNaN(n) ? null : n;
+        };
 
+        const voltage = toNumber(body.voltage);
+
+        //
+        // 3️⃣ Build unified telemetry format
+        //
         const formattedData = {
-            // Unified timestamp structure
-            timestamp: telemTime,
+            // Timestamps
+            timestamp: telemTime,                           // Epoch MS
             telem_time: new Date(telemTime).toISOString(),
             transport_time: new Date(transportTime).toISOString(),
 
             auid,
 
             // Standard ENV fields
-            temperature: getNum(body.temp),
-            humidity: getNum(body.humidity),
-            pressure: getNum(body.pressure),
-            sound: getNum(body.sound),
-            current: getNum(body.current),
-            lux: getNum(body.lux),
-            uv: getNum(body.uv),
+            temperature: toNumber(body.temp),
+            humidity: toNumber(body.humidity),
+            pressure: toNumber(body.pressure),
+            sound: toNumber(body.sound),
+            current: toNumber(body.current),
+            lux: toNumber(body.lux),
+            uv: toNumber(body.uv),
 
             // PM values
-            pm1: getNum(body.pm1),
-            pm2_5: getNum(body.pm2_5),
-            pm10: getNum(body.pm10),
+            pm1: toNumber(body.pm1),
+            pm2_5: toNumber(body.pm2_5),
+            pm10: toNumber(body.pm10),
 
-            // v2 values
-            pm1s: getNum(body.pm1s),
-            pm2_5s: getNum(body.pm2_5s),
-            pm10s: getNum(body.pm10s),
+            // v2 secondary PM values
+            pm1s: toNumber(body.pm1s),
+            pm2_5s: toNumber(body.pm2_5s),
+            pm10s: toNumber(body.pm10s),
 
             voltage,
-            battery: batteryPercentage(voltage),
-            aqi: calculateAQI(getNum(body.pm2_5)),
+            battery: batteryPercentage(voltage ?? 0),
+            aqi: calculateAQI(toNumber(body.pm2_5) ?? 0),
             error: body.err || "0000"
         };
 

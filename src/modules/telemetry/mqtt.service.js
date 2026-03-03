@@ -43,9 +43,11 @@ function initializeMQTTClient(client, topics) {
             console.log(`📦 Telemetry queued as Job ID: ${result.id}`);
 
             // 🔥 HEARTBEAT: Also push to status queue for fast online detection
-            if (data.devid) {
+            // Note: devid is nested under data.body, not at the root of the Notehub payload
+            const heartbeatDevid = data.body?.devid;
+            if (heartbeatDevid) {
                 await statusQueue.add('processStatus', {
-                    body: { devid: data.devid }
+                    body: { devid: heartbeatDevid }
                 }, {
                     removeOnComplete: true,
                     removeOnFail: true
