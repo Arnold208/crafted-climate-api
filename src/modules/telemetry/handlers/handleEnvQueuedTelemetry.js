@@ -73,11 +73,9 @@ async function handleEnvQueuedTelemetry(messageObj) {
             transportTime = Date.now();
         }
 
-        // 🔒 BATCH FIX: Notehub batches often share the same whole-second epoch.
-        // Add random sub-second jitter so Redis keys don't collide across batch entries.
-        if (telemTime % 1000 === 0) {
-            telemTime += Math.floor(Math.random() * 999);
-        }
+        // 🔒 BATCH FIX REMOVED: Jitter is no longer added to Notehub epochs.
+        // Worker deduplication now uses event IDs securely, avoiding Redis collisions.
+
 
         //
         // 2️⃣ Parse numeric fields (null-safe — better for graphs than 0)

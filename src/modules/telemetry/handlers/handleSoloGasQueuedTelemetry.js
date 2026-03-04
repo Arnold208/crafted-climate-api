@@ -78,11 +78,9 @@ async function handleGasSoloQueuedTelemetry(messageObj) {
             transportTime = Date.now();
         }
 
-        // 🔒 BATCH FIX: If purely second-based timestamp (from Notehub sometimes), 
-        // add random MS to prevent Redis key collision if multiple readings have same second.
-        if (telemTime % 1000 === 0) {
-            telemTime += Math.floor(Math.random() * 999);
-        }
+        // 🔒 BATCH FIX REMOVED: Jitter is no longer added to Notehub epochs.
+        // Worker deduplication now uses event IDs securely, avoiding Redis collisions.
+
 
         //
         // 2️⃣ Parse numeric fields
