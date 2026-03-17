@@ -23,11 +23,11 @@ const client = createClient({
     }
   },
   password: process.env.REDIS_PASSWORD || undefined
-});
-
-// Required error handler to prevent process crash
-client.on('error', (err) => {
-  console.error('❌ Redis Client Error:', err.message);
+}).on('error', (err) => {
+  console.error(`❌ Redis Client Error: ${err.message}`, {
+    stack: err.stack,
+    code: err.code
+  });
 });
 
 // Optional event logging

@@ -36,7 +36,8 @@ const NotificationPreferenceSchema = new mongoose.Schema({
             updates: { type: Boolean, default: true },
             support: { type: Boolean, default: true },
             admin: { type: Boolean, default: true },
-            system: { type: Boolean, default: true }
+            system: { type: Boolean, default: true },
+            alerts: { type: Boolean, default: true }
         }
     },
 
@@ -76,7 +77,8 @@ NotificationPreferenceSchema.statics.getDefaults = function () {
                 updates: true,
                 support: true,
                 admin: true,
-                system: true
+                system: true,
+                alerts: true
             }
         },
         quietHours: {

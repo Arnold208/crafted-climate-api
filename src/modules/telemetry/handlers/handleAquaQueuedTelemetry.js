@@ -80,6 +80,7 @@ async function handleAquaQueuedTelemetry(messageObj) {
             temperature_ambient: +body.temperature_ambient || 0,
             pressure: +body.pressure || 0,
             ph: +body.ph || 0,
+            tds: +body.tds || 0,
             lux: +body.lux || 0,
             turbidity: +body.turbidity || 0,
             voltage: isNaN(voltage) ? 0 : voltage,

@@ -10,17 +10,18 @@ const AQUA_PROJECT_UID = process.env.AQUA_PROJECT_UID;
 
 class NotecardService {
     _resolveProjectUid(model) {
-        if (!model) return null;
+        if (!model) return NOTEHUB_PROJECT_UID;
         const base = model.toLowerCase().trim();
-        if (base.includes('aqua')) return AQUA_PROJECT_UID;
-        // Logic check: original was strictly === 'aqua', but device models might vary slightly? 
-        // Original: if (baseModel === 'aqua')
-        // Original: if (['env', 'terra', 'gas'].includes(baseModel))
-        if (['aqua'].includes(base)) return AQUA_PROJECT_UID;
-        if (['env', 'terra', 'gas'].includes(base)) return NOTEHUB_PROJECT_UID;
-        // Fallback or expanded logic? Original code defaults to NOTEHUB_PROJECT_UID only if listed.
-        // Actually original `getProjectUidForDevice` defaults to NOTEHUB_PROJECT_UID for anything else in envDeviceRoutes?
-        // Let's stick to explicit support to avoid errors.
+
+        const TERRA_PROJECT_UID = process.env.TERRA_PROJECT_UID;
+        const GAS_PROOJECT_UID = process.env.GAS_PROOJECT_UID;
+        const ENV_PROJECT_UID = process.env.ENV_PROJECT_UID;
+
+        if (base.includes('aqua')) return AQUA_PROJECT_UID || NOTEHUB_PROJECT_UID;
+        if (base.includes('terra')) return TERRA_PROJECT_UID || NOTEHUB_PROJECT_UID;
+        if (base.includes('gas')) return GAS_PROOJECT_UID || NOTEHUB_PROJECT_UID;
+        if (base.includes('env')) return ENV_PROJECT_UID || NOTEHUB_PROJECT_UID;
+
         return NOTEHUB_PROJECT_UID;
     }
 
@@ -31,21 +32,19 @@ class NotecardService {
     async validateDeviceInOrg(auid, userid, orgId) {
         const device = await RegisteredDevice.findOne({ auid });
         if (!device) throw new Error('Device not found');
-        if (device.userid !== userid && !device.collaborators.find(c => c.userid === userid)) {
-            // Basic ownership check, but original code just did findOne({ auid, userid }) implying ONLY owner?
-            // Original: registerNewDevice.findOne({ auid, userid });
-            // So strictly OWNER or logic needs to be careful. The route usually passes 'userid'.
-            // I'll stick to strict findOne({auid, userid}) pattern if that's what legacy did.
+
+        // Check ownership or collaborator status
+        const isOwner = device.userid === userid || device.ownerUserId === userid;
+        const isCollaborator = device.collaborators && device.collaborators.find(c => c.userid === userid);
+
+        if (!isOwner && !isCollaborator) {
+            throw new Error('Device not found or access denied');
         }
 
-        // Actually, let's use the explicit check:
-        const deviceOwned = await RegisteredDevice.findOne({ auid, userid });
-        if (!deviceOwned) throw new Error('Device not found or not owned by user');
-
-        if (deviceOwned.organizationId && deviceOwned.organizationId !== orgId) {
+        if (device.organizationId && device.organizationId !== orgId) {
             throw new Error('Device does not belong to this organization');
         }
-        return deviceOwned;
+        return device;
     }
 
     async updateDeviceEnv(auid, userid, orgId, envVars) {
@@ -61,6 +60,21 @@ class NotecardService {
             headers: { 'Content-Type': 'application/json', 'X-Session-Token': NOTEHUB_API_KEY },
             timeout: 10000
         });
+
+        // PLATFORM SYNC: Update database alert threshold if sync interval changed
+        if (envVars.NOTE_OUT_MIN) {
+            const newInterval = parseInt(envVars.NOTE_OUT_MIN);
+            if (!isNaN(newInterval)) {
+                // Set threshold to interval + buffer (e.g., 10 mins or 20% whichever is more)
+                const buffer = Math.max(10, Math.ceil(newInterval * 0.2));
+                device.notificationPreferences = {
+                    ...device.notificationPreferences,
+                    alertThresholdMinutes: newInterval + buffer
+                };
+                await device.save();
+                console.log(`[NotecardSync] Updated alert threshold for ${auid} to ${newInterval + buffer} mins`);
+            }
+        }
 
         return {
             noteDevUuid: device.noteDevUuid,
