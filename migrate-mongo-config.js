@@ -4,9 +4,9 @@ require('dotenv').config();
 const config = {
     mongodb: {
         // We use the same connection string as the app
-        url: process.env.COSMOS_CONNECTION_STRING || "mongodb://localhost:27017",
+        url: process.env.COSMOS_CONNECTION_STRING,
 
-        databaseName: process.env.DATABASE_NAME || "crafted_climate_db",
+        databaseName: process.env.DATABASE_NAME,
 
         options: {
             // proper connection options for CosmosDB or standard Mongo
