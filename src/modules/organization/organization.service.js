@@ -284,14 +284,16 @@ class OrganizationService {
     }
 
     async getUserOrganizations(userid) {
-        // DIRECT FETCH (Cache disabled for debugging)
-        const user = await User.findOne({ userid });
-        if (!user) throw new Error("User not found");
+        const cacheKey = `user:${userid}:orgs`;
+        return await CacheService.getOrSet(cacheKey, async () => {
+            const user = await User.findOne({ userid });
+            if (!user) throw new Error("User not found");
 
-        return await Organization.find({
-            organizationId: { $in: user.organization },
-            deletedAt: null
-        });
+            return await Organization.find({
+                organizationId: { $in: user.organization },
+                deletedAt: null
+            });
+        }, 3600);
     }
 
     async getOrganizationInfo(orgId) {

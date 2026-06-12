@@ -5,7 +5,7 @@ const path = require('path');
 let envFile = process.env.NODE_ENV === 'development' ? '.env.development' : '.env';
 dotenv.config({ path: path.resolve(__dirname, `../${envFile}`) });
 
-const { setupRealtime } = require("./config/socket/socketio");
+const { setupRealtime, startStatusBridge } = require("./config/socket/socketio");
 const connectDB = require('./config/database/mongodb');
 const { connectRedis } = require('./config/redis/redis');
 // MQTT Service
@@ -16,6 +16,8 @@ const { startTelemetryWorker } = require('./modules/telemetry/workers/telemetryW
 const { startStatusWorker } = require('./modules/telemetry/workers/statusWorker');
 const { startSubscriptionWorker } = require('./modules/subscription/workers/subscriptionWorker');
 const emailWorker = require('./workers/emailWorker');
+const alertWorker = require('./workers/alertWorker');
+const webhookWorker = require('./workers/webhookWorker');
 
 // 🔥 PRODUCTION HARDENING: Queue monitoring for error visibility
 const { QueueEvents } = require('bullmq');
@@ -25,6 +27,7 @@ const { startFlushDirectCron } = require('./cron/flushEnqueueCron');
 const { startOfflineAlertCron } = require('./cron/offlineAlertCron');
 const { startSubscriptionCheckCron } = require('./cron/subscriptionCheckCron');
 const { startSLABreachCron } = require('./cron/slaBreachCron');
+const { startAutoDisableCron } = require('./cron/autoDisableCron');
 
 // 🔒 SECURITY: Validate required environment variables on startup
 const requiredEnvVars = [
@@ -59,9 +62,12 @@ connectRedis()
         console.log('⏱️ Starting background crons...');
         startFlushDirectCron();
         startOfflineAlertCron();
-        startSubscriptionCheckCron(); // 🆕 Start subscription cron
-        startSLABreachCron(); // 🆕 Start SLA breach cron
+        startSubscriptionCheckCron();
+        startSLABreachCron();
+        startAutoDisableCron(); // 🔄 Auto-disable devices inactive > 30 days
         emailWorker.start().then(() => console.log('✅ Email worker started'));
+        alertWorker.start().then(() => console.log('✅ Alert worker started'));
+        webhookWorker.start().then(() => console.log('✅ Webhook worker started'));
 
         // 🔥 Initialize Email Templates (Seeds DB)
         const emailTemplateService = require('./services/emailTemplate.service');
@@ -98,6 +104,12 @@ connectRedis()
         });
 
         setupRealtime(server);
+
+        // ✅ START PUB/SUB BRIDGE: Redis device:status-change → Socket.IO rooms
+        // This MUST be called after setupRealtime() so `io` is ready.
+        startStatusBridge().catch(err =>
+            console.error('❌ Failed to start status bridge:', err.message)
+        );
     })
     .catch((err) => {
         console.error('❌ Failed to connect to Redis:', err);

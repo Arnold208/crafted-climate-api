@@ -11,8 +11,11 @@ class TelemetryController {
 
             if (!deviceId) return res.status(400).json({ message: 'Missing device ID (i)' });
 
-            await telemetryService.ingestTelemetry(model, deviceId, req.body);
-            return res.status(201).json({ message: 'Telemetry cached successfully' });
+            const result = await telemetryService.ingestTelemetry(model, deviceId, req.body);
+            return res.status(201).json({
+                message: 'Telemetry cached successfully',
+                config: result.config
+            });
 
         } catch (error) {
             console.error('[TelemetryController] Ingest Error:', error);

@@ -122,7 +122,7 @@ router.post('/:auid/op-mode', authenticateToken, checkOrgAccess("org.devices.con
  *                 startTime: { type: string, example: "08:00" }
  *                 durationMinutes: { type: integer, example: 3 }
  *                 intervalMinutes: { type: integer, example: 60 }
- *                 days: { type: array, items: { type: string }, example: ["Monday", "Wednesday"] }
+ *                 days: { type: array, items: { type: string, enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday] }, example: ["Monday", "Wednesday"] }
  *             example:
  *               name: "Morning Irrigation"
  *               startTime: "08:00"
@@ -161,7 +161,7 @@ router.post('/:auid/schedules', authenticateToken, checkOrgAccess("org.devices.c
  *               startTime: { type: string, example: "08:00" }
  *               durationMinutes: { type: integer, example: 3 }
  *               intervalMinutes: { type: integer, example: 60 }
- *               days: { type: array, items: { type: string } }
+ *               days: { type: array, items: { type: string, enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday] } }
  *               enabled: { type: boolean }
  *           example:
  *             startTime: "09:30"
@@ -247,7 +247,7 @@ router.get('/sync/:auid', flowController.syncConfig);
  *               power_system:
  *                 type: object
  *                 properties:
- *                   architecture: { type: string }
+ *                   architecture: { type: string, enum: [SOLAR, AC, HYBRID] }
  *                   capabilities:
  *                     type: object
  *                     properties:

@@ -16,6 +16,7 @@ const { flushTelemetryToMongo } = require('../../../utils/flushTelemetryToMongo'
 const EnvTelemetry = require('../../../models/telemetry/envModel');
 const GasSoloTelemetry = require('../../../models/telemetry/gasSoloModel');
 const FlowTelemetry = require('../../../models/telemetry/flowModel');
+const AquaTelemetry = require('../../../models/telemetry/aquaModel');
 
 const MODEL_MAP = {
     'env': EnvTelemetry,
@@ -24,15 +25,17 @@ const MODEL_MAP = {
     'gas-solo': GasSoloTelemetry,
     'gassolo': GasSoloTelemetry,
     'flow': FlowTelemetry,
+    'aqua': AquaTelemetry,
 };
 
 function startFlushWorker() {
     const connection = process.env.REDIS_URL
-        ? { url: process.env.REDIS_URL }
+        ? { url: process.env.REDIS_URL, keepAlive: 30000 }
         : {
             host: process.env.REDIS_HOST || '127.0.0.1',
             port: parseInt(process.env.REDIS_PORT || '6379', 10),
             password: process.env.REDIS_PASSWORD || undefined,
+            keepAlive: 30000,
         };
 
     const worker = new Worker(

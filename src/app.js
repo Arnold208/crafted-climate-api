@@ -114,7 +114,11 @@ const { dynamicCorsMiddleware } = require('./middleware/dynamicCors');
 app.use(globalRateLimiter);
 app.use(helmet());
 app.use(dynamicCorsMiddleware); // Dynamic CORS from database
-app.use(express.json());
+app.use(express.json({
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    }
+}));
 app.use(auditLogger);
 
 // Docs JSON (Protected)
@@ -215,12 +219,14 @@ app.use('/api/devices', devicesRoutes);
 app.use('/api', thresholdRoutes);
 
 app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/subscriptions/paystack', require('./modules/subscription/paystackWebhook.routes'));
+app.use('/api/webhooks', require('./modules/webhook/webhook.routes'));
 const adminPlanRoutes = require('./modules/admin/adminPlan.routes');
 app.use('/api/admin/plans', adminPlanRoutes);
 const analyticsRoutes = require('./modules/analytics/analytics.routes');
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api', logsRoutes);
+app.use('/api/logs', logsRoutes);
 
 // ============================================
 // CSRF TOKEN ENDPOINT

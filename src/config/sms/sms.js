@@ -10,7 +10,7 @@ if (process.env.NODE_ENV === 'development') {
   envFile = '.env';   // default for production or if NODE_ENV not set
 }
 
-dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
+dotenv.config({ path: path.resolve(__dirname, `../../../${envFile}`) });
 
 async function sendSMS(msisdn, message) {
     const payload = {

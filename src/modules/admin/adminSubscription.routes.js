@@ -163,7 +163,7 @@ router.delete('/:subscriptionId', authenticateToken, requirePlatformAdmin, admin
 
 /**
  * @swagger
- * /api/admin/subscriptions/expiring:
+ * /api/admin/subscriptions/expiring/list:
  *   get:
  *     tags: [Platform Admin - Subscription Management]
  *     summary: Get expiring subscriptions

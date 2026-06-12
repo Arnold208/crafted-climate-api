@@ -41,7 +41,7 @@ const globalRateLimiter = rateLimit({
 // 📘 Swagger Rate Limiter – more strict
 const swaggerRateLimiter = rateLimit({
   windowMs: parseInt(process.env.SWAGGER_LIMIT_WINDOW_MS) || 1 * 60 * 1000,
-  max: 60,
+  max: parseInt(process.env.SWAGGER_LIMIT_MAX) || 60,
   message: 'Too many requests to Swagger docs. Try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -51,8 +51,8 @@ const swaggerRateLimiter = rateLimit({
 
 // 🛡️ Auth Rate Limiter (Login/Signup) - Strict but fair
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
+  windowMs: parseInt(process.env.AUTH_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  max: parseInt(process.env.AUTH_LIMIT_MAX) || 20,
   message: 'Too many login attempts from this IP, please try again after 15 minutes',
   standardHeaders: true,
   legacyHeaders: false,
@@ -61,8 +61,8 @@ const authLimiter = rateLimit({
 });
 
 const otpLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 requests per 15 minutes
+  windowMs: parseInt(process.env.OTP_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  max: parseInt(process.env.OTP_LIMIT_MAX) || 5,
   standardHeaders: true,
   legacyHeaders: false,
   message: 'Too many OTP requests. Please try again after 15 minutes.',
@@ -117,8 +117,8 @@ const publicTelemetryLimiter = rateLimit({
 
 // 📥 Telemetry Ingestion limiter
 const ingestRouteLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 60, // 60 requests per minute
+  windowMs: parseInt(process.env.INGEST_LIMIT_WINDOW_MS, 10) || 1 * 60 * 1000,
+  max: parseInt(process.env.INGEST_LIMIT_MAX, 10) || 60,
   message: 'Ingestion rate limit exceeded. Please slow down.',
   standardHeaders: true,
   legacyHeaders: false,

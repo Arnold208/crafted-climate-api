@@ -209,7 +209,7 @@ class OrganizationManagementController {
             const userid = req.user.userid;
 
             // 1. EXTRACT DATA (Multipart fields usually come as strings)
-            let { name, type, description, businessDetails, documents } = req.body;
+            let { name, type, description, businessDetails, documents, planId, billingCycle } = req.body;
 
             // Handle businessDetails if sent as string (common in multipart)
             if (typeof businessDetails === 'string') {
@@ -280,17 +280,44 @@ class OrganizationManagementController {
                 type,
                 description,
                 businessDetails,
-                documents: uploadedDocuments
+                documents: uploadedDocuments,
+                planId,
+                billingCycle
             };
 
             const result = await organizationManagementService.createCreationRequest(userid, requestData, true); // true = skip validation since we did checks/processing
-            return res.status(201).json({ message: "Request submitted successfully", ...result.toObject() });
+            return res.status(201).json({
+                message: "Request submitted successfully",
+                request: result.request,
+                checkoutUrl: result.checkoutUrl
+            });
 
         } catch (error) {
             console.error('[OrgMgmt] Request Creation Error:', error);
             if (error.message.includes('already taken') || error.message.includes('pending request')) {
                 return res.status(409).json({ message: error.message });
             }
+            return res.status(400).json({ message: error.message });
+        }
+    }
+
+    /**
+     * POST /api/org/creation-requests/:requestId/retry-payment
+     * Retry payment for a pending organization request
+     */
+    async retryPayment(req, res) {
+        try {
+            const { requestId } = req.params;
+            const userid = req.user.userid;
+
+            const result = await organizationManagementService.retryPayment(requestId, userid);
+            return res.status(200).json({
+                message: result.checkoutUrl ? "Payment initialized" : "Request approved directly",
+                request: result.request,
+                checkoutUrl: result.checkoutUrl
+            });
+        } catch (error) {
+            console.error('[OrgMgmt] Retry Payment Error:', error);
             return res.status(400).json({ message: error.message });
         }
     }

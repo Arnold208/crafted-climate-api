@@ -64,6 +64,12 @@ const deploymentSchema = new mongoose.Schema({
     )
   ],
 
+  notehubFleets: {
+    type: Map,
+    of: String,
+    default: {}
+  },
+
   /** Platform Hardening: Data Safety */
   deletedAt: {
     type: Date,

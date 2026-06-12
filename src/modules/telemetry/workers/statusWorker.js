@@ -23,6 +23,7 @@ function startStatusWorker() {
         host: process.env.REDIS_HOST || '127.0.0.1',
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
         password: process.env.REDIS_PASSWORD || undefined,
+        keepAlive: 30000,
         maxRetriesPerRequest: null, // REQUIRED for BullMQ workers
     };
 
@@ -92,29 +93,22 @@ function startStatusWorker() {
             }
 
             // Metadata cache (prefs, nickname, location) - keyed by AUID
-            const cacheKey = `device:cache:${auid}`;
+            const cacheKey = `device:${auid}:meta`;
             const cachedDataRaw = await redisClient.get(cacheKey);
             let prefs;
+            let deviceDoc;
 
             if (cachedDataRaw) {
-                const cached = JSON.parse(cachedDataRaw);
-                prefs = cached.prefs;
+                deviceDoc = JSON.parse(cachedDataRaw);
+                prefs = deviceDoc.notificationPreferences;
                 // Refresh cache TTL
                 tx.expire(cacheKey, 24 * 60 * 60); // 24h
             } else {
-                const device = await registerNewDevice.findOne({ auid }); // Secondary fetch if map exists but cache expired
-                if (!device) return;
+                deviceDoc = await registerNewDevice.findOne({ auid }); // Secondary fetch if map exists but cache expired
+                if (!deviceDoc) return;
 
-                prefs = device.notificationPreferences;
-                const metadata = {
-                    prefs,
-                    nickname: device.nickname,
-                    location: device.location,
-                    organizationId: device.organizationId,
-                    userid: device.userid
-                };
-
-                tx.set(cacheKey, JSON.stringify(metadata), { EX: 24 * 60 * 60 });
+                prefs = deviceDoc.notificationPreferences;
+                tx.set(cacheKey, JSON.stringify(deviceDoc), { EX: 24 * 60 * 60 });
             }
 
             // 3) HEARTBEAT UPDATE (ZSET)
@@ -129,13 +123,42 @@ function startStatusWorker() {
             if (typeof tx.sAdd === 'function') tx.sAdd(kAllSet, devid);
             else if (typeof tx.sadd === 'function') tx.sadd(kAllSet, devid);
 
-            // 4) CLEAR ALERT STATE
+            // Check previous status in Redis to see if we transition to online
+            const prevMetaStr = await redisClient.hGet(auid, 'metadata');
+            let prevStatus = 'unknown';
+            let metaObj = null;
+            if (prevMetaStr) {
+                try {
+                    metaObj = JSON.parse(prevMetaStr);
+                    prevStatus = metaObj.status;
+                } catch (e) {}
+            }
+
+            if (prevStatus !== 'online') {
+                try {
+                    await registerNewDevice.updateOne(
+                        { auid },
+                        { $set: { status: 'online', lastSeen: new Date() } }
+                    );
+                } catch (err) {
+                    console.error(`❌ [StatusWorker] Failed to sync online status for ${auid}:`, err.message);
+                }
+
+                if (metaObj) {
+                    metaObj.status = 'online';
+                    metaObj.statusUpdatedAt = new Date().toISOString();
+                    tx.hSet(auid, 'metadata', JSON.stringify(metaObj));
+                }
+
+                tx.publish('device:status-change', JSON.stringify({ auid, status: 'online' }));
+            }
+
+            // 4) CLEAR ALERT STATE & ESCALATION CONTEXT
+            tx.del(`device:${auid}:alert_context`);
             tx.del(`device:${auid}:alert_state`);
 
             await tx.exec();
             console.log(`✅ [StatusWorker] Status update complete for job ${job.id}`);
-            return;
-
             return;
         },
         //1

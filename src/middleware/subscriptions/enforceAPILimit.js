@@ -9,7 +9,8 @@ async function enforceAPILimit(userid) {
   }
 
   if (plan.features.apiAccess === "limited") {
-    if (sub.usage.apiCallsThisMonth >= 1000) {
+    const maxCalls = plan.features.maxApiCallsPerMonth || 1000;
+    if (sub.usage.apiCallsThisMonth >= maxCalls) {
       throw new Error("Monthly API call limit reached for your plan.");
     }
   }

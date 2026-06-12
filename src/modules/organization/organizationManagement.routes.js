@@ -82,6 +82,21 @@ router.put(
  *     tags: [Organizations (Platform User)]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Name history retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - not a collaborator
+ *       404:
+ *         description: Organization not found
  */
 router.get(
     '/:orgId/name-history',
@@ -98,6 +113,36 @@ router.get(
  *     tags: [Organizations (Platform User)]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newType
+ *               - reason
+ *             properties:
+ *               newType:
+ *                 type: string
+ *                 enum: [business, non-profit, government, education, research]
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Type change request submitted successfully
+ *       400:
+ *         description: Invalid input or duplicate pending request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
  */
 router.post(
     '/:orgId/type/request',
@@ -115,6 +160,21 @@ router.post(
  *     tags: [Organizations (Platform User)]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Verification details submitted successfully
+ *       400:
+ *         description: Invalid input
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
  */
 router.post(
     '/:orgId/verify',
@@ -132,6 +192,21 @@ router.post(
  *     tags: [Organizations (Platform User)]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Partner application submitted successfully
+ *       400:
+ *         description: Invalid input
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
  */
 router.post(
     '/:orgId/partner/apply',
@@ -159,6 +234,13 @@ router.post(
  *         schema:
  *           type: string
  *           enum: [pending, approved, rejected, all]
+ *     responses:
+ *       200:
+ *         description: Type change requests retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - requires platform admin
  */
 router.get(
     '/admin/type-change-requests',
@@ -181,6 +263,15 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
+ *     responses:
+ *       200:
+ *         description: Type change request approved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Request not found
  */
 router.put(
     '/admin/type-change-requests/:orgId/approve',
@@ -214,6 +305,15 @@ router.put(
  *             properties:
  *               reason:
  *                 type: string
+ *     responses:
+ *       200:
+ *         description: Type change request rejected successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Request not found
  */
 router.put(
     '/admin/type-change-requests/:orgId/reject',
@@ -222,6 +322,28 @@ router.put(
     organizationManagementController.rejectTypeChange
 );
 
+/**
+ * @swagger
+ * /api/org/admin/verifications:
+ *   get:
+ *     summary: Get all verification requests (admin only)
+ *     tags: [Organizations (Platform Admin)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, approved, rejected, all]
+ *     responses:
+ *       200:
+ *         description: Verification requests retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - admin only
+ */
 router.get(
     '/admin/verifications',
     auth,
@@ -243,6 +365,15 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
+ *     responses:
+ *       200:
+ *         description: Business verification approved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Verification request not found
  */
 router.put(
     '/admin/verifications/:orgId/approve',
@@ -276,6 +407,15 @@ router.put(
  *             properties:
  *               reason:
  *                 type: string
+ *     responses:
+ *       200:
+ *         description: Business verification rejected successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Verification request not found
  */
 router.put(
     '/admin/verifications/:orgId/reject',
@@ -298,6 +438,13 @@ router.put(
  *         schema:
  *           type: string
  *           enum: [pending, approved, rejected, all]
+ *     responses:
+ *       200:
+ *         description: Partner applications retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - admin only
  */
 router.get(
     '/admin/partners/applications',
@@ -332,6 +479,15 @@ router.get(
  *               approvedTier:
  *                 type: string
  *                 enum: [silver, gold, platinum]
+ *     responses:
+ *       200:
+ *         description: Partner application approved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Application request not found
  */
 router.put(
     '/admin/partners/:orgId/approve',
@@ -365,6 +521,15 @@ router.put(
  *             properties:
  *               reason:
  *                 type: string
+ *     responses:
+ *       200:
+ *         description: Partner application rejected successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Application request not found
  */
 router.put(
     '/admin/partners/:orgId/reject',
@@ -398,6 +563,15 @@ router.put(
  *             properties:
  *               reason:
  *                 type: string
+ *     responses:
+ *       200:
+ *         description: Partner status revoked successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Partner organization not found
  */
 router.delete(
     '/admin/partners/:orgId/revoke',
@@ -476,6 +650,32 @@ router.post(
     auth,
     fileUpload.any(), // Accept any files (businessCert, workplaceImage, etc.)
     organizationManagementController.requestCreation
+);
+
+/**
+ * @swagger
+ * /api/org/creation-requests/{requestId}/retry-payment:
+ *   post:
+ *     summary: Retry payment for an organization request
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: requestId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Payment initialized successfully
+ *       400:
+ *         description: Bad request
+ */
+router.post(
+    '/creation-requests/:requestId/retry-payment',
+    auth,
+    organizationManagementController.retryPayment
 );
 
 /**

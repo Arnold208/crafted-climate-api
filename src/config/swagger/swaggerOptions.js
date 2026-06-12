@@ -35,8 +35,8 @@ This API provides tenant-isolated, multi-organizational access for climate senso
 - Multi-Tenant (Organization-Based)
 - Role-Based Access Control (RBAC)
 - JWT Authentication
-- API Key for Telemetry Devices
-- WebSocket Real-Time Telemetry
+- API Key for Telemetry Devices & Factory Manufacturing
+- WebSocket Real-Time Telemetry & Status Bridge
 
 ---
 
@@ -50,7 +50,8 @@ x-org-id: org_xxx   ← required for org-scoped routes
 
 ---
 
-## Real-Time WebSocket Example
+## **Real-Time WebSocket Telemetry Connection**
+Clients can listen to live telemetry events by establishing a WebSocket connection and joining a device room:
 
 \`\`\`javascript
 const socket = io('https://api.craftedclimate.org', {
@@ -63,7 +64,51 @@ socket.on('telemetry', (data) => console.log(data));
 
 ---
 
-## Example Telemetry Payload
+## **Real-Time Device Status Synchronization (Zero Stale UI)**
+To support reactive interfaces, the backend includes a status synchronization bridge. Instead of polling REST endpoints to check if a sensor is online or offline, client dashboards can join a device room and subscribe to the \`device:status\` event.
+
+### **1. Join Room**
+\`\`\`javascript
+socket.emit('join', 'device-auid', (response) => {
+  if (response.ok) {
+    console.log(\`Successfully joined room for device: \${response.room}\`);
+  } else {
+    console.error(\`Failed to join room: \${response.error}\`);
+  }
+});
+\`\`\`
+
+### **2. Listen for Real-Time Status Changes**
+\`\`\`javascript
+socket.on('device:status', (event) => {
+  console.log(\`Device AUID:\`, event.auid);
+  console.log(\`Connectivity Status:\`, event.status);      // 'online', 'offline', 'inactive', 'disabled'
+  console.log(\`Operational State:\`, event.state);         // 'active', 'inactive', 'disabled'
+  console.log(\`State Changed At:\`, event.stateChangedAt);
+  console.log(\`Changed By (userid):\`, event.changedBy);
+  console.log(\`Broadcast Timestamp:\`, event.ts);
+});
+\`\`\`
+
+---
+
+## **Device Operational States & Status**
+Sensors separate **connectivity status** from **intentional operational state**:
+
+- **Connectivity Status (\`status\`)**:
+  - \`online\`: Device is active and actively sending heartbeat telemetry.
+  - \`offline\`: Device has stopped reporting and exceeded its alert threshold.
+- **Operational State (\`state\`)**:
+  - \`active\` (Default): The device is deployed. Heartbeats are monitored, and alerts are dispatched if it goes offline.
+  - \`inactive\`: Deliberately powered down or removed from deployment by an owner/admin. Offline alerts are automatically **suppressed**, and heartbeat monitoring is paused.
+  - \`disabled\`: Automatically set by the system if a device has remained \`inactive\` for more than 30 consecutive days. All alert processing and heartbeat checks are disabled.
+
+*To change a device state programmatically, call:*
+\`PUT /api/devices/device/:auid/state\` with request body \`{ "state": "inactive" }\`.
+
+---
+
+## **Example Telemetry Payload**
 
 \`\`\`json
 {

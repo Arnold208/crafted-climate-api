@@ -6,6 +6,18 @@ const authorizeRoles = require('../../../middleware/rbacMiddleware');
 const verifyApiKey = require('../../../middleware/apiKeymiddleware');
 const authenticateToken = require('../../../middleware/bearermiddleware');
 
+const verifyApiKeyOrTokenAdmin = (req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+  if (apiKey) {
+    return verifyApiKey(req, res, next);
+  }
+  return authenticateToken(req, res, (err) => {
+    if (err) return next(err);
+    return authorizeRoles('admin', 'supervisor')(req, res, next);
+  });
+};
+
+
 /**
  * @swagger
  * tags:
@@ -62,7 +74,7 @@ const authenticateToken = require('../../../middleware/bearermiddleware');
  *       500:
  *         description: Server error.
  */
-router.post('/', manufacturerController.createDevice);
+router.post('/', verifyApiKeyOrTokenAdmin, manufacturerController.createDevice);
 
 /**
  * @swagger
@@ -100,7 +112,7 @@ router.post('/', manufacturerController.createDevice);
  *       200: { description: Note UUID updated }
  *       400: { description: Invalid parameters }
  */
-router.patch('/update-note-uuid', manufacturerController.updateNoteUuid);
+router.patch('/update-note-uuid', verifyApiKeyOrTokenAdmin, manufacturerController.updateNoteUuid);
 
 /**
  * @swagger
@@ -129,7 +141,7 @@ router.patch('/update-note-uuid', manufacturerController.updateNoteUuid);
  *       403:
  *         description: Forbidden (Admin/Supervisor only)
  */
-router.get('/', verifyApiKey, authenticateToken, authorizeRoles('admin', 'supervisor'), manufacturerController.getAllDevices);
+router.get('/', verifyApiKeyOrTokenAdmin, manufacturerController.getAllDevices);
 
 /**
  * @swagger
@@ -151,7 +163,7 @@ router.get('/', verifyApiKey, authenticateToken, authorizeRoles('admin', 'superv
  *       404:
  *         description: Device not found
  */
-router.get('/:id', verifyApiKey, authenticateToken, authorizeRoles('admin', 'supervisor'), manufacturerController.getDeviceById);
+router.get('/:id', verifyApiKeyOrTokenAdmin, manufacturerController.getDeviceById);
 
 /**
  * @swagger
@@ -199,7 +211,7 @@ router.get('/:id', verifyApiKey, authenticateToken, authorizeRoles('admin', 'sup
  *       404:
  *         description: Device not found
  */
-router.put('/:id', verifyApiKey, authenticateToken, authorizeRoles('admin', 'supervisor'), manufacturerController.updateDevice);
+router.put('/:id', verifyApiKeyOrTokenAdmin, manufacturerController.updateDevice);
 
 /**
  * @swagger
@@ -221,6 +233,6 @@ router.put('/:id', verifyApiKey, authenticateToken, authorizeRoles('admin', 'sup
  *       404:
  *         description: Device not found
  */
-router.delete('/:id', verifyApiKey, authenticateToken, authorizeRoles('admin', 'supervisor'), manufacturerController.deleteDevice);
+router.delete('/:id', verifyApiKeyOrTokenAdmin, manufacturerController.deleteDevice);
 
 module.exports = router;

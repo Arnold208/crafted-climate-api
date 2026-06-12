@@ -35,6 +35,9 @@ const { otpLimiter } = require('../../middleware/rateLimiter');
  *                 type: string
  *               lastName:
  *                 type: string
+ *               country:
+ *                 type: string
+ *                 default: Ghana
  *               contact:
  *                 type: string
  *               invitationId:

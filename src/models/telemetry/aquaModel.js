@@ -40,7 +40,7 @@ const aquaTelemetrySchema = new mongoose.Schema({
     default: {}
   }
 
-}, { timestamps: true });
+}, { timestamps: true, shardKey: { auid: 1 } });
 
 aquaTelemetrySchema.index({ auid: 1, transport_time: -1 });
 

@@ -55,7 +55,8 @@ const PlanSchema = new mongoose.Schema({
     collaboration: { type: Boolean, default: false },
     location_access: { type: Boolean, default: false },
     public_listing: { type: Boolean, default: true },
-    export: { type: Boolean, default: false }
+    export: { type: Boolean, default: false },
+    maxMembers: { type: Number, default: null }
   },
 
   enterprise: {

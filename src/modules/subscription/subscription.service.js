@@ -90,7 +90,13 @@ class SubscriptionService {
         subscription.startDate = new Date();
         subscription.endDate = null;
 
-        return await subscription.save();
+        const savedSub = await subscription.save();
+
+        // 📡 Reconcile device states after plan upgrade (e.g. re-activate slot capacity)
+        const reconcileDeviceStates = require('./reconcileDeviceStates');
+        await reconcileDeviceStates(userid, subscription.organizationId, targetPlanId, userid);
+
+        return savedSub;
     }
 
     async downgradeSubscription(userid, subscriptionId, targetPlanId) {
@@ -105,7 +111,13 @@ class SubscriptionService {
         subscription.startDate = new Date();
         subscription.endDate = null;
 
-        return await subscription.save();
+        const savedSub = await subscription.save();
+
+        // 📡 Reconcile device states after plan downgrade (e.g. disable excess devices)
+        const reconcileDeviceStates = require('./reconcileDeviceStates');
+        await reconcileDeviceStates(userid, subscription.organizationId, plan.planId, userid);
+
+        return savedSub;
     }
 
     async updateBillingCycle(userid, billingCycle) {
@@ -196,6 +208,10 @@ class SubscriptionService {
         );
         console.log(`[SubscriptionService] Org Update Result:`, updateResult);
 
+        // 📡 Reconcile device states after plan upgrade (e.g. re-activate slot capacity)
+        const reconcileDeviceStates = require('./reconcileDeviceStates');
+        await reconcileDeviceStates(userId, organizationId, targetPlanId, userId);
+
         // CENTRALIZED INVALIDATION
         console.log(`[SubscriptionService] Calling InvalidateOrgCache...`);
         await OrganizationService.invalidateOrgCache(organizationId);
@@ -203,7 +219,7 @@ class SubscriptionService {
         return savedSub;
     }
 
-    async downgradeOrgSubscription(organizationId, targetPlanId) {
+    async downgradeOrgSubscription(organizationId, targetPlanId, userId) {
         const plan = await Plan.findOne({ planId: targetPlanId });
         if (!plan) throw new Error("Plan not found.");
 
@@ -231,6 +247,10 @@ class SubscriptionService {
         );
         // CENTRALIZED INVALIDATION
         await OrganizationService.invalidateOrgCache(organizationId);
+
+        // 📡 Reconcile device states after plan downgrade (excess devices are disabled)
+        const reconcileDeviceStates = require('./reconcileDeviceStates');
+        await reconcileDeviceStates(userId, organizationId, plan.planId, userId);
 
         return savedSub;
     }

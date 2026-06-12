@@ -6,7 +6,7 @@ const { checkDeviceAccessCompatibility } = require('../../../middleware/devices/
 class RegistryController {
     async registerDevice(req, res) {
         try {
-            const { auid, serial, location, nickname } = req.body;
+            const { auid, serial, location, nickname, frequency, batch } = req.body;
             const userid = req.user.userid;
 
             // 🔥 Priority: Middleware context -> Query param -> User Profile
@@ -21,7 +21,7 @@ class RegistryController {
             // await enforceDeviceLimit(userid); <--- REMOVED
 
             const newDevice = await registryService.registerDevice({
-                auid, serial, location, nickname, userid, organizationId
+                auid, serial, location, nickname, userid, organizationId, frequency, batch
             });
 
             return res.status(201).json(newDevice);
@@ -42,6 +42,8 @@ class RegistryController {
                 || req.currentOrgId
                 || req.query.orgId
                 || req.user.currentOrganizationId;
+
+            console.log(`[DEBUG getUserDevices] param userid: "${userid}", req.user.userid: "${req.user?.userid}", orgId: "${organizationId}"`);
 
             let devices = [];
 
@@ -237,6 +239,33 @@ class RegistryController {
         }
     }
 
+    async setDeviceState(req, res) {
+        try {
+            const { auid } = req.params;
+            const { state } = req.body;
+
+            if (!state) {
+                return res.status(400).json({ message: 'state is required (active | inactive | disabled)' });
+            }
+
+            const device = await registryService.getDeviceByAuid(auid);
+            if (!device) return res.status(404).json({ message: 'Device not found' });
+
+            // Only owner or users with 'control' permission can change state
+            // (same permission used for command:send in Socket.IO)
+            if (!await checkDeviceAccessCompatibility(req, device, 'control')) {
+                return res.status(403).json({ message: 'Forbidden: You do not have permission to change the device state.' });
+            }
+
+            const result = await registryService.setDeviceState(auid, state, req.user.userid);
+            res.status(200).json(result);
+        } catch (error) {
+            if (error.message.includes('Invalid state')) return res.status(400).json({ message: error.message });
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
+            res.status(500).json({ error: error.message });
+        }
+    }
+
     async setAvailability(req, res) {
         try {
             const { auid } = req.params;
@@ -312,6 +341,63 @@ class RegistryController {
             if (error.message.includes('already')) return res.status(409).json({ message: error.message });
 
             res.status(500).json({ message: error.message });
+        }
+    }
+
+    async getPermissionsCatalog(req, res) {
+        try {
+            const catalog = {
+                roles: [
+                    {
+                        role: "device-admin",
+                        displayName: "Device Administrator",
+                        description: "Full access to settings, commands, data exports, and collaborator management.",
+                        implicitPermissions: ["device.view", "device.edit", "device.control", "device.share", "device.delete"]
+                    },
+                    {
+                        role: "device-support",
+                        displayName: "Support Operator",
+                        description: "Can edit settings, view data, and execute control commands. Cannot delete or manage collaborators.",
+                        implicitPermissions: ["device.view", "device.edit", "device.control"]
+                    },
+                    {
+                        role: "device-user",
+                        displayName: "Regular User",
+                        description: "Read-only access to device details and telemetry streams.",
+                        implicitPermissions: ["device.view"]
+                    }
+                ],
+                assignablePermissions: [
+                    {
+                        permission: "device.view",
+                        name: "View telemetry and status",
+                        description: "Allows reading telemetry dashboards and checking device online status."
+                    },
+                    {
+                        permission: "device.edit",
+                        name: "Configure settings",
+                        description: "Allows updating device nickname, location, transmission frequency, and batching config."
+                    },
+                    {
+                        permission: "device.control",
+                        name: "Execute operational commands",
+                        description: "Allows changing the device state (ON/OFF) and sending remote configuration commands."
+                    },
+                    {
+                        permission: "device.share",
+                        name: "Manage collaborators",
+                        description: "Allows adding, updating, and removing collaborators on this device."
+                    },
+                    {
+                        permission: "device.delete",
+                        name: "De-register / Delete device",
+                        description: "Allows deleting the device from the organization and registry."
+                    }
+                ]
+            };
+            res.status(200).json(catalog);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
         }
     }
 }

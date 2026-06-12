@@ -7,6 +7,7 @@ const { handleAquaQueuedTelemetry } = require('../handlers/handleAquaQueuedTelem
 const { handleFlowQueuedTelemetry } = require('../handlers/handleFlowQueuedTelemetry');
 // 🔒 PRODUCTION HARDENING: Redis client for deduplication
 const { client: redisClient } = require('../../../config/redis/redis');
+const registerNewDevice = require('../../../models/devices/registerDevice');
 const logger = require('../../../utils/logger');
 
 function startTelemetryWorker() {
@@ -25,6 +26,7 @@ function startTelemetryWorker() {
         host: process.env.REDIS_HOST || '127.0.0.1',
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
         password: process.env.REDIS_PASSWORD || undefined,
+        keepAlive: 30000,
         maxRetriesPerRequest: null, // REQUIRED for BullMQ workers
     };
 
@@ -41,8 +43,38 @@ function startTelemetryWorker() {
             // (Optional) light validation; skip if clearly not a datapoint
             if (!body.devid) return;
 
-            const devmod = (body.devmod || '').toUpperCase();
             const devid = body.devid;
+            let devmod = (body.devmod || '').toUpperCase();
+
+            let auid;
+            const mapKey = `device:map:${devid}`;
+            try {
+                auid = await redisClient.get(mapKey);
+                if (!auid) {
+                    const device = await registerNewDevice.findOne({ devid });
+                    if (device) {
+                        auid = device.auid;
+                        await redisClient.set(mapKey, auid, { EX: 30 * 24 * 60 * 60 }); // 30 days
+                    }
+                }
+
+                if (!devmod && auid) {
+                    const cacheKey = `device:${auid}:meta`;
+                    const cachedDataRaw = await redisClient.get(cacheKey);
+                    if (cachedDataRaw) {
+                        const deviceDoc = JSON.parse(cachedDataRaw);
+                        devmod = (deviceDoc.model || '').toUpperCase();
+                    } else {
+                        const deviceDoc = await registerNewDevice.findOne({ auid });
+                        if (deviceDoc) {
+                            devmod = (deviceDoc.model || '').toUpperCase();
+                            await redisClient.set(cacheKey, JSON.stringify(deviceDoc), { EX: 24 * 60 * 60 });
+                        }
+                    }
+                }
+            } catch (err) {
+                logger.error(`⚠️ Failed to dynamically resolve devmod for devid ${devid}: %s`, err.message);
+            }
 
             // 🔒 PRODUCTION HARDENING: Idempotency/Deduplication Check
             // FIX: Use 'event' UUID from Notecard/Hub if available to safely handle batches with same timestamp
@@ -74,11 +106,7 @@ function startTelemetryWorker() {
                 // Continue processing even if dedup check fails (fail-open)
             }
 
-            //console.log("Devvvvvvv.....", devid)
-            if (devid == '2af0' || devid == '2af1' || devid == '2af2') {
-                console.log('🌿 Processing Afriset ENV telemetry');
-                await handleEnvQueuedTelemetry(data);
-            } else if (devmod === 'ENV') {
+            if (devmod === 'ENV') {
                 console.log('🌿 Processing ENV telemetry');
                 await handleEnvQueuedTelemetry(data);
             } else if (devmod === 'AQUA') {

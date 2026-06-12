@@ -39,7 +39,7 @@ class UserService {
     /**
     * Register a new user
     */
-    async signup({ username, email, password, invitationId, contact, firstName, lastName, file, isVerified = false }) {
+    async signup({ username, email, password, invitationId, contact, firstName, lastName, country, file, isVerified = false }) {
         try {
             email = email.trim().toLowerCase().replace(/\s+/g, '');
             contact = normalizeContact(contact);
@@ -71,7 +71,7 @@ class UserService {
                     throw new Error('Invalid or expired invitation');
                 }
 
-                role = "supervisor";
+                role = "user";
                 if (invitation.deviceId) {
                     devices.push({ deviceId: invitation.deviceId, accessType: "invited" });
                 }
@@ -106,6 +106,7 @@ class UserService {
                 contact,
                 firstName,
                 lastName,
+                country: country || "Ghana",
                 profilePicture: profilePictureUrl,
                 role,
                 devices,

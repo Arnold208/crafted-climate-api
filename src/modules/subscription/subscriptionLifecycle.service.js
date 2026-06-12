@@ -10,7 +10,7 @@
  */
 
 const UserSubscription = require('../../models/subscriptions/UserSubscription');
-const SubscriptionPlan = require('../../models/subscriptions/Plan');
+const Plan = require('../../models/subscriptions/Plan');
 const User = require('../../models/user/userModel');
 const { sendEmail } = require('../../config/mail/nodemailer');
 const { subscriptionQueue } = require('../../config/queue/bullMQ/bullqueue');
@@ -248,8 +248,8 @@ class SubscriptionLifecycleService {
 
         // Get freemium plan
         const freemiumPlan = await Plan.findOne({
-            name: { $regex: /free/i }
-        }).sort({ createdAt: 1 });
+            name: 'freemium'
+        });
 
         if (!freemiumPlan) {
             console.error('❌ Freemium plan not found!');
@@ -259,11 +259,18 @@ class SubscriptionLifecycleService {
         const oldPlanId = subscription.planId;
 
         // Downgrade to freemium
-        subscription.status = 'expired';
+        subscription.status = 'active';
         subscription.planId = freemiumPlan.planId;
         subscription.billingCycle = 'free';
         subscription.autoRenew = false;
+        subscription.endDate = null;
+        subscription.gracePeriodStartDate = null;
+        subscription.gracePeriodEndDate = null;
         await subscription.save();
+
+        // 📡 Reconcile device states under Freemium plan limit (excess devices are disabled)
+        const reconcileDeviceStates = require('./reconcileDeviceStates');
+        await reconcileDeviceStates(subscription.userid, subscription.organizationId, freemiumPlan.planId, 'system:downgrade');
 
         // Send downgrade notification
         const user = await User.findOne({ userid: subscription.userid });

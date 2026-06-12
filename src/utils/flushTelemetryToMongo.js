@@ -12,8 +12,8 @@ const { client: redisClient } = require('../config/redis/redis');
  * @param {string} auid            Redis hash key (e.g., "GH-...")
  * @param {Mongoose.Model} model   Mongo model (EnvTelemetry, GasSoloTelemetry, ...)
  */
-async function flushTelemetryToMongo(auid, model) {
-  const LOCK_KEY = `flush_lock_${auid}`;
+async function flushTelemetryToMongo(auid, model, force = false) {
+  const LOCK_KEY = `{${auid}}:flush_lock`;
   const LOCK_EXPIRY = 60; // seconds
   let lockAcquired = false;
 
@@ -88,20 +88,28 @@ async function flushTelemetryToMongo(auid, model) {
     }
 
     if (toInsert.length === 0) {
+      // Set 24h TTL since there are no unflushed entries
+      await redisClient.expire(String(auid), 86400);
       return { status: 'empty', message: 'No unflushed entries.' };
     }
 
     // 4) threshold (default 1 so it actually flushes)
-    const THRESHOLD = parseInt(process.env.BATCH_SIZE || '1', 10);
+    const THRESHOLD = force ? 1 : parseInt(process.env.BATCH_SIZE || '1', 10);
     if (toInsert.length < THRESHOLD) {
       return { status: 'pending', message: `Only ${toInsert.length} < threshold ${THRESHOLD}` };
     }
 
-    // 5) insert
-    await model.insertMany(toInsert, { ordered: false });
-    console.log(`✅ Flushed ${toInsert.length} entries for ${auid}`);
+    // 5) Idempotent Bulk Write (Upsert)
+    const operations = toInsert.map(doc => ({
+      updateOne: {
+        filter: { auid: doc.auid, transport_time: doc.transport_time },
+        update: { $set: doc },
+        upsert: true
+      }
+    }));
+    await model.bulkWrite(operations, { ordered: false });
+    console.log(`✅ Flushed ${toInsert.length} entries via idempotent bulkWrite for ${auid}`);
 
-    // 6) mark flushed by the SAME hash field (the epoch key)
     // 6) mark flushed by the SAME hash field (the epoch key)
     const batchUpdates = {};
     for (const { ts, doc } of toMark) {
@@ -113,6 +121,52 @@ async function flushTelemetryToMongo(auid, model) {
       // 🚀 SCALABILITY FIX: Single round-trip to Redis instead of N awaits
       // hSet supports multiple field-value pairs: hSet(key, { field: value, ... })
       await redisClient.hSet(String(auid), batchUpdates);
+    }
+
+    // Check if there are any remaining unflushed entries in the hash
+    let hasUnflushed = false;
+    const freshAll = await redisClient.hGetAll(String(auid));
+    for (const [field, raw] of Object.entries(freshAll || {})) {
+      if (field === 'metadata' || field === 'meta') continue;
+      if (!raw) continue;
+      try {
+        const doc = JSON.parse(raw);
+        if (Number(doc.f ?? 0) !== 1) {
+          hasUnflushed = true;
+          break;
+        }
+      } catch (e) {}
+    }
+
+    if (!hasUnflushed) {
+      // All data flushed! Safely set 24h TTL
+      await redisClient.expire(String(auid), 86400);
+    }
+
+    // 7) Refresh cached device metadata in Redis to ensure it is not stale
+    try {
+      const RegisterDevice = require('../models/devices/registerDevice');
+      const device = await RegisterDevice.findOne({ auid });
+      if (device) {
+        const metadata = {
+          auid: device.auid,
+          nickname: device.nickname,
+          availability: device.availability,
+          status: device.status || 'online',
+          battery: device.battery,
+          location: device.location,
+          model: device.model,
+          type: device.type,
+          serial: device.serial,
+          mac: device.mac,
+          collaborators: device.collaborators,
+          statusUpdatedAt: device.statusUpdatedAt || new Date().toISOString()
+        };
+        await redisClient.hSet(String(auid), 'metadata', JSON.stringify(metadata));
+        console.log(`🔄 [flushTelemetryToMongo] Refreshed metadata in Redis for ${auid}`);
+      }
+    } catch (metaErr) {
+      console.error(`⚠️ [flushTelemetryToMongo] Failed to refresh metadata for ${auid}:`, metaErr.message);
     }
 
     return { status: 'success', message: `${toInsert.length} records flushed & flagged.` };

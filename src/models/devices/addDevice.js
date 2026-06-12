@@ -68,6 +68,11 @@ const addDeviceSchema = new mongoose.Schema({
   },
   noteDevUuid: {
     type: String
+  },
+  acquisitionType: {
+    type: String,
+    enum: ['purchase', 'maas'],
+    default: 'purchase'
   }
 
 }, { versionKey: false });

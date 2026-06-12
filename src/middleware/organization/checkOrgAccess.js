@@ -55,9 +55,32 @@ module.exports = function checkOrgAccess(requiredPermission) {
                 }
             }
 
+            // 5. Check API key specific permissions if authenticated via API key
+            if (req.apiKey) {
+                const API_KEY_PERMISSION_MAP = {
+                    'telemetry:read': ['org.devices.view', 'org.telemetry.read'],
+                    'telemetry:write': ['org.telemetry.write'],
+                    'devices:read': ['org.devices.view'],
+                    'devices:write': ['org.devices.add', 'org.devices.edit', 'org.devices.remove', 'org.devices.control'],
+                    'analytics:read': ['org.analytics.view', 'org.telemetry.export', 'org.logs.view']
+                };
+
+                const hasApiKeyPermission = req.apiKey.permissions.some(p => {
+                    const mapped = API_KEY_PERMISSION_MAP[p] || [];
+                    return mapped.includes(requiredPermission) || p === requiredPermission;
+                });
+
+                if (!hasApiKeyPermission) {
+                    return res.status(403).json({
+                        success: false,
+                        message: `Forbidden: API key lacks required permission: ${requiredPermission}`
+                    });
+                }
+            }
+
             const userOrgRole = membership.role; // org-admin | org-support | org-user
 
-            // 5. Load allowed permissions for this role
+            // 6. Load allowed permissions for this role
             const allowedPermissions = ORG_PERMISSIONS[userOrgRole];
 
             if (!allowedPermissions) {
@@ -67,7 +90,7 @@ module.exports = function checkOrgAccess(requiredPermission) {
                 });
             }
 
-            // 6. Check if role grants the required action
+            // 7. Check if role grants the required action
             if (!allowedPermissions.includes(requiredPermission)) {
                 return res.status(403).json({
                     message: "Forbidden: insufficient permissions",
@@ -76,7 +99,7 @@ module.exports = function checkOrgAccess(requiredPermission) {
                 });
             }
 
-            // 7. Authorized
+            // 8. Authorized
             console.log(`[DEBUG OrgAccess] Authorized. Role: ${userOrgRole} for Permission: ${requiredPermission}`);
             req.currentOrgRole = userOrgRole; // Fix: Pass role to downstream middleware
             return next();

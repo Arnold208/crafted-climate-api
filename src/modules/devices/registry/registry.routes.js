@@ -114,6 +114,36 @@ router.get('/public-map/models', publicMapLimiter, registryController.getPublicS
 
 /**
  * @swagger
+ * /api/devices/permissions/catalog:
+ *   get:
+ *     tags: [Device Registry]
+ *     summary: Get permissions catalog for device collaborator assignment
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of roles and assignable permissions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 roles:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 assignablePermissions:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ */
+router.get('/permissions/catalog',
+    authenticateToken,
+    registryController.getPermissionsCatalog
+);
+
+/**
+ * @swagger
  * /api/devices/register-device:
  *   post:
  *     tags: [Device Registry]
@@ -132,6 +162,8 @@ router.get('/public-map/models', publicMapLimiter, registryController.getPublicS
  *               serial: { type: string }
  *               location: { type: array, items: { type: number }, example: [5.56, -0.20] }
  *               nickname: { type: string }
+ *               frequency: { type: integer, default: 30, description: "Expected reporting interval in minutes" }
+ *               batch: { type: integer, default: 2, description: "Telemetry batch size" }
  *     responses:
  *       201:
  *         description: Device registered successfully
@@ -286,7 +318,7 @@ router.get('/user/:userid/device/:auid/location',
  * /api/devices/user/{userid}/device/{auid}/update:
  *   put:
  *     tags: [Device Registry]
- *     summary: Update a device's nickname or location
+ *     summary: Update a device's settings (nickname, location, frequency, batch)
  *     security:
  *       - bearerAuth: []
  *       - organizationId: []
@@ -299,6 +331,24 @@ router.get('/user/:userid/device/:auid/location',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               nickname: { type: string }
+ *               location: { type: array, items: { type: number }, example: [5.56, -0.20] }
+ *               frequency: { type: integer, description: "Expected reporting interval in minutes" }
+ *               batch: { type: integer, description: "Telemetry batch size" }
+ *               notificationPreferences:
+ *                 type: object
+ *                 properties:
+ *                   enabled: { type: boolean }
+ *                   offlineAlert: { type: boolean }
+ *                   alertThresholdMinutes: { type: number }
+ *                   recipients: { type: array, items: { type: string } }
  *     responses:
  *       200: { description: Device updated }
  *       404: { description: Device not found }
@@ -359,6 +409,24 @@ router.post('/device/:auid/transfer',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, role]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               role:
+ *                 type: string
+ *                 enum: ['device-admin', 'device-support', 'device-user', 'viewer', 'editor', 'admin', 'support', 'user']
+ *               permissions:
+ *                 type: array
+ *                 items:
+ *                   type: string
  *     responses:
  *       201: { description: Collaborator added }
  */
@@ -492,6 +560,18 @@ router.post('/:userid/device/:auid/collaborators/permissions',
  *         name: auid
  *         required: true
  *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [availability]
+ *             properties:
+ *               availability:
+ *                 type: string
+ *                 enum: ['public', 'private']
+ *                 description: Device accessibility
  *     responses:
  *       200: { description: Availability updated }
  */
@@ -499,6 +579,77 @@ router.put('/user/:userid/device/:auid/availability',
     authenticateToken,
     checkFeatureAccess("public_listing"),
     registryController.setAvailability
+);
+
+// ── STATE (On / Off) ──────────────────────────────────────────────────────────
+
+const stateChangeLimiter = rateLimit({
+    windowMs: 60 * 1000,   // 1 minute
+    max: 10,               // Max 10 state changes per minute (prevents abuse)
+    message: { error: 'Too many state change requests. Please slow down.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+/**
+ * @swagger
+ * /api/devices/device/{auid}/state:
+ *   put:
+ *     tags:
+ *       - Device Registry
+ *     summary: Set device operational state (active / inactive / disabled)
+ *     description: |
+ *       Intentionally turns a device ON or OFF. This is distinct from the
+ *       connectivity `status` (online/offline). When set to `inactive` or
+ *       `disabled`, offline alerts are suppressed and the heartbeat is removed
+ *       so the system does not flag it as a lost device.
+ *
+ *       **Permissions required:** Device owner OR org/deployment member with
+ *       `control` permission.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string }
+ *         description: Device AUID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [state]
+ *             properties:
+ *               state:
+ *                 type: string
+ *                 enum: ['active', 'inactive', 'disabled']
+ *                 description: |
+ *                   - `active`   - Device is operational and should report data.
+ *                   - `inactive` - Deliberately turned off. Alerts suppressed.
+ *                   - `disabled` - Permanently deactivated (usually auto-set after 30+ days inactive).
+ *     responses:
+ *       200:
+ *         description: Device state updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:    { type: string }
+ *                 auid:       { type: string }
+ *                 state:      { type: string, enum: ['active', 'inactive', 'disabled'] }
+ *                 stateChangedAt: { type: string, format: date-time }
+ *                 stateChangedBy: { type: string }
+ *       400: { description: Invalid state value }
+ *       403: { description: Forbidden - insufficient permissions }
+ *       404: { description: Device not found }
+ */
+router.put('/device/:auid/state',
+    authenticateToken,
+    stateChangeLimiter,
+    registryController.setDeviceState
 );
 
 module.exports = router;

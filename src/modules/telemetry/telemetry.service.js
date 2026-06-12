@@ -110,7 +110,14 @@ class TelemetryService {
             removeOnFail: true
         });
 
-        return { success: true };
+        const config = {
+            CC_NET_MODE: device.netMode || 'cellular',
+            CC_FREQUENCY: device.frequency || 30,
+            CC_BATCH: device.batch || 2,
+            CC_STATE: device.state || 'active'
+        };
+
+        return { success: true, config };
     }
 
     /**
@@ -152,12 +159,14 @@ class TelemetryService {
                 .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
                 .slice(0, limit); // Descending (Newest -> Oldest)
 
-            return {
-                source: 'redis',
-                metadata,
-                count: telemetryData.length,
-                telemetry: telemetryData
-            };
+            if (telemetryData.length > 0) {
+                return {
+                    source: 'redis',
+                    metadata,
+                    count: telemetryData.length,
+                    telemetry: telemetryData
+                };
+            }
         }
 
         // 3. Fallback to Mongo
@@ -307,7 +316,7 @@ class TelemetryService {
         const device = await registerNewDevice.findOne({ auid });
         if (device) this._checkFlowConfigStatus(device);
 
-        const data = await M.find(query).limit(limit).lean();
+        const data = await M.find(query).sort({ transport_time: -1 }).limit(limit).lean();
         return data;
     }
 

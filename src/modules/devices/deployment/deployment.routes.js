@@ -14,7 +14,7 @@ const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess'
 
 /**
  * @swagger
- * /api/deployments:
+ * /api/devices/deployments:
  *   post:
  *     tags: [Deployments]
  *     summary: Create a new deployment
@@ -41,7 +41,7 @@ router.post('/deployments',
 
 /**
  * @swagger
- * /api/deployments/{deploymentId}:
+ * /api/devices/deployments/{deploymentId}:
  *   get:
  *     tags: [Deployments]
  *     summary: Get a deployment by ID
@@ -62,7 +62,7 @@ router.get('/deployments/:deploymentId',
 
 /**
  * @swagger
- * /api/deployments/{deploymentId}/devices:
+ * /api/devices/deployments/{deploymentId}/devices:
  *   get:
  *     tags: [Deployments]
  *     summary: List all devices in a deployment
@@ -82,7 +82,7 @@ router.get('/deployments/:deploymentId/devices',
 
 /**
  * @swagger
- * /api/deployments/{deploymentId}:
+ * /api/devices/deployments/{deploymentId}:
  *   patch:
  *     tags: [Deployments]
  *     summary: Update deployment name or description
@@ -103,7 +103,7 @@ router.patch('/deployments/:deploymentId',
 
 /**
  * @swagger
- * /api/deployments/{deploymentId}:
+ * /api/devices/deployments/{deploymentId}:
  *   delete:
  *     tags: [Deployments]
  *     summary: Delete a deployment
@@ -124,7 +124,7 @@ router.delete('/deployments/:deploymentId',
 
 /**
  * @swagger
- * /api/deployments/{deploymentId}/collaborators:
+ * /api/devices/deployments/{deploymentId}/collaborators:
  *   post:
  *     tags: [Deployments]
  *     summary: Add a collaborator to the deployment
@@ -157,7 +157,7 @@ router.post('/deployments/:deploymentId/collaborators',
 
 /**
  * @swagger
- * /api/deployments/{deploymentId}/collaborators:
+ * /api/devices/deployments/{deploymentId}/collaborators:
  *   delete:
  *     tags: [Deployments]
  *     summary: Remove a collaborator from the deployment
@@ -189,7 +189,7 @@ router.delete('/deployments/:deploymentId/collaborators',
 
 /**
  * @swagger
- * /api/deployments/{deploymentId}/devices:
+ * /api/devices/deployments/{deploymentId}/devices:
  *   post:
  *     tags: [Deployments]
  *     summary: Add a device to a deployment
@@ -209,7 +209,7 @@ router.post('/deployments/:deploymentId/devices',
 
 /**
  * @swagger
- * /api/deployments/{deploymentId}/devices/{auid}:
+ * /api/devices/deployments/{deploymentId}/devices/{auid}:
  *   delete:
  *     tags: [Deployments]
  *     summary: Remove a device from a deployment
@@ -233,7 +233,7 @@ router.delete('/deployments/:deploymentId/devices/:auid',
 
 /**
  * @swagger
- * /api/deployments:
+ * /api/devices/deployments:
  *   get:
  *     tags: [Deployments]
  *     summary: List all deployments in the organization

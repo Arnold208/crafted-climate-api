@@ -228,6 +228,29 @@ class OrganizationEmailService {
 
         await sendEmail(userEmail, subject, body);
     }
+
+    /**
+     * Send member invitation email
+     */
+    async sendInvitation(email, organizationName, acceptUrl, signupUrl, isNewUser) {
+        const subject = `Invitation to join ${organizationName} on Crafted Climate`;
+        const body = `
+            <h2>You've been invited!</h2>
+            <p>You have been invited to join the organization <strong>${organizationName}</strong> on Crafted Climate.</p>
+            ${isNewUser ? `
+                <p>To accept this invitation, please sign up by clicking the link below:</p>
+                <p><a href="${signupUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Sign Up & Accept Invite</a></p>
+            ` : `
+                <p>To accept this invitation, please click the link below:</p>
+                <p><a href="${acceptUrl}" style="background-color: #008CBA; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Accept Invitation</a></p>
+            `}
+            <p>This link will expire in 48 hours.</p>
+            <br>
+            <p>Best regards,<br>The Crafted Climate Team</p>
+        `;
+
+        await sendEmail(email, subject, body);
+    }
 }
 
 module.exports = new OrganizationEmailService();

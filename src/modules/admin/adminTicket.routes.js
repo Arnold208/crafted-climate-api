@@ -206,7 +206,7 @@ router.patch('/:ticketId/close', authenticateToken, requirePlatformAdmin, adminT
 
 /**
  * @swagger
- * /api/admin/support/statistics:
+ * /api/admin/support/tickets/statistics/summary:
  *   get:
  *     tags: [Support]
  *     summary: Get ticket statistics

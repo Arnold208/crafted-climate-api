@@ -10,13 +10,14 @@ if (process.env.NODE_ENV === 'development') {
   envFile = '.env';   // default for production or if NODE_ENV not set
 }
 
-dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
+dotenv.config({ path: path.resolve(__dirname, `../../../../${envFile}`) });
 
 // Redis connection object
 const connection = {
   host: process.env.REDIS_HOST || '127.0.0.1',
   port: parseInt(process.env.REDIS_PORT || '6379', 10),
   password: process.env.REDIS_PASSWORD || undefined,
+  keepAlive: 30000,
 };
 
 // Create the worker

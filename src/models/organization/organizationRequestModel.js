@@ -25,9 +25,36 @@ const organizationRequestSchema = new mongoose.Schema(
 
         status: {
             type: String,
-            enum: ["pending", "approved", "rejected"],
-            default: "pending",
+            enum: ["payment_pending", "pending", "approved", "rejected"],
+            default: "payment_pending",
             index: true
+        },
+
+        paymentStatus: {
+            type: String,
+            enum: ["pending", "success", "failed"],
+            default: "pending"
+        },
+
+        paymentReference: {
+            type: String,
+            default: null
+        },
+
+        pricePaid: {
+            type: Number,
+            default: 0
+        },
+
+        planId: {
+            type: String,
+            default: null
+        },
+
+        billingCycle: {
+            type: String,
+            enum: ["monthly", "yearly"],
+            default: "monthly"
         },
 
         // 🏢 PROPOSED ORGANIZATION DETAILS

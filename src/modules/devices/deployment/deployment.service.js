@@ -3,6 +3,7 @@ const RegisteredDevice = require('../../../models/devices/registerDevice');
 const Organization = require('../../../models/organization/organizationModel');
 const User = require('../../../models/user/userModel');
 const registryService = require('../registry/registry.service');
+const notecardService = require('../notecard/notecard.service');
 const { nanoid } = require('nanoid');
 
 class DeploymentService {
@@ -21,11 +22,20 @@ class DeploymentService {
             description
         });
 
-        await Organization.findOneAndUpdate(
-            { organizationId },
-            { $addToSet: { deployments: deploymentid } },
-            { new: true }
-        );
+        try {
+            const org = await Organization.findOneAndUpdate(
+                { organizationId },
+                { $addToSet: { deployments: deploymentid } },
+                { new: true }
+            );
+            if (!org) {
+                throw new Error("Organization not found");
+            }
+        } catch (err) {
+            // Rollback deployment creation
+            await Deployment.deleteOne({ deploymentid });
+            throw err;
+        }
 
         return deployment;
     }
@@ -63,16 +73,45 @@ class DeploymentService {
     }
 
     async deleteDeployment(deploymentId, organizationId) {
-        // ... (existing implementation) ...
         const deployment = await this.getDeployment(deploymentId, organizationId);
         if (!deployment) throw new Error('Deployment not found');
 
-        // Unassign devices
         const deviceIds = deployment.devices; // Store before clearing
+
+        // 1. Restore individual device configurations on Notehub (so they don't lose their settings)
+        const devices = await RegisteredDevice.find({ auid: { $in: deviceIds } });
+        for (const device of devices) {
+            if (device.noteDevUuid) {
+                try {
+                    // Temporarily unset device.deployment so syncConfigToNotecard doesn't skip it
+                    device.deployment = null;
+                    device.deploymentId = null;
+                    await notecardService.syncConfigToNotecard(device);
+                } catch (err) {
+                    console.warn(`[Deployment] Failed to restore config for device ${device.auid} on deployment deletion:`, err.message);
+                }
+            }
+        }
+
+        // 2. Unassign devices in MongoDB
         await RegisteredDevice.updateMany(
             { deployment: deploymentId },
             { $set: { deployment: null, deploymentId: null } }
         );
+
+        // 3. Delete all mapped fleets on Notehub
+        if (deployment.notehubFleets) {
+            for (const [model, fleetUid] of deployment.notehubFleets.entries()) {
+                try {
+                    const projectUid = notecardService.resolveProjectUid(model);
+                    if (projectUid && fleetUid) {
+                        await notecardService.deleteFleet(projectUid, fleetUid);
+                    }
+                } catch (err) {
+                    console.warn(`[Deployment] Failed to delete fleet ${fleetUid} for model ${model} on Notehub:`, err.message);
+                }
+            }
+        }
 
         deployment.deletedAt = new Date();
         await deployment.save();
@@ -93,6 +132,9 @@ class DeploymentService {
         const deployment = await this.getDeployment(deploymentId, organizationId);
         if (!deployment) throw new Error("Deployment not found");
 
+        // Save original collaborators in case of rollback
+        const originalCollaborators = [...deployment.collaborators.map(c => ({ userid: c.userid, role: c.role }))];
+
         // 1. Upsert into Deployment
         const existsIndex = deployment.collaborators.findIndex(c => c.userid === user.userid.toString());
         if (existsIndex >= 0) {
@@ -102,17 +144,19 @@ class DeploymentService {
         }
         await deployment.save();
 
-        // 2. Sync to Devices (Auto-Permissions)
-        // Default: 'device-user' with 'view', 'export'
-        const deviceRole = 'device-user';
-        const devicePermissions = ['view', 'export'];
+        try {
+            // 2. Sync to Devices (Auto-Permissions)
+            const deviceRole = 'device-user';
+            const devicePermissions = ['view', 'export'];
 
-        for (const auid of deployment.devices) {
-            try {
+            for (const auid of deployment.devices) {
                 await registryService.addCollaborator(auid, email, deviceRole, devicePermissions);
-            } catch (err) {
-                console.warn(`[Deployment] Failed to sync collaborator to device ${auid}:`, err.message);
             }
+        } catch (err) {
+            // Rollback deployment collaborator update
+            deployment.collaborators = originalCollaborators;
+            await deployment.save();
+            throw err;
         }
 
         // CACHE INVALIDATION
@@ -131,17 +175,23 @@ class DeploymentService {
         const deployment = await this.getDeployment(deploymentId, organizationId);
         if (!deployment) throw new Error("Deployment not found");
 
+        // Save original collaborators in case of rollback
+        const originalCollaborators = [...deployment.collaborators.map(c => ({ userid: c.userid, role: c.role }))];
+
         // 1. Remove from Deployment
         deployment.collaborators = deployment.collaborators.filter(c => c.userid !== user.userid.toString());
         await deployment.save();
 
-        // 2. Remove from ALL devices
-        for (const auid of deployment.devices) {
-            try {
+        try {
+            // 2. Remove from ALL devices
+            for (const auid of deployment.devices) {
                 await registryService.removeCollaborator(auid, email);
-            } catch (err) {
-                console.warn(`[Deployment] Failed to remove collaborator from device ${auid}:`, err.message);
             }
+        } catch (err) {
+            // Rollback deployment collaborator update
+            deployment.collaborators = originalCollaborators;
+            await deployment.save();
+            throw err;
         }
 
         // CACHE INVALIDATION
@@ -161,32 +211,90 @@ class DeploymentService {
         if (!device) throw new Error('Device not found in this organization');
         if (device.deployment) throw new Error('Device already belongs to a deployment');
 
+        // Update device
         device.deployment = deploymentId;
         device.deploymentId = deploymentId;
         await device.save();
 
-        deployment.devices.push(auid);
-        await deployment.save();
+        let addedToFleet = false;
+        let projectUid = null;
+        let fleetUid = null;
 
-        await Organization.findOneAndUpdate(
-            { organizationId },
-            { $addToSet: { devices: auid } },
-            { new: true }
-        );
+        try {
+            // Update deployment
+            deployment.devices.push(auid);
+            await deployment.save();
 
-        // SYNC: Add existing Deployment Collaborators to this new Device
-        if (deployment.collaborators && deployment.collaborators.length > 0) {
-            for (const collab of deployment.collaborators) {
-                try {
-                    // We need email for registryService.addCollaborator
-                    const user = await User.findOne({ userid: collab.userid });
-                    if (user) {
-                        await registryService.addCollaborator(auid, user.email, 'device-user', ['view', 'export']);
+            // Notehub Fleet association and overrides cleanup
+            if (device.noteDevUuid) {
+                const cleanModel = device.model.trim().toLowerCase();
+                projectUid = notecardService.resolveProjectUid(cleanModel);
+                if (projectUid) {
+                    // Get or create Notehub Fleet dynamically
+                    fleetUid = deployment.notehubFleets ? deployment.notehubFleets.get(cleanModel) : null;
+                    if (!fleetUid) {
+                        const label = `${deployment.name} - ${cleanModel}`;
+                        fleetUid = await notecardService.createFleet(projectUid, label);
+                        if (!deployment.notehubFleets) {
+                            deployment.notehubFleets = new Map();
+                        }
+                        deployment.notehubFleets.set(cleanModel, fleetUid);
+                        await deployment.save();
                     }
-                } catch (e) {
-                    console.warn(`[Deployment] Failed to sync existing deployment collab to new device ${auid}`, e.message);
+
+                    // Add device to fleet
+                    await notecardService.addDeviceToFleet(projectUid, fleetUid, device.noteDevUuid);
+                    addedToFleet = true;
+
+                    // Delete device-level overrides for CC_FREQUENCY, CC_BATCH, CC_INBOUND, CC_OUTBOUND
+                    await notecardService.deleteDeviceEnvKeys(projectUid, device.noteDevUuid, [
+                        'CC_FREQUENCY', 'CC_BATCH', 'CC_INBOUND', 'CC_OUTBOUND'
+                    ]);
+                } else {
+                    console.warn(`[Deployment] No project UID configured for model: ${device.model}`);
                 }
             }
+
+            // Update organization
+            await Organization.findOneAndUpdate(
+                { organizationId },
+                { $addToSet: { devices: auid } },
+                { new: true }
+            );
+
+            // SYNC: Add existing Deployment Collaborators to this new Device
+            if (deployment.collaborators && deployment.collaborators.length > 0) {
+                for (const collab of deployment.collaborators) {
+                    try {
+                        const user = await User.findOne({ userid: collab.userid });
+                        if (user) {
+                            await registryService.addCollaborator(auid, user.email, 'device-user', ['view', 'export']);
+                        }
+                    } catch (e) {
+                        console.warn(`[Deployment] Failed to sync existing deployment collab to new device ${auid}`, e.message);
+                    }
+                }
+            }
+        } catch (err) {
+            // Notehub Rollback
+            if (addedToFleet && projectUid && fleetUid && device.noteDevUuid) {
+                try {
+                    await notecardService.removeDeviceFromFleet(projectUid, fleetUid, device.noteDevUuid);
+                } catch (fleetErr) {
+                    console.error(`[Deployment] Failed to remove device ${device.noteDevUuid} from fleet on rollback:`, fleetErr.message);
+                }
+            }
+
+            // Rollback device updates
+            device.deployment = null;
+            device.deploymentId = null;
+            await device.save();
+
+            // Rollback deployment array update
+            deployment.devices = deployment.devices.filter(id => id !== auid);
+            await deployment.save();
+
+            throw err;
         }
 
         // CACHE INVALIDATION
@@ -205,15 +313,56 @@ class DeploymentService {
             throw new Error("Device does not belong to this deployment");
         }
 
+        // Save original deployment settings in case of rollback
+        const originalDeployment = device.deployment;
+        const originalDeploymentId = device.deploymentId;
+
+        // Update device
         device.deployment = null;
         device.deploymentId = null;
         await device.save();
 
-        deployment.devices = deployment.devices.filter(id => id !== auid);
-        await deployment.save();
+        let removedFromFleet = false;
+        let projectUid = null;
+        let fleetUid = null;
 
-        // FIX: Device remains in organization, so we strictly do NOT remove from org
-        // Removed the Organization.findOneAndUpdate pull logic.
+        try {
+            // Update deployment
+            deployment.devices = deployment.devices.filter(id => id !== auid);
+            await deployment.save();
+
+            // Notehub Fleet removal and restore configuration to device level
+            if (device.noteDevUuid) {
+                const cleanModel = device.model.trim().toLowerCase();
+                projectUid = notecardService.resolveProjectUid(cleanModel);
+                fleetUid = deployment.notehubFleets ? deployment.notehubFleets.get(cleanModel) : null;
+
+                if (projectUid && fleetUid) {
+                    await notecardService.removeDeviceFromFleet(projectUid, fleetUid, device.noteDevUuid);
+                    removedFromFleet = true;
+
+                    // Sync the device's specific configuration back to device level on Notehub
+                    await notecardService.syncConfigToNotecard(device);
+                } else {
+                    console.warn(`[Deployment] Could not remove device ${device.noteDevUuid} from Fleet: projectUid or fleetUid missing.`);
+                }
+            }
+        } catch (err) {
+            // Notehub Rollback
+            if (removedFromFleet && projectUid && fleetUid && device.noteDevUuid) {
+                try {
+                    await notecardService.addDeviceToFleet(projectUid, fleetUid, device.noteDevUuid);
+                } catch (fleetErr) {
+                    console.error(`[Deployment] Failed to re-add device ${device.noteDevUuid} to fleet on rollback:`, fleetErr.message);
+                }
+            }
+
+            // Rollback device updates
+            device.deployment = originalDeployment;
+            device.deploymentId = originalDeploymentId;
+            await device.save();
+            throw err;
+        }
 
         // CACHE INVALIDATION
         const CacheService = require('../../../modules/common/cache.service');

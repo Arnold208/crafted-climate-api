@@ -48,7 +48,7 @@ const envTelemetrySchema = new mongoose.Schema({
     default: {}
   }
 
-}, { timestamps: true });
+}, { timestamps: true, shardKey: { auid: 1 } });
 
 envTelemetrySchema.index({ auid: 1, transport_time: -1 });
 

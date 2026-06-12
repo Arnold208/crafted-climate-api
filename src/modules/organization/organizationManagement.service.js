@@ -413,19 +413,13 @@ class OrganizationManagementService {
      * Supports both pre-processed requests (from multipart controller) and standard JSON
      */
     async createCreationRequest(userId, data, isPreProcessed = false) {
-        let { name, type, description, businessDetails, documents, requestId } = data;
+        let { name, type, description, businessDetails, documents, requestId, planId, billingCycle } = data;
+        billingCycle = billingCycle || 'monthly';
 
         // Validation
         if (!name || name.length < 3) throw new Error("Organization name is required and must be at least 3 chars");
         if (!["business", "non-profit", "government", "education", "research"].includes(type)) {
             throw new Error("Invalid organization type. Personal organizations do not require approval.");
-        }
-
-        // Basic business details validation
-        if (!businessDetails || !businessDetails.location || !businessDetails.businessType) {
-            // throw new Error("Missing required business details (location, businessType)"); 
-            // Relaxing strictness slightly to allow partial saves if needed, but for verified we want strict.
-            // Let's enforce the model constraints naturally.
         }
 
         if (!documents || documents.length === 0) throw new Error("At least one supporting document is required.");
@@ -437,6 +431,22 @@ class OrganizationManagementService {
             documents = documents.map(d => ({ ...d, uploadedBy: userId }));
         }
 
+        // Find plan and price
+        let planToUse;
+        if (planId) {
+            planToUse = await Plan.findOne({ planId, isActive: true });
+            if (!planToUse) throw new Error("Requested plan not found or inactive");
+        } else {
+            planToUse = await Plan.findOne({ name: 'enterprise', isActive: true });
+            if (!planToUse) {
+                planToUse = await Plan.findOne({ isActive: true }).sort({ priceMonthly: -1 }); // Fallback to most premium plan
+            }
+        }
+        if (!planToUse) throw new Error("No active subscription plan found in the system");
+
+        const price = billingCycle === 'yearly' ? planToUse.priceYearly : planToUse.priceMonthly;
+        const amountInPesewas = Math.round(price * 100);
+
         const request = new OrganizationRequest({
             requestId: requestId || `req-${uuidv4()}`,
             requesterUserId: userId,
@@ -444,14 +454,90 @@ class OrganizationManagementService {
             proposedType: type,
             description,
             businessDetails,
-            documents: documents
+            documents: documents,
+            planId: planToUse.planId,
+            billingCycle,
+            status: "payment_pending",
+            paymentStatus: "pending"
         });
+
+        let checkoutUrl = null;
+        if (amountInPesewas > 0) {
+            const user = await User.findOne({ userid: userId });
+            if (!user) throw new Error("User not found");
+
+            const paystackService = require('../../services/paystackService');
+            const paymentInit = await paystackService.initializeTransaction(user.email, amountInPesewas, {
+                requestId: request.requestId,
+                planId: planToUse.planId,
+                billingCycle,
+                userId
+            });
+
+            request.paymentReference = paymentInit.reference;
+            checkoutUrl = paymentInit.authorization_url;
+        } else {
+            // Free plan or price is 0
+            request.status = "pending"; // Directly moves to pending approval
+            request.paymentStatus = "success";
+            request.pricePaid = 0;
+        }
 
         await request.save();
 
         // TODO: Send Email to Admin (Notification)
 
-        return request;
+        return {
+            request,
+            checkoutUrl
+        };
+    }
+
+    /**
+     * 💳 RETRY PAYMENT FOR CREATION REQUEST
+     */
+    async retryPayment(requestId, userId) {
+        const request = await OrganizationRequest.findOne({ requestId });
+        if (!request) throw new Error("Request not found");
+        if (request.requesterUserId !== userId) throw new Error("Unauthorized. Only the requester can retry payment.");
+        if (request.paymentStatus === 'success') throw new Error("Payment already successful");
+
+        let planToUse = await Plan.findOne({ planId: request.planId });
+        if (!planToUse) {
+            planToUse = await Plan.findOne({ name: 'enterprise', isActive: true });
+        }
+        if (!planToUse) throw new Error("Plan not found");
+
+        const price = request.billingCycle === 'yearly' ? planToUse.priceYearly : planToUse.priceMonthly;
+        const amountInPesewas = Math.round(price * 100);
+
+        if (amountInPesewas === 0) {
+            request.status = "pending";
+            request.paymentStatus = "success";
+            request.pricePaid = 0;
+            await request.save();
+            return { request, checkoutUrl: null };
+        }
+
+        const user = await User.findOne({ userid: userId });
+        if (!user) throw new Error("User not found");
+
+        const paystackService = require('../../services/paystackService');
+        const paymentInit = await paystackService.initializeTransaction(user.email, amountInPesewas, {
+            requestId: request.requestId,
+            planId: planToUse.planId,
+            billingCycle: request.billingCycle,
+            userId
+        });
+
+        request.paymentReference = paymentInit.reference;
+        request.paymentStatus = 'pending'; // Reset payment status to pending
+        await request.save();
+
+        return {
+            request,
+            checkoutUrl: paymentInit.authorization_url
+        };
     }
 
     /**
@@ -523,10 +609,17 @@ class OrganizationManagementService {
             }]
         });
 
-        // 1b. Assign ENTERPRISE Plan (Matching planType)
-        const enterprisePlan = await Plan.findOne({ name: 'enterprise', isActive: true });
-        // Fallback to free if enterprise not found, but we want enterprise
-        const planToAssign = enterprisePlan || await Plan.findOne({ $or: [{ name: 'free' }, { name: 'starter' }], isActive: true });
+        // 1b. Assign the requested Plan (or fallback to enterprise)
+        let planToAssign;
+        if (request.planId) {
+            planToAssign = await Plan.findOne({ planId: request.planId });
+        }
+        if (!planToAssign) {
+            planToAssign = await Plan.findOne({ name: 'enterprise', isActive: true });
+        }
+        if (!planToAssign) {
+            planToAssign = await Plan.findOne({ $or: [{ name: 'free' }, { name: 'starter' }], isActive: true });
+        }
 
         if (planToAssign) {
             // Create Subscription Record
@@ -536,7 +629,7 @@ class OrganizationManagementService {
                 organizationId: orgId,
                 subscriptionScope: "organization",
                 planId: planToAssign.planId,
-                billingCycle: "monthly",
+                billingCycle: request.billingCycle || "monthly",
                 status: "active"
             });
 

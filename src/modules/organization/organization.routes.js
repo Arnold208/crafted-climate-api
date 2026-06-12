@@ -183,7 +183,7 @@ router.get('/:orgId/dashboard',
  *             required: [email, role]
  *             properties:
  *               email: { type: string, format: email }
- *               role: { type: string, enum: ['org-admin', 'org-support', 'org-user'] }
+ *               role: { type: string, enum: ['org-admin', 'org-support', 'org-user', 'viewer', 'editor', 'admin', 'support', 'user'] }
  *     responses:
  *       200:
  *         description: User invited successfully
@@ -225,7 +225,7 @@ router.post('/:orgId/add-user',
  *             required: [email, newRole]
  *             properties:
  *               userid: { type: string }
- *               newRole: { type: string, enum: ['org-admin', 'org-support', 'org-user'] }
+ *               newRole: { type: string, enum: ['org-admin', 'org-support', 'org-user', 'viewer', 'editor', 'admin', 'support', 'user'] }
  *     responses:
  *       200:
  *         description: Role updated successfully
@@ -586,6 +586,37 @@ router.post('/:orgId/devices/:auid/transfer',
     orgDevicesController.transferDevice
 );
 
+/**
+ * @swagger
+ * /api/org/devices/transfer-batch:
+ *   post:
+ *     summary: Batch transfer multiple devices to a target organization
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [auids, targetOrgId]
+ *             properties:
+ *               auids:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               targetOrgId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Batch transfer completed
+ */
+router.post('/devices/transfer-batch',
+    authenticateToken,
+    orgDevicesController.transferDevicesBatch
+);
+
 // ========================================
 // 🆕 ORGANIZATION MANAGEMENT ROUTES
 // Name editing, verification, partner workflows
@@ -599,5 +630,12 @@ router.use('/', organizationManagementRoutes);
 // ========================================
 const orgApiKeyRoutes = require('./orgApiKey.routes');
 router.use('/:orgId/api-keys', orgApiKeyRoutes);
+
+// ========================================
+// ✉️ INVITATION ROUTES
+// Invite members, accept/decline invites
+// ========================================
+const invitationRoutes = require('./invitation.routes');
+router.use('/', invitationRoutes);
 
 module.exports = router;

@@ -72,6 +72,9 @@ const checkPlanFeature = (featureName, requiredValue = null) => {
 
         } catch (error) {
             console.error("Plan Feature Check Error:", error);
+            if (error.message.includes("subscription") || error.message.includes("plan")) {
+                return res.status(403).json({ message: error.message });
+            }
             res.status(500).json({ message: "Internal Subscription Error" });
         }
     };

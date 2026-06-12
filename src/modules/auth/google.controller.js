@@ -55,7 +55,17 @@ exports.googleCallback = (req, res) => {
 
         // Check if this was a mobile request via state parameter
         const state = req.query.state;
-        if (state === 'mobile') {
+        let decodedState = {};
+        if (state) {
+            try {
+                decodedState = JSON.parse(Buffer.from(state, 'base64').toString('utf8'));
+            } catch (e) {
+                // Support legacy state format
+                decodedState = { platform: state };
+            }
+        }
+
+        if (decodedState.platform === 'mobile') {
             const encodedData = encodeURIComponent(JSON.stringify(responseData));
             const deepLink = `crowdsense://auth-callback?data=${encodedData}`;
             console.log(`📱 Mobile OAuth Success: Redirecting to deep link`);

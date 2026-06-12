@@ -6,6 +6,11 @@ const invitationSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
+  token: {
+    type: String,
+    required: true,
+    unique: true
+  },
   email: {
     type: String,
     required: true
@@ -16,7 +21,7 @@ const invitationSchema = new mongoose.Schema({
   },
   accessLevel: {
     type: String,
-    enum: ['ADMIN', 'MODERATOR'],
+    enum: ['org-admin', 'org-support', 'org-user', 'viewer', 'editor', 'admin', 'support', 'user'],
     required: true
   },
   needsSignUp: {

@@ -51,7 +51,7 @@ const gasSoloTelemetrySchema = new mongoose.Schema({
     default: {}
   }
 
-}, { timestamps: true });
+}, { timestamps: true, shardKey: { auid: 1 } });
 
 gasSoloTelemetrySchema.index({ auid: 1, transport_time: -1 });
 gasSoloTelemetrySchema.index({ auid: 1, transport_time: 1 }); // Optimized for graph route

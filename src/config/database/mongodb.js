@@ -24,7 +24,7 @@ const connectDB = async () => {
       maxPoolSize: 100,           // Handle up to 100 concurrent ops per instance
       minPoolSize: 10,            // Keep 10 connections warm
       socketTimeoutMS: 45000,     // Close sockets after 45s of inactivity
-      serverSelectionTimeoutMS: 5000, // Fail fast if DB is down
+      serverSelectionTimeoutMS: 30000, // Allow up to 30s for remote connection handshakes
       heartbeatFrequencyMS: 10000,
       retryWrites: false           // Azure Cosmos DB (RU) does not support retryable writes
     });

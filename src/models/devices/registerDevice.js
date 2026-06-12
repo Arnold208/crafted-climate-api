@@ -67,10 +67,27 @@ const registerNewDeviceSchema = new mongoose.Schema({
   status: { type: String, default: 'offline' },
   availability: { type: String, default: 'private' },
 
+  /**
+   * OPERATIONAL STATE — intentional power/lifecycle state set by owner/operator.
+   * Distinct from `status` (online/offline connectivity):
+   *   - active   : Device is deployed and expected to report data.
+   *   - inactive : Deliberately turned off by an owner/admin. Offline alerts suppressed.
+   *   - disabled : Auto-set after 30+ days inactive. Alerts and heartbeat processing halted.
+   */
+  state: {
+    type: String,
+    enum: ['active', 'inactive', 'disabled'],
+    default: 'active'
+  },
+  stateChangedAt: { type: Date, default: null },
+  stateChangedBy: { type: String, default: null }, // userid that last changed state
+
   datapoints: { type: [String], default: [] },
   subscription: { type: [String], default: [] },
 
   manufacturingId: { type: String, required: true },
+  frequency: { type: Number, default: 30 },
+  batch: { type: Number, default: 2 },
   createdAt: { type: Date, default: Date.now },
 
   collaborators: [
@@ -96,6 +113,18 @@ const registerNewDeviceSchema = new mongoose.Schema({
   ],
 
   noteDevUuid: { type: String },
+  isEnvInitialized: { type: Boolean, default: false },
+  acquisitionType: {
+    type: String,
+    enum: ['purchase', 'maas'],
+    default: 'purchase',
+    index: true
+  },
+  netMode: {
+    type: String,
+    enum: ['cellular', 'wifi'],
+    default: 'cellular'
+  },
 
   /** 
    * Platform Hardening: Device Metadata & Safety
@@ -154,6 +183,8 @@ registerNewDeviceSchema.index({ "collaborators.userid": 1 });
 registerNewDeviceSchema.index({ organizationId: 1 });
 registerNewDeviceSchema.index({ userid: 1 });
 registerNewDeviceSchema.index({ status: 1 });
+registerNewDeviceSchema.index({ state: 1 }); // For auto-disable cron query
+registerNewDeviceSchema.index({ state: 1, stateChangedAt: 1 }); // Compound for efficient auto-disable scan
 
 
 module.exports = mongoose.model(

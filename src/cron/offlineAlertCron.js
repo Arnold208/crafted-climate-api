@@ -1,9 +1,7 @@
 const cron = require('node-cron');
 const { client: redis } = require('../config/redis/redis');
 const RegisterDevice = require('../models/devices/registerDevice');
-const User = require('../models/user/userModel');
-const NotificationPreference = require('../models/notification/NotificationPreference');
-const { sendSMS } = require('../config/sms/sms');
+const { alertQueue } = require('../config/queue/bullMQ/alertQueue');
 const logger = require('../utils/logger');
 
 // ---------------------------------------------------------------------------
@@ -11,78 +9,28 @@ const logger = require('../utils/logger');
 // ---------------------------------------------------------------------------
 const ALERT_CHECK_INTERVAL = process.env.OFFLINE_CHECK_INTERVAL || '* * * * *'; // Every minute
 
-// Stages: minMinutes = how long device must be offline to trigger
-// level = identifier for the stage
-const ALERT_STAGES = [
-    { level: 1, minMinutes: 70, tag: 'WARNING' },
-    { level: 2, minMinutes: 600, tag: 'CRITICAL' }, // 10 hours
-    { level: 3, minMinutes: 1440, tag: 'SEVERE' }   // 24 hours
-];
-
-const emailTemplateService = require('../services/emailTemplate.service');
-
-// ---------------------------------------------------------------------------
-// HELPERS
-// ---------------------------------------------------------------------------
-
-function getStageConfig(stage, device, lastSeen) {
-    const timeStr = new Date(lastSeen).toLocaleString();
-    const nickname = device.nickname || device.devid;
-    // Safe location access (assuming structure, fallback to empty)
-    const location = device.metadata?.location || device.location || 'Unknown';
-
-    let sms = '';
-    let templateSlug = '';
-
-    // Variables for the template
-    const variables = {
-        nickname,
-        devid: device.devid,
-        lastSeen: timeStr,
-        location: typeof location === 'string' ? location : JSON.stringify(location)
-    };
-
-    switch (stage.level) {
-        case 1:
-            // Warning (70 mins)
-            sms = `CraftedClimate Alert: ${nickname} has been offline since ${timeStr}. Please check power and connectivity.`;
-            templateSlug = 'device-offline-warning';
-            break;
-        case 2:
-            // Critical (10 Hours)
-            sms = `Urgent: ${nickname} has been offline for over 10 hours. Please inspect the device immediately to prevent data loss.`;
-            templateSlug = 'device-offline-critical';
-            break;
-        case 3:
-            // Severe (24 Hours)
-            sms = `Severe: ${nickname} has been offline for 24 hours. Immediate action required to restore data flow.`;
-            templateSlug = 'device-offline-severe';
-            break;
-        default:
-            return null;
-    }
-
-    return { sms, templateSlug, variables };
+function getAlertStagesForDevice(device) {
+    const frequency = device.frequency || 30;
+    const batch = device.batch || 2;
+    const alertThresholdMinutes = device.notificationPreferences?.alertThresholdMinutes;
+    // Base Threshold: custom alertThresholdMinutes || (frequency * batch) + 5 minutes safety margin
+    const baseThreshold = alertThresholdMinutes || ((frequency * batch) + 5);
+    return [
+        { level: 1, minMinutes: baseThreshold, tag: 'WARNING' },
+        { level: 2, minMinutes: baseThreshold * 8, tag: 'CRITICAL' },
+        { level: 3, minMinutes: baseThreshold * 20, tag: 'SEVERE' }
+    ];
 }
 
-async function sendStageAlert(device, recipients, smsRecipients, stage, lastSeen) {
-    const config = getStageConfig(stage, device, lastSeen);
-    if (!config) return;
-
-    logger.info(`📢 Sending [${stage.tag}] Alert for ${device.devid} to ${recipients.length} emails, ${smsRecipients.length} SMS`);
-
-    // 1. Send Emails (via Template Service)
-    // We run these in parallel
-    await Promise.allSettled(recipients.map(email =>
-        emailTemplateService.sendFromTemplate(config.templateSlug, email, config.variables)
-            .catch(e => logger.error(`❌ Email Template failed for ${email}:`, e.message))
-    ));
-
-    // 2. Send SMS (Direct)
-    await Promise.allSettled(smsRecipients.map(contact =>
-        sendSMS(contact, config.sms)
-            .catch(e => logger.error(`❌ SMS failed for ${contact}:`, e.message))
-    ));
+function formatDuration(minutes) {
+    if (minutes < 60) {
+        return `${Math.round(minutes)} minutes`;
+    }
+    const hours = minutes / 60;
+    if (hours === 1) {
+        return `1 hour`;
+    }
+    return `${parseFloat(hours.toFixed(1))} hours`;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,15 +38,12 @@ async function sendStageAlert(device, recipients, smsRecipients, stage, lastSeen
 // ---------------------------------------------------------------------------
 
 async function checkOfflineDevices() {
-    // logger.debug('🕵️ Checking for offline devices (3-Stage)...');
-
     const now = Date.now();
-    // We only care about devices that have been offline for at least Stage 1 (70 mins)
-    // So cutoff is 70 mins ago.
-    const cutoff = now - (ALERT_STAGES[0].minMinutes * 60 * 1000);
+    // We fetch any device that has not checked in for at least 2 minutes (the minimum possible threshold)
+    const cutoff = now - (2 * 60 * 1000);
 
     try {
-        // 1. Find candidates (Offline > 70 mins)
+        // 1. Find candidates (Offline > 2 mins)
         let offlineCandidates;
         if (typeof redis.zRangeByScore === 'function') {
             offlineCandidates = await redis.zRangeByScore('devices:heartbeat', 0, cutoff);
@@ -110,130 +55,121 @@ async function checkOfflineDevices() {
 
         // 2. Process Candidates
         for (const auid of offlineCandidates) {
-
-            // A. Get Last Seen Score
             const lastSeenScore = await redis.zScore('devices:heartbeat', auid);
             if (!lastSeenScore) continue;
 
             const lastSeen = Number(lastSeenScore);
             const minutesOffline = (now - lastSeen) / 60000;
 
-            // B. Determine Target Stage
-            // We find the HIGHEST stage that this duration qualifies for.
+            // Load device metadata from Redis cache or MongoDB (Warm cache)
+            const cacheKey = `device:${auid}:meta`;
+            let cachedDataRaw = await redis.get(cacheKey);
+            let device;
+
+            if (cachedDataRaw) {
+                try {
+                    device = JSON.parse(cachedDataRaw);
+                } catch (e) {
+                    logger.warn(`Failed to parse cached metadata for device ${auid}`);
+                }
+            }
+
+            if (!device) {
+                device = await RegisterDevice.findOne({ auid });
+                if (!device) {
+                    // Cleanup orphan heartbeat
+                    if (typeof redis.zRem === 'function') {
+                        await redis.zRem('devices:heartbeat', auid);
+                    } else {
+                        await redis.zrem('devices:heartbeat', auid);
+                    }
+                    continue;
+                }
+                // Save to cache (Warming)
+                await redis.set(cacheKey, JSON.stringify(device), { EX: 24 * 60 * 60 });
+            }
+
+            // ⚡ STATE GUARD: Skip inactive/disabled devices immediately.
+            // If a device was deliberately turned off, we do NOT alert.
+            // Also remove it from heartbeat ZSet so we don't re-process it every minute.
+            const deviceState = device.state || 'active';
+            if (deviceState === 'inactive' || deviceState === 'disabled') {
+                logger.debug(`[OfflineAlert] Skipping device ${auid} — state is '${deviceState}' (intentionally off).`);
+                if (typeof redis.zRem === 'function') {
+                    await redis.zRem('devices:heartbeat', auid);
+                } else {
+                    await redis.zrem('devices:heartbeat', auid);
+                }
+                continue;
+            }
+
+            // Calculate alert stages dynamically using per-device config (frequency & batch)
+            const alertStages = getAlertStagesForDevice(device);
+
+            // Determine Target Stage (highest qualified)
             let targetStage = null;
-            for (let i = ALERT_STAGES.length - 1; i >= 0; i--) {
-                if (minutesOffline >= ALERT_STAGES[i].minMinutes) {
-                    targetStage = ALERT_STAGES[i];
+            for (let i = alertStages.length - 1; i >= 0; i--) {
+                if (minutesOffline >= alertStages[i].minMinutes) {
+                    targetStage = alertStages[i];
                     break;
                 }
             }
 
-            if (!targetStage) continue; // Should not happen given cutoff, but safety check
+            if (!targetStage) continue; // Not offline long enough
 
-            // C. Check Current Alert Context
+            // Update Dashboard Status to 'offline' in Redis immediately (Zero Stale UI Data)
+            try {
+                const metaStr = await redis.hGet(auid, 'metadata');
+                if (metaStr) {
+                    const meta = JSON.parse(metaStr);
+                    if (meta.status !== 'offline') {
+                        meta.status = 'offline';
+                        await redis.hSet(auid, 'metadata', JSON.stringify(meta));
+                        
+                        // 📣 Publish real-time status change event
+                        await redis.publish('device:status-change', JSON.stringify({ auid, status: 'offline' }));
+                        logger.info(`📣 Published offline status for device ${auid}`);
+                    }
+                }
+            } catch (e) { /* ignore */ }
+
+            // Check current alert context to prevent duplicate notifications
             const contextKey = `device:${auid}:alert_context`;
-            const currentContext = await redis.hGetAll(contextKey); // { level, lastAlertAt }
+            const currentContext = await redis.hGetAll(contextKey);
             const currentLevel = currentContext && currentContext.level ? Number(currentContext.level) : 0;
 
-            // D. Alert if we have escalated
+            // If we have escalated
             if (targetStage.level > currentLevel) {
 
-                // Fetch Metadata/Recipients
-                // (Optimized: Only fetch if we are actually alerting)
-                const device = await RegisterDevice.findOne({ auid });
-                if (!device) {
-                    await redis.zRem('devices:heartbeat', auid);
-                    continue;
-                }
-
-                // Check preferences
-                if (device.notificationPreferences?.enabled === false || device.notificationPreferences?.offlineAlert === false) {
-                    console.log(`[OfflineAlert] Suppressed: Notifications disabled for device ${device.auid}`);
-                    continue;
-                }
-
-                // Gather Recipients
-                const emails = new Set();
-                const phones = new Set();
-
-                /**
-                 * Helper to add user to alert lists if their preferences allow it
-                 */
-                const addUserIfAllowed = async (userId, userEmail, userContact) => {
-                    if (!userId) return;
-                    const prefs = await NotificationPreference.findOne({ userid: userId });
-
-                    if (prefs) {
-                        // Check if device is muted for THIS user
-                        // We check both auid and devid for backward compatibility
-                        const isMuted = prefs.mutedDevices && (prefs.mutedDevices.includes(device.auid) || prefs.mutedDevices.includes(device.devid));
-                        if (isMuted) {
-                            logger.debug(`[OfflineAlert] User ${userId} has muted device ${device.auid}. Skipping.`);
-                            return;
-                        }
-
-                        // Check channel preferences
-                        const emailEnabled = prefs.preferences?.email?.enabled !== false;
-                        const pushEnabled = prefs.preferences?.push?.enabled !== false; // Mapping push to SMS
-
-                        if (emailEnabled && userEmail) emails.add(userEmail);
-                        if (pushEnabled && userContact) phones.add(userContact);
-                    } else {
-                        // Default: Notify if no preference record exists
-                        if (userEmail) emails.add(userEmail);
-                        if (userContact) phones.add(userContact);
-                    }
-                };
-
-                // D1. Owner
-                const owner = await User.findOne({ userid: device.userid });
-                if (owner) {
-                    await addUserIfAllowed(owner.userid, owner.email, owner.contact);
-                }
-
-                // D2. Custom Recipients list (Usually emails, added directly)
-                if (device.notificationPreferences?.recipients?.length > 0) {
-                    device.notificationPreferences.recipients.forEach(e => emails.add(e));
-                }
-
-                // D3. Collaborators
-                if (device.collaborators?.length > 0) {
-                    for (const c of device.collaborators) {
-                        if (['device-admin', 'device-support'].includes(c.role)) {
-                            const u = await User.findOne({ userid: c.userid });
-                            if (u) {
-                                await addUserIfAllowed(u.userid, u.email, u.contact);
-                            }
+                // Flapping Anti-Spam Check (for Level 1 alerts)
+                if (targetStage.level === 1) {
+                    const lastAlertTimeRaw = await redis.get(`device:${auid}:last_alert_time`);
+                    if (lastAlertTimeRaw) {
+                        const timeSinceLastAlert = now - Number(lastAlertTimeRaw);
+                        const cooldownMs = (parseInt(process.env.ALERT_FLAPPING_COOLDOWN_MINUTES, 10) || 30) * 60 * 1000;
+                        if (timeSinceLastAlert < cooldownMs) {
+                            logger.info(`[OfflineAlert] Suppressed Level 1 alert for device ${device.auid} due to flapping cooldown (${Math.round(timeSinceLastAlert / 60000)}m ago).`);
+                            continue;
                         }
                     }
                 }
 
-                // E. Send Alert
-                if (emails.size > 0 || phones.size > 0) {
-                    await sendStageAlert(device, Array.from(emails), Array.from(phones), targetStage, lastSeen);
-                }
+                // Decouple: Add alert job to background BullMQ queue
+                logger.info(`📥 Queuing offline alert job for device ${auid} (Level ${targetStage.level})`);
+                await alertQueue.add(`offline-alert:${auid}:${targetStage.level}`, {
+                    auid,
+                    lastSeen,
+                    targetStage,
+                    now
+                });
 
-                // F. Update Context
+                // Optimistically update context to prevent queuing duplicate alert jobs
                 await redis.hSet(contextKey, {
                     level: targetStage.level,
                     lastAlertAt: now,
                     lastStageTag: targetStage.tag
                 });
-                // Expire context after 48 hours of no updates (cleanup if device removed)
-                // But generally, reset happens on recovery in redisTelemetry.js
                 await redis.expire(contextKey, 48 * 3600);
-
-                // G. Update Dashboard Status (if not already offline)
-                try {
-                    const metaStr = await redis.hGet(auid, 'metadata');
-                    if (metaStr) {
-                        const meta = JSON.parse(metaStr);
-                        if (meta.status !== 'offline') {
-                            meta.status = 'offline';
-                            await redis.hSet(auid, 'metadata', JSON.stringify(meta));
-                        }
-                    }
-                } catch (e) { /* ignore */ }
             }
         }
 
@@ -247,7 +183,7 @@ async function checkOfflineDevices() {
 // ---------------------------------------------------------------------------
 function startOfflineAlertCron() {
     cron.schedule(ALERT_CHECK_INTERVAL, checkOfflineDevices);
-    console.log('⏱️ Offline Alert Cron scheduled (3-Stage Logic)');
+    console.log('⏱️ Offline Alert Cron scheduled (3-Stage Logic & Background Alerting)');
 }
 
-module.exports = { startOfflineAlertCron };
+module.exports = { startOfflineAlertCron, checkOfflineDevices, getAlertStagesForDevice, formatDuration };

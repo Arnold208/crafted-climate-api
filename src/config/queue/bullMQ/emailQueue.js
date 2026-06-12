@@ -9,12 +9,13 @@ if (process.env.NODE_ENV === 'development') {
     envFile = '.env';
 }
 
-dotenv.config({ path: path.resolve(__dirname, `../../../${envFile}`) });
+dotenv.config({ path: path.resolve(__dirname, `../../../../${envFile}`) });
 
 const connection = {
     host: process.env.REDIS_HOST || '127.0.0.1',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
     password: process.env.REDIS_PASSWORD || undefined,
+    keepAlive: 30000,
     maxRetriesPerRequest: 3,
     enableOfflineQueue: false,
 };

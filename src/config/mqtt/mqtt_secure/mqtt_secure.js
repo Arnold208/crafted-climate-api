@@ -12,7 +12,7 @@ if (process.env.NODE_ENV === 'development') {
   envFile = '.env';   // default for production or if NODE_ENV not set
 }
 
-dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
+dotenv.config({ path: path.resolve(__dirname, `../../../../${envFile}`) });
 
 // Resolve certificate paths
 const certPath = path.resolve(__dirname, "../../certificates/api_v2-client.pem");

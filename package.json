@@ -7,7 +7,12 @@
     "dev": "cross-env NODE_ENV=development nodemon src/server.js",
     "migrate": "migrate-mongo up",
     "migrate:create": "migrate-mongo create",
-    "migrate:down": "migrate-mongo down"
+    "migrate:down": "migrate-mongo down",
+    "test:rbac": "node scripts/verify-rbac-logic.js",
+    "test:cache": "node scripts/verify_org_cache.js",
+    "test:notifications": "node scripts/verify_notifications.js",
+    "test:settings": "node scripts/verify_user_settings.js",
+    "test:frequency": "cross-env NODE_ENV=development node scripts/verify_frequency_settings.js"
   },
   "keywords": [],
   "author": "",

@@ -11,6 +11,8 @@ const { sendEmail } = require('../../../config/mail/nodemailer');
 const CacheService = require('../../../modules/common/cache.service');
 const { createAuditLog } = require('../../../utils/auditLogger');
 const { client: redisClient } = require('../../../config/redis/redis');
+// Notecard auto-sync (non-fatal if Notehub is unreachable)
+const notecardService = require('../notecard/notecard.service');
 
 // Telemetry Models for Fallback
 const EnvTelemetry = require('../../../models/telemetry/envModel');
@@ -24,7 +26,7 @@ const MODEL_MAP = {
 };
 
 class RegistryService {
-    async registerDevice({ auid, serial, location, nickname, userid, organizationId }) {
+    async registerDevice({ auid, serial, location, nickname, userid, organizationId, frequency, batch }) {
         // 1. Check Existence
         const existing = await registerNewDevice.findOne({ serial });
         if (existing) {
@@ -70,6 +72,31 @@ class RegistryService {
         const modelEntry = await SensorModel.findOne({ model: manufactured.model.toLowerCase() });
         const imageUrl = modelEntry?.imageUrl || process.env.DEFAULT_IMAGE_URL;
 
+        // 4.5 Resolve Plan and Initial netMode/state
+        const Plan = require('../../../models/subscriptions/Plan');
+        const UserSubscription = require('../../../models/subscriptions/UserSubscription');
+        const subQuery = organizationId
+            ? { organizationId, status: 'active' }
+            : { userid, organizationId: null, status: 'active' };
+        const subscription = await UserSubscription.findOne(subQuery);
+        let planName = 'freemium';
+        if (subscription) {
+            const plan = await Plan.findOne({ planId: subscription.planId });
+            if (plan) planName = plan.name.toLowerCase();
+        }
+
+        const acquisitionType = manufactured.acquisitionType || 'purchase';
+        let initialNetMode = 'cellular';
+        let initialDeviceState = 'active';
+
+        if (planName === 'freemium') {
+            if (acquisitionType === 'purchase') {
+                initialNetMode = 'wifi';
+            } else if (acquisitionType === 'maas') {
+                initialDeviceState = 'disabled';
+            }
+        }
+
         // 5. Save
         const newDevice = new registerNewDevice({
             auid,
@@ -94,9 +121,15 @@ class RegistryService {
             battery: 100,
             subscription: [],
             image: imageUrl,
-            status: 'offline',
+            status: initialDeviceState === 'disabled' ? 'disabled' : 'offline',
+            state: initialDeviceState,
+            netMode: initialNetMode,
             availability: 'private',
             manufacturingId: manufactured.manufacturingId,
+            frequency: frequency !== undefined ? frequency : 30,
+            batch: batch !== undefined ? batch : 2,
+            noteDevUuid: manufactured.noteDevUuid,
+            acquisitionType: acquisitionType,
         });
 
         await newDevice.save();
@@ -107,6 +140,12 @@ class RegistryService {
             { $addToSet: { devices: auid } }
         );
 
+        // Update manufactured device status and auid
+        await addDevice.updateOne(
+            { serial },
+            { $set: { status: 'REGISTERED', auid } }
+        );
+
         // AUDIT LOG
         await createAuditLog({
             action: 'DEVICE_REGISTER',
@@ -115,6 +154,13 @@ class RegistryService {
             details: { auid, serial, model: manufactured.model },
             ipAddress: null
         });
+
+        // 📡 Push initial config to Notecard (non-blocking, non-fatal)
+        // This ensures the physical device starts with correct frequency/batch/state
+        // from the first Notehub sync rather than relying on firmware defaults.
+        if (manufactured.noteDevUuid) {
+            notecardService.syncConfigToNotecard(newDevice).catch(() => {});
+        }
 
         return newDevice;
     }
@@ -145,9 +191,41 @@ class RegistryService {
         // But logic requires device to exist.
         if (!device) throw new Error('Device not found.');
 
-        const { nickname, location } = reqBody;
+        const { nickname, location, frequency, batch, netMode } = reqBody;
+
+        // Track config changes before mutation (for Notecard sync decision)
+        const freqChanged = frequency !== undefined && frequency !== device.frequency;
+        const batchChanged = batch !== undefined && batch !== device.batch;
+        
+        let netModeChanged = false;
+        if (netMode !== undefined && netMode !== device.netMode) {
+            if (!['cellular', 'wifi'].includes(netMode)) {
+                throw new Error("Invalid netMode. Must be 'cellular' or 'wifi'");
+            }
+            if (netMode === 'cellular') {
+                const Plan = require('../../../models/subscriptions/Plan');
+                const UserSubscription = require('../../../models/subscriptions/UserSubscription');
+                const orgId = device.organizationId;
+                const subQuery = orgId 
+                    ? { organizationId: orgId, status: 'active' }
+                    : { userid: userid, organizationId: null, status: 'active' };
+                const subscription = await UserSubscription.findOne(subQuery);
+                let planName = 'freemium';
+                if (subscription) {
+                    const plan = await Plan.findOne({ planId: subscription.planId });
+                    if (plan) planName = plan.name.toLowerCase();
+                }
+                if (planName === 'freemium') {
+                    throw new Error("Cellular mode is not available on the Freemium plan. Please upgrade to use cellular sync.");
+                }
+            }
+            device.netMode = netMode;
+            netModeChanged = true;
+        }
 
         if (nickname) device.nickname = nickname;
+        if (frequency !== undefined) device.frequency = frequency;
+        if (batch !== undefined) device.batch = batch;
         if (location) {
             const [latitude, longitude] = location;
             // Re-geocoding logic could be extracted to utility
@@ -232,6 +310,12 @@ class RegistryService {
 
         await device.save();
         await CacheService.invalidate(`device:${auid}:meta`);
+
+        // 📡 AUTO-PUSH to Notecard if frequency, batch, or netMode changed
+        if (freqChanged || batchChanged || netModeChanged) {
+            notecardService.syncConfigToNotecard(device).catch(() => {}); // Non-blocking, non-fatal
+        }
+
         return device;
     }
 
@@ -243,8 +327,8 @@ class RegistryService {
 
         // Cleanup Logic
         await Deployment.updateMany(
-            { devices: devid },
-            { $pull: { devices: devid } }
+            { devices: auid },
+            { $pull: { devices: auid } }
         );
 
         // Delete associated Threshold Rules
@@ -252,8 +336,8 @@ class RegistryService {
 
         await registerNewDevice.findOneAndDelete({ auid });
 
-        await Organization.findByIdAndUpdate(
-            organizationId,
+        await Organization.findOneAndUpdate(
+            { organizationId },
             { $pull: { devices: auid } }
         );
 
@@ -396,6 +480,134 @@ class RegistryService {
         if (!collab) throw new Error('Collaborator not found on this device');
 
         return { role: collab.role, permissions: collab.permissions };
+    }
+
+    /**
+     * SET DEVICE STATE
+     * ─────────────────────────────────────────────────────────────────────
+     * Intentionally turns a device ON (active) or OFF (inactive).
+     * This is DISTINCT from `status` (online/offline connectivity).
+     *
+     * Effects:
+     *   - Saves state + stateChangedAt + stateChangedBy in MongoDB
+     *   - Writes state into Redis metadata hash (no stale data)
+     *   - Publishes to device:status-change Pub/Sub (frontend gets it instantly)
+     *   - Removes heartbeat from ZSet if going inactive/disabled
+     *     (so offline cron doesn't process it)
+     *   - Clears alert context to reset escalation
+     *
+     * @param {string} auid        - Device unique ID
+     * @param {string} newState    - 'active' | 'inactive' | 'disabled'
+     * @param {string} changedBy   - userid of the operator making this change
+     */
+    async setDeviceState(auid, newState, changedBy, newNetMode = null) {
+        const VALID_STATES = ['active', 'inactive', 'disabled'];
+        if (!VALID_STATES.includes(newState)) {
+            throw new Error(`Invalid state. Must be one of: ${VALID_STATES.join(', ')}`);
+        }
+        if (newNetMode && !['cellular', 'wifi'].includes(newNetMode)) {
+            throw new Error(`Invalid netMode. Must be one of: 'cellular' or 'wifi'`);
+        }
+
+        const device = await registerNewDevice.findOne({ auid });
+        if (!device) throw new Error('Device not found');
+
+        const prevState = device.state;
+        const prevNetMode = device.netMode || 'cellular';
+        if (prevState === newState && (!newNetMode || prevNetMode === newNetMode)) {
+            return { message: `Device is already ${newState} and netMode is ${prevNetMode}`, device };
+        }
+
+        const now = new Date();
+
+        // 1. Persist to MongoDB
+        await registerNewDevice.updateOne(
+            { auid },
+            {
+                $set: {
+                    state: newState,
+                    stateChangedAt: now,
+                    stateChangedBy: changedBy,
+                    ...(newNetMode && { netMode: newNetMode }),
+                    // If re-activating: keep status as-is (device is not necessarily online yet)
+                    // If deactivating: set status to 'inactive' for display clarity
+                    ...(newState !== 'active' && { status: newState })
+                }
+            }
+        );
+
+        // 2. Invalidate + warm meta cache atomically
+        await CacheService.invalidate(`device:${auid}:meta`);
+
+        // 3. Update Redis metadata hash directly (no stale data in UI)
+        try {
+            const metaStr = await redisClient.hGet(auid, 'metadata');
+            if (metaStr) {
+                const meta = JSON.parse(metaStr);
+                meta.state = newState;
+                meta.stateChangedAt = now.toISOString();
+                if (newNetMode) meta.netMode = newNetMode;
+                if (newState !== 'active') meta.status = newState;
+                await redisClient.hSet(auid, 'metadata', JSON.stringify(meta));
+            }
+        } catch (e) {
+            // Non-fatal: UI will refresh from next telemetry or REST call
+        }
+
+        // 4. Publish real-time status-change event to WebSocket bridge
+        await redisClient.publish('device:status-change', JSON.stringify({
+            auid,
+            status: newState !== 'active' ? newState : 'online',
+            state: newState,
+            netMode: newNetMode || device.netMode || 'cellular',
+            stateChangedAt: now.toISOString(),
+            changedBy
+        }));
+
+        // 5. Heartbeat ZSet management
+        if (newState !== 'active') {
+            // Remove from heartbeat ZSet → offline cron won't process this device
+            try {
+                if (typeof redisClient.zRem === 'function') {
+                    await redisClient.zRem('devices:heartbeat', auid);
+                } else {
+                    await redisClient.zrem('devices:heartbeat', auid);
+                }
+            } catch (e) { /* ignore */ }
+
+            // Clear any pending alert escalation
+            await redisClient.del(`device:${auid}:alert_context`);
+            await redisClient.del(`device:${auid}:last_alert_time`);
+        }
+
+        // 6. Audit Log
+        await createAuditLog({
+            action: 'DEVICE_STATE_CHANGE',
+            userid: changedBy,
+            organizationId: device.organizationId,
+            details: { auid, prevState, newState, prevNetMode, newNetMode },
+            ipAddress: null
+        });
+
+        // 7. 📡 Sync new state to physical Notecard device via Notehub env var
+        // cc_state: 'active' | 'inactive' | 'disabled'
+        // The firmware reads this on the next sync and powers down or wakes up.
+        // We reload the device so the mutated state is available for the push.
+        const updatedDevice = { 
+            ...device.toObject(), 
+            state: newState, 
+            ...(newNetMode && { netMode: newNetMode }) 
+        };
+        notecardService.syncStateToNotecard(updatedDevice).catch(() => {}); // Non-blocking, non-fatal
+
+        return {
+            message: `Device state changed from '${prevState}' to '${newState}'`,
+            auid,
+            state: newState,
+            netMode: newNetMode || device.netMode || 'cellular',
+            stateChangedAt: now,
+            stateChangedBy: changedBy
+        };
     }
 
     async setAvailability(auid, availability) {
@@ -582,7 +794,7 @@ class RegistryService {
 
             await Deployment.updateOne(
                 { deploymentid: targetDeploymentId },
-                { $addToSet: { devices: device.devid } }
+                { $addToSet: { devices: auid } }
             );
         } else {
             device.deploymentId = null;
@@ -631,6 +843,34 @@ class RegistryService {
             message: "Device transferred successfully",
             targetOrgId,
             removedCollaborators
+        };
+    }
+
+    /**
+     * 🚚 BATCH TRANSFER DEVICES
+     */
+    async transferDevicesBatch(userid, auids, targetOrgId, targetDeploymentId = null) {
+        if (!Array.isArray(auids) || auids.length === 0) {
+            throw new Error("Device auids array is required and must not be empty.");
+        }
+
+        const results = [];
+        const errors = [];
+
+        for (const auid of auids) {
+            try {
+                const res = await this.transferDevice(userid, auid, targetOrgId, targetDeploymentId);
+                results.push({ auid, status: 'success', message: res.message });
+            } catch (err) {
+                errors.push({ auid, status: 'failed', error: err.message });
+            }
+        }
+
+        return {
+            successCount: results.length,
+            failedCount: errors.length,
+            results,
+            errors
         };
     }
 }

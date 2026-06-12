@@ -36,10 +36,41 @@ async function authenticateApiKey(req, res, next) {
             }
         }
 
+        // Enforce Subscription API Gating
+        const getUserPlan = require('./subscriptions/getUserPlan');
+        const { plan, sub } = await getUserPlan(validKey.createdBy, validKey.organizationId);
+        
+        if (plan.features.apiAccess === 'none') {
+            return res.status(403).json({
+                success: false,
+                message: 'API access is not included in your current subscription plan.'
+            });
+        }
+
+        if (plan.features.apiAccess === 'limited') {
+            const maxCalls = plan.features.maxApiCallsPerMonth || 1000;
+            if (sub.usage && sub.usage.apiCallsThisMonth >= maxCalls) {
+                return res.status(429).json({
+                    success: false,
+                    message: 'Monthly API call limit reached for your plan.'
+                });
+            }
+        }
+
         // Attach to request
         req.apiKey = validKey;
         req.organizationId = validKey.organizationId;
+        req.currentOrgId = validKey.organizationId; // for verifyOrgMembership compatibility
         req.authType = 'api_key';
+
+        // Mock req.user for downstream tenant check & collaborator middlewares compatibility
+        req.user = {
+            userid: validKey.createdBy,
+            organization: [validKey.organizationId],
+            currentOrganizationId: validKey.organizationId,
+            platformRole: 'user',
+            role: 'user'
+        };
 
         // Track usage on response
         res.on('finish', async () => {
@@ -52,6 +83,15 @@ async function authenticateApiKey(req, res, next) {
                     res.statusCode,
                     responseTime
                 );
+
+                // Increment API usage counter on successful requests
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    const UserSubscription = require('../models/subscriptions/UserSubscription');
+                    await UserSubscription.updateOne(
+                        { organizationId: validKey.organizationId, status: 'active' },
+                        { $inc: { 'usage.apiCallsThisMonth': 1 } }
+                    );
+                }
             } catch (error) {
                 console.error('Failed to track API key usage:', error);
             }
@@ -62,7 +102,8 @@ async function authenticateApiKey(req, res, next) {
         console.error('[API Key Auth] Error:', error);
         return res.status(500).json({
             success: false,
-            message: 'Authentication error'
+            message: 'Authentication error',
+            error: error.message
         });
     }
 }

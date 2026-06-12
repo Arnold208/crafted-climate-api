@@ -11,12 +11,13 @@ if (process.env.NODE_ENV === 'development') {
   envFile = '.env';   // default for production or if NODE_ENV not set
 }
 
-dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
+dotenv.config({ path: path.resolve(__dirname, `../../../../${envFile}`) });
 
 const connection = {
   host: process.env.REDIS_HOST || '127.0.0.1',
   port: parseInt(process.env.REDIS_PORT || '6379', 10),
   password: process.env.REDIS_PASSWORD || undefined,
+  keepAlive: 30000,
   // 🔒 PRODUCTION HARDENING: Prevent memory crashes during Redis outages
   maxRetriesPerRequest: 3,        // Fail fast if Redis is busy
   enableOfflineQueue: false,      // Do not buffer in RAM if Redis is down
@@ -47,5 +48,19 @@ const subscriptionQueue = new Queue('subscriptions', {
   },
 });
 
+// Outgoing webhook delivery queue
+const webhookQueue = new Queue('webhook-delivery', {
+  connection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 2000, // 2 seconds
+    },
+    removeOnComplete: { age: 3600, count: 1000 },
+    removeOnFail: { age: 86400, count: 500 },
+  },
+});
+
 console.log('✅ Redis connection and Queues created');
-module.exports = { telemetryQueue, statusQueue, flushQueue, subscriptionQueue };
+module.exports = { telemetryQueue, statusQueue, flushQueue, subscriptionQueue, webhookQueue };

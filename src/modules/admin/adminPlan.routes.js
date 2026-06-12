@@ -50,20 +50,74 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminPlanController.lis
  *             properties:
  *               name:
  *                 type: string
+ *                 enum: [freemium, starter, premium, enterprise, maas_starter, maas_premium, maas_enterprise]
+ *                 description: Unique plan name
  *               description:
  *                 type: string
  *               priceMonthly:
  *                 type: number
+ *                 description: Monthly subscription price in Cedis (GHS)
  *               priceYearly:
  *                 type: number
+ *                 description: Yearly subscription price in Cedis (GHS)
  *               maxDevices:
  *                 type: number
+ *                 description: Maximum devices allowed (use -1 or null for unlimited)
  *               maxDataRetentionDays:
  *                 type: number
+ *                 description: Data retention period in days (use -1 or null for unlimited)
  *               features:
  *                 type: object
+ *                 properties:
+ *                   fullSensorAccess:
+ *                     type: boolean
+ *                   aiInsightsLevel:
+ *                     type: string
+ *                     enum: [none, basic, moderate, advanced]
+ *                   apiAccess:
+ *                     type: string
+ *                     enum: [none, limited, full]
+ *                   alerts:
+ *                     type: string
+ *                     enum: [none, basic, smart, automated]
+ *                   firmwareUpdates:
+ *                     type: boolean
+ *                   customerSupportLevel:
+ *                     type: string
+ *                     enum: [none, 48h, 24/7]
+ *                   device_read:
+ *                     type: boolean
+ *                   device_update:
+ *                     type: boolean
+ *                   collaboration:
+ *                     type: boolean
+ *                   location_access:
+ *                     type: boolean
+ *                   public_listing:
+ *                     type: boolean
+ *                   export:
+ *                     type: boolean
+ *                   maxMembers:
+ *                     type: number
+ *                     description: Max org members allowed (null for unlimited)
+ *                   websockets:
+ *                     type: boolean
+ *                     description: Whether WebSocket access is enabled
+ *                   webhooks:
+ *                     type: boolean
+ *                     description: Whether Webhooks access is enabled
+ *                   maxApiCallsPerMonth:
+ *                     type: number
+ *                     description: Monthly API calls quota limit
  *               enterprise:
  *                 type: object
+ *                 properties:
+ *                   enableSLAs:
+ *                     type: boolean
+ *                   dedicatedAccountManager:
+ *                     type: boolean
+ *                   customDeployments:
+ *                     type: boolean
  *     responses:
  *       201:
  *         description: Plan created
@@ -115,6 +169,73 @@ router.get('/:planId', authenticateToken, requirePlatformAdmin, adminPlanControl
  *         application/json:
  *           schema:
  *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 enum: [freemium, starter, premium, enterprise, maas_starter, maas_premium, maas_enterprise]
+ *                 description: Plan name
+ *               description:
+ *                 type: string
+ *               priceMonthly:
+ *                 type: number
+ *                 description: Monthly subscription price in Cedis (GHS)
+ *               priceYearly:
+ *                 type: number
+ *                 description: Yearly subscription price in Cedis (GHS)
+ *               maxDevices:
+ *                 type: number
+ *                 description: Maximum devices allowed
+ *               maxDataRetentionDays:
+ *                 type: number
+ *                 description: Data retention period in days
+ *               features:
+ *                 type: object
+ *                 properties:
+ *                   fullSensorAccess:
+ *                     type: boolean
+ *                   aiInsightsLevel:
+ *                     type: string
+ *                     enum: [none, basic, moderate, advanced]
+ *                   apiAccess:
+ *                     type: string
+ *                     enum: [none, limited, full]
+ *                   alerts:
+ *                     type: string
+ *                     enum: [none, basic, smart, automated]
+ *                   firmwareUpdates:
+ *                     type: boolean
+ *                   customerSupportLevel:
+ *                     type: string
+ *                     enum: [none, 48h, 24/7]
+ *                   device_read:
+ *                     type: boolean
+ *                   device_update:
+ *                     type: boolean
+ *                   collaboration:
+ *                     type: boolean
+ *                   location_access:
+ *                     type: boolean
+ *                   public_listing:
+ *                     type: boolean
+ *                   export:
+ *                     type: boolean
+ *                   maxMembers:
+ *                     type: number
+ *                   websockets:
+ *                     type: boolean
+ *                   webhooks:
+ *                     type: boolean
+ *                   maxApiCallsPerMonth:
+ *                     type: number
+ *               enterprise:
+ *                 type: object
+ *                 properties:
+ *                   enableSLAs:
+ *                     type: boolean
+ *                   dedicatedAccountManager:
+ *                     type: boolean
+ *                   customDeployments:
+ *                     type: boolean
  *     responses:
  *       200:
  *         description: Plan updated

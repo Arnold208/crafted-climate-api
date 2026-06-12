@@ -54,7 +54,7 @@ const flowTelemetrySchema = new mongoose.Schema({
     default: {}
   }
 
-}, { timestamps: true });
+}, { timestamps: true, shardKey: { auid: 1 } });
 
 flowTelemetrySchema.index({ auid: 1, transport_time: -1 });
 flowTelemetrySchema.index({ devid: 1, transport_time: -1 });

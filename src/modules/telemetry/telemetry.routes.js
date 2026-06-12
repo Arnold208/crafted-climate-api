@@ -280,7 +280,7 @@ router.get('/db/:model/:auid',
  *           type: string
  *           enum: [env, aqua, gas-solo, flow]
  *           default: env
- *         description: Telemetry model (currently only "env").
+ *         description: Telemetry model (env, aqua, gas-solo, flow).
  *       - in: path
  *         name: auid
  *         required: true

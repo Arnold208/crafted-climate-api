@@ -63,6 +63,9 @@ router.post("/models",
  *   get:
  *     tags: [Sensor Models]
  *     summary: Get all sensor models
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     responses:
  *       200: { description: List of sensor models }
  */
@@ -79,6 +82,9 @@ router.get("/models",
  *   get:
  *     tags: [Sensor Models]
  *     summary: Search and filter sensor models
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     responses:
  *       200: { description: Search results }
  */
@@ -95,6 +101,9 @@ router.get("/models/search",
  *   get:
  *     tags: [Sensor Models]
  *     summary: Get model by UUID
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     responses:
  *       200: { description: Sensor model details }
  *       404: { description: Model not found }
@@ -112,6 +121,9 @@ router.get("/models/uuid/:uuid",
  *   get:
  *     tags: [Sensor Models]
  *     summary: Get a specific sensor model by name
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     responses:
  *       200: { description: Sensor model details }
  *       404: { description: Model not found }
@@ -129,6 +141,9 @@ router.get("/models/:model",
  *   put:
  *     tags: [Sensor Models]
  *     summary: Update a model's image or description
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -161,6 +176,9 @@ router.put("/models/:model",
  *   delete:
  *     tags: [Sensor Models]
  *     summary: Delete a model
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     responses:
  *       200: { description: Model deleted }
  *       404: { description: Model not found }

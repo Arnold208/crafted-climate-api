@@ -4,6 +4,12 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/user/userModel");
 
 function authenticateToken(req, res, next) {
+  // If API Key is present and is not the platform-wide global key, delegate to API Key verification
+  if (req.headers["x-api-key"] && req.headers["x-api-key"] !== process.env.API_KEY) {
+    const { authenticateApiKey } = require("./authenticateApiKey");
+    return authenticateApiKey(req, res, next);
+  }
+
   const authHeader =
     req.headers["authorization"] || req.headers["Authorization"];
   const token =

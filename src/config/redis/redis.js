@@ -1,4 +1,4 @@
-const { createClient } = require('redis');
+const { createClient, createCluster } = require('redis');
 const dotenv = require('dotenv');
 const path = require('path');
 
@@ -10,20 +10,45 @@ if (process.env.NODE_ENV === 'development') {
   envFile = '.env';   // default for production or if NODE_ENV not set
 }
 
-dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
+dotenv.config({ path: path.resolve(__dirname, `../../../${envFile}`) });
 
-const client = createClient({
-  socket: {
-    host: process.env.REDIS_HOST || '127.0.0.1',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    reconnectStrategy: (retries) => {
-      const delay = Math.min(1000 * retries, 3000); // Max 3 seconds
-      console.warn(`🔁 Redis reconnect attempt ${retries} — retrying in ${delay}ms`);
-      return delay;
+const useCluster = process.env.REDIS_USE_CLUSTER === 'true';
+let client;
+
+if (useCluster) {
+  const nodes = (process.env.REDIS_CLUSTER_NODES || '127.0.0.1:6379')
+    .split(',')
+    .map(node => {
+      const [host, port] = node.trim().split(':');
+      return {
+        url: `redis://${host}:${port || '6379'}`
+      };
+    });
+
+  client = createCluster({
+    rootNodes: nodes,
+    defaults: {
+      password: process.env.REDIS_PASSWORD || undefined,
+      socket: {
+        keepAlive: 30000
+      }
     }
-  },
-  password: process.env.REDIS_PASSWORD || undefined
-});
+  });
+} else {
+  client = createClient({
+    socket: {
+      host: process.env.REDIS_HOST || '127.0.0.1',
+      port: parseInt(process.env.REDIS_PORT || '6379', 10),
+      keepAlive: 30000,
+      reconnectStrategy: (retries) => {
+        const delay = Math.min(1000 * Math.max(retries, 1), 3000); // Max 3 seconds, min 1 second
+        console.warn(`🔁 Redis reconnect attempt ${retries} — retrying in ${delay}ms`);
+        return delay;
+      }
+    },
+    password: process.env.REDIS_PASSWORD || undefined
+  });
+}
 
 // Required error handler to prevent process crash
 client.on('error', (err) => {

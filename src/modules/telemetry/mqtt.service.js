@@ -21,7 +21,15 @@ function initializeMQTTClient(client, topics) {
         console.log(`📥 MQTT message received on '${topic}': ${messageString}`);
 
         try {
-            const data = JSON.parse(messageString);
+            const rawData = JSON.parse(messageString);
+
+            // Auto-unwrap Blues Wireless Notehub event wrapper (e.g., "data.qo")
+            let data = rawData;
+            const notehubFileKey = Object.keys(rawData).find(k => k.endsWith('.qo'));
+            if (notehubFileKey && typeof rawData[notehubFileKey] === 'object') {
+                data = rawData[notehubFileKey];
+                console.log(`📦 Unwrapped Notehub event from key '${notehubFileKey}'`);
+            }
 
             const jobPayload = {
                 ...data,
@@ -70,12 +78,16 @@ function initializeMQTTClient(client, topics) {
 }
 
 function connectSecureMqtt() {
-    const topics = [
+    let topics = [
         "eventroutes/Env-Telemetry-Dev",
         "eventroutes/Env-Telemetry",
         "eventroutes/Aqua-Telemetry",
         "eventroutes/GasSolo-Telemetry"
     ];
+
+    if (process.env.MQTT_TOPICS) {
+        topics = process.env.MQTT_TOPICS.split(",").map(t => t.trim()).filter(Boolean);
+    }
 
     const mqttClient = createMqttClient();
     initializeMQTTClient(mqttClient, topics);

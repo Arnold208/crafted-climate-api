@@ -28,11 +28,14 @@ const CacheService = require('../../modules/common/cache.service');
  */
 async function checkDeviceAccessCompatibility(req, device, requiredPermission = null) {
   if (!req.user || !device) {
+    console.log(`[DEBUG checkDeviceAccessCompatibility] Missing req.user or device. user: ${!!req.user}, device: ${!!device}`);
     return false;
   }
 
   const userId = req.user.userid;
   const currentOrgId = req.headers["x-org-id"] || req.user.currentOrganizationId;
+
+  console.log(`[DEBUG checkDeviceAccessCompatibility] auid: "${device.auid}", ownerUserId: "${device.ownerUserId}", userid: "${device.userid}", userId: "${userId}", currentOrgId: "${currentOrgId}"`);
 
   // ──────────────────────────────────────────────────────────
   // 1. DIRECT OWNERSHIP (Legacy + New)
@@ -40,11 +43,13 @@ async function checkDeviceAccessCompatibility(req, device, requiredPermission = 
 
   // New ownership field
   if (device.ownerUserId === userId) {
+    console.log(`[DEBUG checkDeviceAccessCompatibility] Allowed: direct ownerUserId match`);
     return true;
   }
 
   // Legacy ownership field (for devices migrated before the split)
   if (device.userid === userId) {
+    console.log(`[DEBUG checkDeviceAccessCompatibility] Allowed: direct legacy userid match`);
     return true;
   }
 
@@ -56,22 +61,39 @@ async function checkDeviceAccessCompatibility(req, device, requiredPermission = 
     const collaborator = device.collaborators.find(c => c.userid === userId);
 
     if (collaborator) {
-      // 1. If explicit permissions are required (e.g., 'edit', 'org.devices.control'), check role
-      if (requiredPermission === 'edit' || requiredPermission === 'org.devices.control') {
-        const allowedRoles = ['device-admin', 'admin', 'editor'];
-        if (allowedRoles.includes(collaborator.role)) {
-          return true;
+      if (requiredPermission) {
+        const action = requiredPermission.toLowerCase();
+
+        if (action === 'delete') {
+          const allowedRoles = ['device-admin', 'admin'];
+          if (allowedRoles.includes(collaborator.role)) return true;
+          if (collaborator.permissions && collaborator.permissions.includes('delete')) return true;
+          return false;
         }
-        // Fallback: check if they have explicit permission in permissions array
-        const permKey = requiredPermission === 'org.devices.control' ? 'control' : 'edit';
-        if (collaborator.permissions && (collaborator.permissions.includes(permKey) || collaborator.permissions.includes('edit'))) {
-          return true;
+
+        if (action === 'share') {
+          const allowedRoles = ['device-admin', 'admin'];
+          if (allowedRoles.includes(collaborator.role)) return true;
+          if (collaborator.permissions && collaborator.permissions.includes('share')) return true;
+          return false;
         }
-        // If not, deny access for write operations
-        return false;
+
+        if (action === 'control' || action === 'org.devices.control') {
+          const allowedRoles = ['device-admin', 'device-support', 'admin', 'editor', 'support'];
+          if (allowedRoles.includes(collaborator.role)) return true;
+          if (collaborator.permissions && (collaborator.permissions.includes('control') || collaborator.permissions.includes('state'))) return true;
+          return false;
+        }
+
+        if (action === 'edit' || action === 'update') {
+          const allowedRoles = ['device-admin', 'admin', 'editor'];
+          if (allowedRoles.includes(collaborator.role)) return true;
+          if (collaborator.permissions && (collaborator.permissions.includes('edit') || collaborator.permissions.includes('update'))) return true;
+          return false;
+        }
       }
 
-      // 2. Default: Allow access for 'view' or unspecified permission
+      // Default: Allow access for 'view' or unspecified permission
       return true;
     }
   }
@@ -120,6 +142,7 @@ async function checkDeviceAccessCompatibility(req, device, requiredPermission = 
   // Access Denied
   // ──────────────────────────────────────────────────────────
 
+  console.log(`[DEBUG checkDeviceAccessCompatibility] Denied for auid: "${device.auid}"`);
   return false;
 }
 

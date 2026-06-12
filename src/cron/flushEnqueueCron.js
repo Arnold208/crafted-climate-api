@@ -13,6 +13,7 @@ const FlowTelem = require('../models/telemetry/flowModel');
 const MODEL_MAP = {
     'env': EnvTelemetry,
     'gas-solo': GasSoloTelem,
+    'gassolo': GasSoloTelem,
     'aqua': AquaTelem,
     'flow': FlowTelem
 };
@@ -91,7 +92,12 @@ async function flushDirectOnce() {
                 return { status: 'skipped' };
             }
 
-            return await flushTelemetryToMongo(String(auid), mongoModel);
+            const res = await flushTelemetryToMongo(String(auid), mongoModel);
+            if (res && res.status !== 'success' && res.status !== 'empty') {
+                console.log(`🔄 [FlushCron] Re-adding ${auid} to dirty set due to status: ${res.status}`);
+                await redis.sAdd('device:dirty_set', auid);
+            }
+            return res;
         };
 
         // Chunking function

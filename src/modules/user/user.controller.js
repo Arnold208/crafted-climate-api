@@ -3,14 +3,14 @@ const userService = require('./user.service');
 class UserController {
     async signup(req, res) {
         try {
-            const { username, email, password, invitationId, contact, firstName, lastName } = req.body;
+            const { username, email, password, invitationId, contact, firstName, lastName, country } = req.body;
 
             if (!username || !email || !password) {
                 return res.status(400).send({ message: 'Please provide username, email, and password' });
             }
 
             const result = await userService.signup({
-                username, email: email.toLowerCase(), password, invitationId, contact, firstName, lastName,
+                username, email: email.toLowerCase(), password, invitationId, contact, firstName, lastName, country,
                 file: req.file
             });
 

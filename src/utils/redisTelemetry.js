@@ -29,23 +29,52 @@ async function cacheTelemetryToRedis(auid, telemetry, device) {
   // Check previous status in Redis to avoid spamming MongoDB on every packet
   const prevMetaStr = await redisClient.hGet(redisHashKey, 'metadata');
   let prevStatus = 'unknown';
+  let prevState = 'active';
   if (prevMetaStr) {
     try {
       const prevMeta = JSON.parse(prevMetaStr);
       prevStatus = prevMeta.status;
+      prevState = prevMeta.state || 'active';
     } catch (e) { }
   }
 
-  // If device was offline (or unknown), sync "Online" to MongoDB immediately
-  if (prevStatus !== 'online') {
+  // STATE GUARD: Do NOT auto-flip inactive/disabled devices back to online.
+  // Only an explicit PUT /device/:auid/state API call can re-activate a device.
+  const isIntentionallyOff = (prevState === 'inactive' || prevState === 'disabled');
+
+  // If device was offline (or unknown) AND is not intentionally off, sync "Online" to MongoDB immediately
+  if (prevStatus !== 'online' && !isIntentionallyOff) {
     try {
       await RegisterDevice.updateOne(
         { auid },
         { $set: { status: 'online', lastSeen: new Date(timestamp) } }
       );
       console.log(`🔄 [RedisTelemetry] Synced ${auid} to ONLINE in MongoDB`);
+      
+      // 📣 Publish real-time status change event
+      await redisClient.publish('device:status-change', JSON.stringify({ auid, status: 'online' }));
     } catch (err) {
       console.error(`❌ Failed to sync status for ${auid}:`, err.message);
+    }
+  }
+  // 📡 [FIRST-PING AUTO-SYNC]
+  // If the device has not had its environment variables initialized on Notehub,
+  // push the default values immediately on the first telemetry ping.
+  if (!device.isEnvInitialized && device.noteDevUuid) {
+    try {
+      const notecardService = require('../modules/devices/notecard/notecard.service');
+      await notecardService.pushInitialDefaultsToNotehub(device);
+      
+      // Update DB to mark as initialized
+      await RegisterDevice.updateOne(
+        { auid },
+        { $set: { isEnvInitialized: true } }
+      );
+      // Mutate the local object reference so downstream metadata is updated
+      device.isEnvInitialized = true;
+      console.log(`📡 [RedisTelemetry] Successfully pushed initial environment defaults to Notehub for ${auid}`);
+    } catch (err) {
+      console.error(`❌ [RedisTelemetry] Failed to push initial env defaults for ${auid}:`, err.message);
     }
   }
 
@@ -54,7 +83,9 @@ async function cacheTelemetryToRedis(auid, telemetry, device) {
     auid: device.auid,
     nickname: device.nickname,
     availability: device.availability,
-    status: 'online', // ⚡ FORCE ONLINE INSTANTLY (Data just arrived!)
+    // If device is intentionally off, preserve its state/status rather than forcing 'online'
+    status: isIntentionallyOff ? prevState : 'online',
+    state: device.state || prevState,
     battery: device.battery,
     location: device.location,
     model: device.model,
@@ -91,8 +122,8 @@ async function cacheTelemetryToRedis(auid, telemetry, device) {
   await redisClient.del(`device:${auid}:alert_context`);
   await redisClient.del(`device:${auid}:alert_state`); // Clear legacy key just in case
 
-  // ✅ Expire the device’s Redis key after 24 hours
-  await redisClient.expire(redisHashKey, 86400);
+  // ✅ Set a long safety TTL (e.g. 30 days) to prevent data loss of unflushed telemetry if MongoDB is down
+  await redisClient.expire(redisHashKey, 30 * 24 * 3600);
 
   console.log(`📦 Cached telemetry for ${auid} at ${timestamp} [unflushed]`);
 }

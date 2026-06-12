@@ -2,15 +2,17 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const User = require('../models/user/userModel');
 const userService = require('../modules/user/user.service');
+const Invitation = require('../models/invitation/invitationModel');
 const { v4: uuidv4 } = require('uuid');
 
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: process.env.GOOGLE_CALLBACK_URL,
-    scope: ['profile', 'email']
+    scope: ['profile', 'email'],
+    passReqToCallback: true
 },
-    async function (accessToken, refreshToken, profile, cb) {
+    async function (req, accessToken, refreshToken, profile, cb) {
         try {
             const email = profile.emails && profile.emails[0] ? profile.emails[0].value : null;
             const googleId = profile.id;
@@ -48,6 +50,20 @@ passport.use(new GoogleStrategy({
             const firstName = profile.name ? profile.name.givenName : 'User';
             const lastName = profile.name ? profile.name.familyName : '';
 
+            // Parse invitation ID from state if present
+            let invitationId = null;
+            if (req && req.query && req.query.state) {
+                try {
+                    const stateObj = JSON.parse(Buffer.from(req.query.state, 'base64').toString('utf8'));
+                    if (stateObj && stateObj.invitationId) {
+                        invitationId = stateObj.invitationId;
+                        console.log(`[GoogleAuth] Invitation ID found in state: ${invitationId}`);
+                    }
+                } catch (e) {
+                    console.log(`[GoogleAuth] Non-JSON state received: ${req.query.state}`);
+                }
+            }
+
             // We use the userService to ensure all initialization (Org creation, Plan assignment) happens.
             await userService.signup({
                 username,
@@ -55,7 +71,7 @@ passport.use(new GoogleStrategy({
                 password,
                 firstName,
                 lastName,
-                invitationId: null,
+                invitationId,
                 contact: null,
                 isVerified: true
             });

@@ -81,6 +81,27 @@ async function checkThresholds(auid, data) {
       // Send notifications (Expanded)
       await sendAlerts(user, info.deviceObject, rule, smsMessage, emailMessage);
 
+      // Dispatch outgoing webhook event
+      try {
+        const webhookService = require('../services/webhook.service');
+        const orgId = info.deviceObject.organizationId || info.deviceObject.organization;
+        if (orgId) {
+          webhookService.dispatch(orgId, 'threshold.breached', {
+            deviceAuid: auid,
+            deviceNickname: nickname,
+            deviceModel: info.model,
+            datapoint: rule.datapoint,
+            value: value,
+            operator: rule.operator,
+            min: rule.min,
+            max: rule.max,
+            triggeredAt: new Date(now).toISOString()
+          });
+        }
+      } catch (webhookErr) {
+        console.error("Failed to dispatch threshold.breached webhook:", webhookErr.message);
+      }
+
       console.log(`ALERT SENT for ${nickname} (${key}) → value=${value}`);
     }
   } catch (err) {
