@@ -17,23 +17,28 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *         name: page
  *         schema:
  *           type: integer
+ *           example: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *           example: 10
  *       - in: query
  *         name: read
  *         schema:
  *           type: boolean
+ *           example: true
  *       - in: query
  *         name: category
  *         schema:
  *           type: string
+ *           example: "hardware"
  *           enum: [security, billing, updates, support, admin, system]
  *       - in: query
  *         name: type
  *         schema:
  *           type: string
+ *           example: "business"
  *           enum: [info, success, warning, error, system]
  *     responses:
  *       200:
@@ -55,6 +60,7 @@ router.get('/', authenticateToken, notificationController.getMyNotifications);
  *         required: true
  *         schema:
  *           type: string
+ *           example: "notificationId_example"
  *     responses:
  *       200:
  *         description: Marked as read
@@ -89,6 +95,7 @@ router.patch('/read-all', authenticateToken, notificationController.markAllAsRea
  *         required: true
  *         schema:
  *           type: string
+ *           example: "notificationId_example"
  *     responses:
  *       200:
  *         description: Notification deleted

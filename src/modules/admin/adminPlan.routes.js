@@ -18,6 +18,7 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: active
  *         schema:
  *           type: boolean
+ *           example: true
  *         description: Filter by active status
  *     responses:
  *       200:
@@ -50,74 +51,99 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminPlanController.lis
  *             properties:
  *               name:
  *                 type: string
+ *                 example: "Afrilogic Environmental Solutions"
  *                 enum: [freemium, starter, premium, enterprise, maas_starter, maas_premium, maas_enterprise]
  *                 description: Unique plan name
  *               description:
  *                 type: string
+ *                 example: "Battery level has dropped below 15% threshold."
  *               priceMonthly:
  *                 type: number
+ *                 example: 1
  *                 description: Monthly subscription price in Cedis (GHS)
  *               priceYearly:
  *                 type: number
+ *                 example: 1
  *                 description: Yearly subscription price in Cedis (GHS)
  *               maxDevices:
  *                 type: number
+ *                 example: 1
  *                 description: Maximum devices allowed (use -1 or null for unlimited)
  *               maxDataRetentionDays:
  *                 type: number
+ *                 example: 1
  *                 description: Data retention period in days (use -1 or null for unlimited)
  *               features:
  *                 type: object
  *                 properties:
  *                   fullSensorAccess:
  *                     type: boolean
+ *                     example: true
  *                   aiInsightsLevel:
  *                     type: string
+ *                     example: "aiInsightsLevel_example"
  *                     enum: [none, basic, moderate, advanced]
  *                   apiAccess:
  *                     type: string
+ *                     example: "apiAccess_example"
  *                     enum: [none, limited, full]
  *                   alerts:
  *                     type: string
+ *                     example: "alerts_example"
  *                     enum: [none, basic, smart, automated]
  *                   firmwareUpdates:
  *                     type: boolean
+ *                     example: true
  *                   customerSupportLevel:
  *                     type: string
+ *                     example: "customerSupportLevel_example"
  *                     enum: [none, 48h, 24/7]
  *                   device_read:
  *                     type: boolean
+ *                     example: true
  *                   device_update:
  *                     type: boolean
+ *                     example: true
  *                   collaboration:
  *                     type: boolean
+ *                     example: true
  *                   location_access:
  *                     type: boolean
+ *                     example: true
  *                   public_listing:
  *                     type: boolean
+ *                     example: true
  *                   export:
  *                     type: boolean
+ *                     example: true
  *                   maxMembers:
  *                     type: number
+ *                     example: 1
  *                     description: Max org members allowed (null for unlimited)
  *                   websockets:
  *                     type: boolean
+ *                     example: true
  *                     description: Whether WebSocket access is enabled
  *                   webhooks:
  *                     type: boolean
+ *                     example: true
  *                     description: Whether Webhooks access is enabled
  *                   maxApiCallsPerMonth:
  *                     type: number
+ *                     example: 1
  *                     description: Monthly API calls quota limit
  *               enterprise:
  *                 type: object
  *                 properties:
  *                   enableSLAs:
  *                     type: boolean
+ *                     example: true
  *                   dedicatedAccountManager:
  *                     type: boolean
+ *                     example: true
  *                   customDeployments:
  *                     type: boolean
+ *                     example: true
  *     responses:
  *       201:
  *         description: Plan created
@@ -140,6 +166,7 @@ router.post('/', authenticateToken, requirePlatformAdmin, adminPlanController.cr
  *         required: true
  *         schema:
  *           type: string
+ *           example: "plan-starter-uuid"
  *     responses:
  *       200:
  *         description: Plan details
@@ -163,6 +190,7 @@ router.get('/:planId', authenticateToken, requirePlatformAdmin, adminPlanControl
  *         required: true
  *         schema:
  *           type: string
+ *           example: "plan-starter-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -172,70 +200,95 @@ router.get('/:planId', authenticateToken, requirePlatformAdmin, adminPlanControl
  *             properties:
  *               name:
  *                 type: string
+ *                 example: "Afrilogic Environmental Solutions"
  *                 enum: [freemium, starter, premium, enterprise, maas_starter, maas_premium, maas_enterprise]
  *                 description: Plan name
  *               description:
  *                 type: string
+ *                 example: "Battery level has dropped below 15% threshold."
  *               priceMonthly:
  *                 type: number
+ *                 example: 1
  *                 description: Monthly subscription price in Cedis (GHS)
  *               priceYearly:
  *                 type: number
+ *                 example: 1
  *                 description: Yearly subscription price in Cedis (GHS)
  *               maxDevices:
  *                 type: number
+ *                 example: 1
  *                 description: Maximum devices allowed
  *               maxDataRetentionDays:
  *                 type: number
+ *                 example: 1
  *                 description: Data retention period in days
  *               features:
  *                 type: object
  *                 properties:
  *                   fullSensorAccess:
  *                     type: boolean
+ *                     example: true
  *                   aiInsightsLevel:
  *                     type: string
+ *                     example: "aiInsightsLevel_example"
  *                     enum: [none, basic, moderate, advanced]
  *                   apiAccess:
  *                     type: string
+ *                     example: "apiAccess_example"
  *                     enum: [none, limited, full]
  *                   alerts:
  *                     type: string
+ *                     example: "alerts_example"
  *                     enum: [none, basic, smart, automated]
  *                   firmwareUpdates:
  *                     type: boolean
+ *                     example: true
  *                   customerSupportLevel:
  *                     type: string
+ *                     example: "customerSupportLevel_example"
  *                     enum: [none, 48h, 24/7]
  *                   device_read:
  *                     type: boolean
+ *                     example: true
  *                   device_update:
  *                     type: boolean
+ *                     example: true
  *                   collaboration:
  *                     type: boolean
+ *                     example: true
  *                   location_access:
  *                     type: boolean
+ *                     example: true
  *                   public_listing:
  *                     type: boolean
+ *                     example: true
  *                   export:
  *                     type: boolean
+ *                     example: true
  *                   maxMembers:
  *                     type: number
+ *                     example: 1
  *                   websockets:
  *                     type: boolean
+ *                     example: true
  *                   webhooks:
  *                     type: boolean
+ *                     example: true
  *                   maxApiCallsPerMonth:
  *                     type: number
+ *                     example: 1
  *               enterprise:
  *                 type: object
  *                 properties:
  *                   enableSLAs:
  *                     type: boolean
+ *                     example: true
  *                   dedicatedAccountManager:
  *                     type: boolean
+ *                     example: true
  *                   customDeployments:
  *                     type: boolean
+ *                     example: true
  *     responses:
  *       200:
  *         description: Plan updated
@@ -259,6 +312,7 @@ router.put('/:planId', authenticateToken, requirePlatformAdmin, adminPlanControl
  *         required: true
  *         schema:
  *           type: string
+ *           example: "plan-starter-uuid"
  *     responses:
  *       200:
  *         description: Plan deactivated

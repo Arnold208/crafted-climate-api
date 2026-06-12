@@ -18,11 +18,13 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: startDate
  *         schema:
  *           type: string
+ *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
+ *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
@@ -34,12 +36,16 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *               properties:
  *                 totalUsers:
  *                   type: integer
+ *                   example: 1
  *                 newUsers:
  *                   type: integer
+ *                   example: 1
  *                 verifiedUsers:
  *                   type: integer
+ *                   example: 1
  *                 signupTrend:
  *                   type: array
+ *                   example: ["example_value"]
  */
 router.get('/users', authenticateToken, requirePlatformAdmin, adminAnalyticsController.getUserGrowth);
 
@@ -57,11 +63,13 @@ router.get('/users', authenticateToken, requirePlatformAdmin, adminAnalyticsCont
  *         name: startDate
  *         schema:
  *           type: string
+ *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
+ *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
@@ -88,14 +96,19 @@ router.get('/devices', authenticateToken, requirePlatformAdmin, adminAnalyticsCo
  *               properties:
  *                 totalOrganizations:
  *                   type: integer
+ *                   example: 1
  *                 personal:
  *                   type: integer
+ *                   example: 1
  *                 business:
  *                   type: integer
+ *                   example: 1
  *                 verified:
  *                   type: integer
+ *                   example: 1
  *                 partners:
  *                   type: integer
+ *                   example: 1
  */
 router.get('/organizations', authenticateToken, requirePlatformAdmin, adminAnalyticsController.getOrganizationMetrics);
 
@@ -113,11 +126,13 @@ router.get('/organizations', authenticateToken, requirePlatformAdmin, adminAnaly
  *         name: startDate
  *         schema:
  *           type: string
+ *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
+ *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:

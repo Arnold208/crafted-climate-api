@@ -32,11 +32,11 @@ const checkOrgAccess = require('../../middleware/organization/checkOrgAccess');
  *             type: object
  *             required: [name, priceMonthly, maxDevices, maxDataRetentionDays]
  *             properties:
- *               name: { type: string }
- *               priceMonthly: { type: number }
- *               priceYearly: { type: number }
- *               maxDevices: { type: number }
- *               maxDataRetentionDays: { type: number }
+ *               name: { type: string, example: "Afrilogic Environmental Solutions" }
+ *               priceMonthly: { type: number, example: 1 }
+ *               priceYearly: { type: number, example: 1 }
+ *               maxDevices: { type: number, example: 1 }
+ *               maxDataRetentionDays: { type: number, example: 1 }
  *               features: { type: object }
  *     responses:
  *       201: { description: Plan created }
@@ -59,7 +59,7 @@ router.post('/admin/create-plan',
  *       - in: path
  *         name: planId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "plan-starter-uuid" }
  *     requestBody:
  *       required: true
  *       content:
@@ -87,7 +87,7 @@ router.put('/admin/update-plan/:planId',
  *       - in: path
  *         name: planId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "plan-starter-uuid" }
  *     responses:
  *       200: { description: Plan deleted }
  */
@@ -126,7 +126,7 @@ router.get('/admin/plans',
  *       - in: path
  *         name: planId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "plan-starter-uuid" }
  *     responses:
  *       200: { description: Plan status toggled }
  */
@@ -188,7 +188,7 @@ router.get('/user/my-subscription',
  *             type: object
  *             required: [targetPlanId]
  *             properties:
- *               targetPlanId: { type: string }
+ *               targetPlanId: { type: string, example: "plan-premium-uuid" }
  *     responses:
  *       200: { description: Subscription upgraded successfully }
  *       400: { description: Invalid plan or downgrade attempted }
@@ -214,7 +214,7 @@ router.post('/user/upgrade',
  *             type: object
  *             required: [targetPlanId]
  *             properties:
- *               targetPlanId: { type: string }
+ *               targetPlanId: { type: string, example: "plan-premium-uuid" }
  *     responses:
  *       200: { description: Subscription downgraded (scheduled for next billing cycle) }
  *       400: { description: Invalid plan }
@@ -240,7 +240,7 @@ router.post('/user/downgrade',
  *             type: object
  *             required: [billingCycle]
  *             properties:
- *               billingCycle: { type: string, enum: [monthly, yearly] }
+ *               billingCycle: { type: string, example: "monthly", enum: [monthly, yearly] }
  *     responses:
  *       200: { description: Billing cycle updated }
  */
@@ -426,7 +426,7 @@ router.get('/pricing/tiers',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     responses:
  *       200: { description: Subscription details }
  *       404: { description: No active subscription }
@@ -449,7 +449,7 @@ router.get('/org/:orgId/current',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     requestBody:
  *       required: true
  *       content:
@@ -458,7 +458,7 @@ router.get('/org/:orgId/current',
  *             type: object
  *             required: [targetPlanId]
  *             properties:
- *               targetPlanId: { type: string }
+ *               targetPlanId: { type: string, example: "plan-premium-uuid" }
  *     responses:
  *       200: { description: Upgraded }
  */
@@ -480,7 +480,7 @@ router.post('/org/:orgId/upgrade',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     requestBody:
  *       required: true
  *       content:
@@ -489,7 +489,7 @@ router.post('/org/:orgId/upgrade',
  *             type: object
  *             required: [targetPlanId]
  *             properties:
- *               targetPlanId: { type: string }
+ *               targetPlanId: { type: string, example: "plan-premium-uuid" }
  *     responses:
  *       200: { description: Downgraded }
  */
@@ -511,7 +511,7 @@ router.post('/org/:orgId/downgrade',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     requestBody:
  *       required: true
  *       content:
@@ -520,7 +520,7 @@ router.post('/org/:orgId/downgrade',
  *             type: object
  *             required: [billingCycle]
  *             properties:
- *               billingCycle: { type: string, enum: [monthly, yearly] }
+ *               billingCycle: { type: string, example: "monthly", enum: [monthly, yearly] }
  *     responses:
  *       200: { description: Cycle updated }
  */
@@ -542,7 +542,7 @@ router.patch('/org/:orgId/billing-cycle',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     responses:
  *       200: { description: Cancelled }
  */
@@ -564,7 +564,7 @@ router.post('/org/:orgId/cancel',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     responses:
  *       200: { description: Reactivated }
  */
@@ -586,7 +586,7 @@ router.post('/org/:orgId/reactivate',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     responses:
  *       200:
  *         description: Plan type updated
@@ -595,12 +595,12 @@ router.post('/org/:orgId/reactivate',
  *             schema:
  *               type: object
  *               properties:
- *                 success: { type: boolean }
- *                 orgId: { type: string }
- *                 planId: { type: string }
- *                 planName: { type: string }
- *                 oldPlanType: { type: string }
- *                 newPlanType: { type: string }
+ *                 success: { type: boolean, example: true }
+ *                 orgId: { type: string, example: "org-starter-uuid" }
+ *                 planId: { type: string, example: "plan-starter-uuid" }
+ *                 planName: { type: string, example: "planName_example" }
+ *                 oldPlanType: { type: string, example: "oldPlanType_example" }
+ *                 newPlanType: { type: string, example: "newPlanType_example" }
  *       404: { description: Org or Plan not found }
  */
 router.get('/debug-fix-plan/:orgId',
@@ -620,7 +620,7 @@ router.get('/debug-fix-plan/:orgId',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     responses:
  *       200:
  *         description: Plan verification details

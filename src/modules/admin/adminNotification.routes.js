@@ -29,22 +29,29 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *                 type: array
  *                 items:
  *                   type: string
+ *                   example: "userids_example"
  *               title:
  *                 type: string
+ *                 example: "Network Maintenance Notice"
  *               message:
  *                 type: string
+ *                 example: "This is a status update notification."
  *               type:
  *                 type: string
+ *                 example: "business"
  *                 enum: [info, success, warning, error, system]
  *               category:
  *                 type: string
+ *                 example: "hardware"
  *                 enum: [security, billing, updates, support, admin, system]
  *               actionUrl:
  *                 type: string
+ *                 example: "actionUrl_example"
  *               channels:
  *                 type: array
  *                 items:
  *                   type: string
+ *                   example: "properties_example"
  *                   enum: [in_app, email, push]
  *             example:
  *               userids: [user1, user2]
@@ -81,26 +88,34 @@ router.post('/send', authenticateToken, requirePlatformAdmin, adminNotificationC
  *             properties:
  *               title:
  *                 type: string
+ *                 example: "Network Maintenance Notice"
  *               message:
  *                 type: string
+ *                 example: "This is a status update notification."
  *               type:
  *                 type: string
+ *                 example: "business"
  *                 enum: [info, success, warning, error, system]
  *               category:
  *                 type: string
+ *                 example: "hardware"
  *                 enum: [security, billing, updates, support, admin, system]
  *               role:
  *                 type: string
+ *                 example: "editor"
  *                 description: Filter by user role
  *               verified:
  *                 type: boolean
+ *                 example: true
  *                 description: Filter by verified status
  *               actionUrl:
  *                 type: string
+ *                 example: "actionUrl_example"
  *               channels:
  *                 type: array
  *                 items:
  *                   type: string
+ *                   example: "properties_example"
  *                   enum: [in_app, email, push]
  *     responses:
  *       201:
@@ -122,15 +137,18 @@ router.post('/broadcast', authenticateToken, requirePlatformAdmin, adminNotifica
  *         name: userid
  *         schema:
  *           type: string
+ *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
+ *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
+ *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:

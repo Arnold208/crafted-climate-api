@@ -17,6 +17,7 @@ const invitationController = require('./invitation.controller');
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -27,8 +28,10 @@ const invitationController = require('./invitation.controller');
  *             properties:
  *               email:
  *                 type: string
+ *                 example: "developer@craftedclimate.com"
  *               accessLevel:
  *                 type: string
+ *                 example: "properties_example"
  *                 enum: ['org-admin', 'org-support', 'org-user', 'viewer', 'editor', 'admin', 'support', 'user']
  *     responses:
  *       201:
@@ -68,6 +71,7 @@ router.get('/invitations/my-invitations', auth, invitationController.getMyInvita
  *         required: true
  *         schema:
  *           type: string
+ *           example: "tok-invite-abcdef123456"
  *     responses:
  *       200:
  *         description: Invitation accepted successfully
@@ -92,6 +96,7 @@ router.post('/invitations/:token/accept', auth, invitationController.acceptInvit
  *         required: true
  *         schema:
  *           type: string
+ *           example: "tok-invite-abcdef123456"
  *     responses:
  *       200:
  *         description: Invitation declined successfully

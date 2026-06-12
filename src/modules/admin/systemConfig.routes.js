@@ -42,10 +42,13 @@ router.get('/', authenticateToken, requirePlatformAdmin, systemConfigController.
  *                 properties:
  *                   userRegistration:
  *                     type: boolean
+ *                     example: true
  *                   googleOAuth:
  *                     type: boolean
+ *                     example: true
  *                   deviceRegistration:
  *                     type: boolean
+ *                     example: true
  *             example:
  *               features:
  *                 userRegistration: true
@@ -80,8 +83,10 @@ router.patch('/features', authenticateToken, requirePlatformAdmin, systemConfigC
  *                     properties:
  *                       windowMs:
  *                         type: integer
+ *                         example: 1
  *                       max:
  *                         type: integer
+ *                         example: 1
  *             example:
  *               rateLimits:
  *                 global:
@@ -113,8 +118,10 @@ router.patch('/rate-limits', authenticateToken, requirePlatformAdmin, systemConf
  *             properties:
  *               enabled:
  *                 type: boolean
+ *                 example: true
  *               message:
  *                 type: string
+ *                 example: "properties_example"
  *             example:
  *               enabled: true
  *               message: Scheduled maintenance - back soon

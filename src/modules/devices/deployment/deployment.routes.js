@@ -28,8 +28,8 @@ const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess'
  *             type: object
  *             required: [name]
  *             properties:
- *               name: { type: string }
- *               description: { type: string }
+ *               name: { type: string, example: "Afrilogic Environmental Solutions" }
+ *               description: { type: string, example: "Battery level has dropped below 15% threshold." }
  *     responses:
  *       201: { description: Deployment created }
  */
@@ -49,7 +49,7 @@ router.post('/deployments',
  *       - in: path
  *         name: deploymentId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "dep-starter-uuid" }
  *     responses:
  *       200: { description: Deployment details retrieved }
  *       404: { description: Deployment not found }
@@ -70,7 +70,7 @@ router.get('/deployments/:deploymentId',
  *       - in: path
  *         name: deploymentId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "dep-starter-uuid" }
  *     responses:
  *       200: { description: Devices in deployment retrieved }
  */
@@ -90,7 +90,7 @@ router.get('/deployments/:deploymentId/devices',
  *       - in: path
  *         name: deploymentId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "dep-starter-uuid" }
  *     responses:
  *       200: { description: Deployment updated }
  *       404: { description: Deployment not found }
@@ -111,7 +111,7 @@ router.patch('/deployments/:deploymentId',
  *       - in: path
  *         name: deploymentId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "dep-starter-uuid" }
  *     responses:
  *       200: { description: Deployment deleted }
  *       404: { description: Deployment not found }
@@ -139,13 +139,13 @@ router.delete('/deployments/:deploymentId',
  *             type: object
  *             required: [email]
  *             properties:
- *               email: { type: string }
- *               role: { type: string, enum: ['deployment-admin', 'deployment-support', 'deployment-user'] }
+ *               email: { type: string, example: "developer@craftedclimate.com" }
+ *               role: { type: string, example: "editor", enum: ['deployment-admin', 'deployment-support', 'deployment-user'] }
  *     parameters:
  *       - in: path
  *         name: deploymentId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "dep-starter-uuid" }
  *     responses:
  *       201: { description: Collaborator added }
  */
@@ -172,12 +172,12 @@ router.post('/deployments/:deploymentId/collaborators',
  *             type: object
  *             required: [email]
  *             properties:
- *               email: { type: string }
+ *               email: { type: string, example: "developer@craftedclimate.com" }
  *     parameters:
  *       - in: path
  *         name: deploymentId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "dep-starter-uuid" }
  *     responses:
  *       200: { description: Collaborator removed }
  */
@@ -197,7 +197,7 @@ router.delete('/deployments/:deploymentId/collaborators',
  *       - in: path
  *         name: deploymentId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "dep-starter-uuid" }
  *     responses:
  *       200: { description: Device added to deployment }
  */
@@ -217,11 +217,11 @@ router.post('/deployments/:deploymentId/devices',
  *       - in: path
  *         name: deploymentId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "dep-starter-uuid" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: Device removed from deployment }
  */

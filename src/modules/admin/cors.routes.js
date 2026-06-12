@@ -33,17 +33,21 @@ const requirePlatformAdmin = (req, res, next) => {
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 data:
  *                   type: object
  *                   properties:
  *                     enabled:
  *                       type: boolean
+ *                       example: true
  *                     allowedOrigins:
  *                       type: array
  *                       items:
  *                         type: string
+ *                         example: "allowedOrigins_example"
  *                     allowCredentials:
  *                       type: boolean
+ *                       example: true
  *       403:
  *         description: Forbidden - Platform admin access required
  */
@@ -67,14 +71,17 @@ router.get('/', authenticateToken, requirePlatformAdmin, corsController.getSetti
  *             properties:
  *               enabled:
  *                 type: boolean
+ *                 example: true
  *                 description: Enable/disable CORS enforcement
  *               allowedOrigins:
  *                 type: array
  *                 items:
  *                   type: string
+ *                   example: "allowedOrigins_example"
  *                 description: Array of allowed origins (at least one required)
  *               allowCredentials:
  *                 type: boolean
+ *                 example: true
  *                 description: Allow credentials (cookies, auth headers)
  *             example:
  *               enabled: true
@@ -110,6 +117,7 @@ router.put('/', authenticateToken, requirePlatformAdmin, corsController.updateSe
  *             properties:
  *               origin:
  *                 type: string
+ *                 example: "properties_example"
  *                 description: Origin to add (must be valid URL or *)
  *             example:
  *               origin: "https://new-app.craftedclimate.com"
@@ -143,6 +151,7 @@ router.post('/origins', authenticateToken, requirePlatformAdmin, corsController.
  *             properties:
  *               origin:
  *                 type: string
+ *                 example: "properties_example"
  *                 description: Origin to remove
  *             example:
  *               origin: "https://old-app.craftedclimate.com"
@@ -176,6 +185,7 @@ router.delete('/origins', authenticateToken, requirePlatformAdmin, corsControlle
  *             properties:
  *               enabled:
  *                 type: boolean
+ *                 example: true
  *                 description: true = enforce whitelist, false = allow all origins
  *             example:
  *               enabled: false

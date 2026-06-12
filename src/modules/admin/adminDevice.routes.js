@@ -18,30 +18,36 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: page
  *         schema:
  *           type: integer
+ *           example: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *           example: 10
  *           default: 50
  *       - in: query
  *         name: search
  *         schema:
  *           type: string
+ *           example: "search_example"
  *         description: Search by device ID, serial, or nickname
  *       - in: query
  *         name: organizationId
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
+ *           example: "pending"
  *           enum: [online, offline]
  *       - in: query
  *         name: type
  *         schema:
  *           type: string
+ *           example: "business"
  *     responses:
  *       200:
  *         description: Devices retrieved
@@ -69,10 +75,13 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminDeviceController.l
  *               properties:
  *                 total:
  *                   type: integer
+ *                   example: 1
  *                 online:
  *                   type: integer
+ *                   example: 1
  *                 offline:
  *                   type: integer
+ *                   example: 1
  *                 typeBreakdown:
  *                   type: object
  */
@@ -93,6 +102,7 @@ router.get('/statistics', authenticateToken, requirePlatformAdmin, adminDeviceCo
  *         required: true
  *         schema:
  *           type: string
+ *           example: "device-starter-uuid"
  *     responses:
  *       200:
  *         description: Device deleted
@@ -115,6 +125,7 @@ router.delete('/:deviceId', authenticateToken, requirePlatformAdmin, adminDevice
  *         name: hours
  *         schema:
  *           type: integer
+ *           example: 24
  *           default: 24
  *         description: Threshold in hours
  *     responses:
@@ -138,6 +149,7 @@ router.get('/offline/list', authenticateToken, requirePlatformAdmin, adminDevice
  *         required: true
  *         schema:
  *           type: string
+ *           example: "device-starter-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -149,6 +161,7 @@ router.get('/offline/list', authenticateToken, requirePlatformAdmin, adminDevice
  *             properties:
  *               organizationId:
  *                 type: string
+ *                 example: "properties_example"
  *             example:
  *               organizationId: org-123456
  *     responses:

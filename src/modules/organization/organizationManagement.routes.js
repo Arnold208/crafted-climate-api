@@ -39,6 +39,7 @@ const fileUpload = require('../../utils/fileUpload');
  *         required: true
  *         schema:
  *           type: string
+ *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -53,10 +54,12 @@ const fileUpload = require('../../utils/fileUpload');
  *                 type: string
  *                 minLength: 2
  *                 maxLength: 100
+ *                 example: Afrilogic Technologies Ltd
  *               reason:
  *                 type: string
  *                 minLength: 10
  *                 maxLength: 500
+ *                 example: Rebranding corporate identity to reflect expansion into IoT and climate tech solutions.
  *     responses:
  *       200:
  *         description: Name updated successfully
@@ -88,6 +91,7 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
+ *           example: org-starter-uuid
  *     responses:
  *       200:
  *         description: Name history retrieved successfully
@@ -119,6 +123,7 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
+ *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -132,8 +137,10 @@ router.get(
  *               newType:
  *                 type: string
  *                 enum: [business, non-profit, government, education, research]
+ *                 example: research
  *               reason:
  *                 type: string
+ *                 example: Focusing core operations on climate monitoring research and public data sharing.
  *     responses:
  *       200:
  *         description: Type change request submitted successfully
@@ -166,6 +173,7 @@ router.post(
  *         required: true
  *         schema:
  *           type: string
+ *           example: org-starter-uuid
  *     responses:
  *       200:
  *         description: Verification details submitted successfully
@@ -198,6 +206,7 @@ router.post(
  *         required: true
  *         schema:
  *           type: string
+ *           example: org-starter-uuid
  *     responses:
  *       200:
  *         description: Partner application submitted successfully
@@ -234,6 +243,7 @@ router.post(
  *         schema:
  *           type: string
  *           enum: [pending, approved, rejected, all]
+ *           example: pending
  *     responses:
  *       200:
  *         description: Type change requests retrieved successfully
@@ -263,6 +273,7 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
+ *           example: org-starter-uuid
  *     responses:
  *       200:
  *         description: Type change request approved successfully
@@ -294,6 +305,7 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
+ *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -305,6 +317,7 @@ router.put(
  *             properties:
  *               reason:
  *                 type: string
+ *                 example: Legal entity certification provided does not match the requested education profile.
  *     responses:
  *       200:
  *         description: Type change request rejected successfully
@@ -336,6 +349,7 @@ router.put(
  *         schema:
  *           type: string
  *           enum: [pending, approved, rejected, all]
+ *           example: pending
  *     responses:
  *       200:
  *         description: Verification requests retrieved successfully
@@ -365,6 +379,7 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
+ *           example: org-starter-uuid
  *     responses:
  *       200:
  *         description: Business verification approved successfully
@@ -396,6 +411,7 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
+ *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -407,6 +423,7 @@ router.put(
  *             properties:
  *               reason:
  *                 type: string
+ *                 example: TIN verification failed with the national revenue authority database.
  *     responses:
  *       200:
  *         description: Business verification rejected successfully
@@ -438,6 +455,7 @@ router.put(
  *         schema:
  *           type: string
  *           enum: [pending, approved, rejected, all]
+ *           example: pending
  *     responses:
  *       200:
  *         description: Partner applications retrieved successfully
@@ -467,6 +485,7 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
+ *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -479,6 +498,7 @@ router.get(
  *               approvedTier:
  *                 type: string
  *                 enum: [silver, gold, platinum]
+ *                 example: gold
  *     responses:
  *       200:
  *         description: Partner application approved successfully
@@ -510,6 +530,7 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
+ *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -521,6 +542,7 @@ router.put(
  *             properties:
  *               reason:
  *                 type: string
+ *                 example: Organization does not meet the minimum active device registry count required for Silver tier.
  *     responses:
  *       200:
  *         description: Partner application rejected successfully
@@ -552,6 +574,7 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
+ *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -563,6 +586,7 @@ router.put(
  *             properties:
  *               reason:
  *                 type: string
+ *                 example: Prolonged inactivity and failure to comply with API usage SLA guidelines.
  *     responses:
  *       200:
  *         description: Partner status revoked successfully
@@ -607,43 +631,71 @@ router.delete(
  *               name:
  *                 type: string
  *                 description: Proposed Organization Name
+ *                 example: Afrilogic Environmental Solutions
  *               type:
  *                 type: string
  *                 enum: [business, non-profit, government, education, research]
+ *                 example: business
  *               description:
  *                 type: string
+ *                 example: Multi-tenant workspace for managing agricultural soil telemetry sensors.
  *               
  *               # Business Identity
  *               legalName:
  *                 type: string
+ *                 example: Afrilogic Solutions Ltd
  *               tin:
  *                 type: string
  *                 description: Tax Identification Number
+ *                 example: GHA-987654321-0
  *               businessType:
  *                 type: string
  *                 enum: ["Sole Proprietorship", "Partnership", "Limited Liability Company (LLC)", "Corporation", "Non-Profit"]
+ *                 example: Limited Liability Company (LLC)
  *               industry:
  *                 type: string
+ *                 example: Environmental Services & Agriculture
  *               website:
  *                 type: string
- *
- *               # Business Location
+ *                 example: https://afrilogic.com
  *
  *               # Business Location
  *               location:
  *                 type: string
  *                 description: Full business address/location
+ *                 example: Suite 4B, Silicon Tower, Accra, Ghana
  *
  *               # Documents (Specific Fields)
  *               business_license:
  *                 type: string
+ *                 example: "business_license_example"
  *                 format: binary
  *               workplace_exterior:
  *                 type: string
+ *                 example: "workplace_exterior_example"
  *                 format: binary
  *     responses:
  *       201:
- *         description: Request submitted successfully
+ *         description: Request submitted successfully. Includes Paystack checkout link if applicable.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Request submitted successfully
+ *                 request:
+ *                   type: object
+ *                   description: The created organization request metadata.
+ *                 checkoutUrl:
+ *                   type: string
+ *                   example: https://checkout.paystack.com/mock-checkout?ref=ref-mock-xxx
+ *                   description: Paystack checkout URL. Use this to redirect users to Paystack for subscription setup. Null for free plans.
+ *       400:
+ *         description: Invalid input parameters
+ *       409:
+ *         description: Organization name already taken or request already pending
  */
 router.post(
     '/request-creation',
@@ -666,11 +718,26 @@ router.post(
  *         required: true
  *         schema:
  *           type: string
+ *           example: req-8f9a2b3c-4d5e-6f7g-8h9i-0j1k2l3m4n5o
  *     responses:
  *       200:
- *         description: Payment initialized successfully
+ *         description: Payment initialized successfully. Returns new checkout link.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Payment initialized
+ *                 request:
+ *                   type: object
+ *                 checkoutUrl:
+ *                   type: string
+ *                   example: https://checkout.paystack.com/mock-checkout?ref=ref-mock-xxx
+ *                   description: New Paystack checkout link.
  *       400:
- *         description: Bad request
+ *         description: Bad request or request already approved / processing
  */
 router.post(
     '/creation-requests/:requestId/retry-payment',
@@ -692,6 +759,7 @@ router.post(
  *         schema:
  *           type: string
  *           enum: [pending, approved, rejected, all]
+ *           example: pending
  *     responses:
  *       200:
  *         description: List of requests
@@ -719,6 +787,7 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
+ *           example: req-8f9a2b3c-4d5e-6f7g-8h9i-0j1k2l3m4n5o
  *     responses:
  *       200:
  *         description: Request details
@@ -746,6 +815,7 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
+ *           example: req-8f9a2b3c-4d5e-6f7g-8h9i-0j1k2l3m4n5o
  *     responses:
  *       200:
  *         description: Organization created successfully
@@ -773,6 +843,7 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
+ *           example: req-8f9a2b3c-4d5e-6f7g-8h9i-0j1k2l3m4n5o
  *     requestBody:
  *       required: true
  *       content:
@@ -783,6 +854,7 @@ router.put(
  *             properties:
  *               reason:
  *                 type: string
+ *                 example: The registration documents provided are expired.
  *     responses:
  *       200:
  *         description: Request rejected

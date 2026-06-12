@@ -39,7 +39,7 @@ const checkOrgAccess = require("../../../middleware/organization/checkOrgAccess"
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: Config retrieved }
  */
@@ -57,7 +57,7 @@ router.get('/:auid/config', authenticateToken, checkOrgAccess("org.devices.view"
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     requestBody:
  *       required: true
  *       content:
@@ -65,8 +65,8 @@ router.get('/:auid/config', authenticateToken, checkOrgAccess("org.devices.view"
  *           schema:
  *             type: object
  *             properties:
- *               pump: { type: boolean }
- *               op_mode: { type: string, enum: ["schedule", "remote", "manual"] }
+ *               pump: { type: boolean, example: true }
+ *               op_mode: { type: string, example: "op_mode_example", enum: ["schedule", "remote", "manual"] }
  *     responses:
  *       200: { description: Pump state updated }
  */
@@ -84,7 +84,7 @@ router.post('/:auid/pump', authenticateToken, checkOrgAccess("org.devices.contro
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     requestBody:
  *       required: true
  *       content:
@@ -92,7 +92,7 @@ router.post('/:auid/pump', authenticateToken, checkOrgAccess("org.devices.contro
  *           schema:
  *             type: object
  *             properties:
- *               op_mode: { type: string, enum: ["schedule", "remote", "manual"] }
+ *               op_mode: { type: string, example: "op_mode_example", enum: ["schedule", "remote", "manual"] }
  *     responses:
  *       200: { description: Operation mode updated }
  */
@@ -110,7 +110,7 @@ router.post('/:auid/op-mode', authenticateToken, checkOrgAccess("org.devices.con
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     requestBody:
  *       required: true
  *       content:
@@ -118,7 +118,7 @@ router.post('/:auid/op-mode', authenticateToken, checkOrgAccess("org.devices.con
  *             schema:
  *               type: object
  *               properties:
- *                 name: { type: string }
+ *                 name: { type: string, example: "Afrilogic Environmental Solutions" }
  *                 startTime: { type: string, example: "08:00" }
  *                 durationMinutes: { type: integer, example: 3 }
  *                 intervalMinutes: { type: integer, example: 60 }
@@ -146,23 +146,23 @@ router.post('/:auid/schedules', authenticateToken, checkOrgAccess("org.devices.c
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *       - in: path
  *         name: scheduleId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "sched-54321" }
  *     requestBody:
  *       content:
  *         application/json:
  *           schema:
  *             type: object
  *             properties:
- *               name: { type: string }
+ *               name: { type: string, example: "Afrilogic Environmental Solutions" }
  *               startTime: { type: string, example: "08:00" }
  *               durationMinutes: { type: integer, example: 3 }
  *               intervalMinutes: { type: integer, example: 60 }
- *               days: { type: array, items: { type: string, enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday] } }
- *               enabled: { type: boolean }
+ *               days: { type: array, example: ["example_value"], items: { type: string, enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday] } }
+ *               enabled: { type: boolean, example: true }
  *           example:
  *             startTime: "09:30"
  *             durationMinutes: 10
@@ -186,11 +186,11 @@ router.put('/:auid/schedules/:scheduleId', authenticateToken, checkOrgAccess("or
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *       - in: path
  *         name: scheduleId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "sched-54321" }
  *     responses:
  *       200: { description: Schedule deleted }
  */
@@ -207,7 +207,7 @@ router.delete('/:auid/schedules/:scheduleId', authenticateToken, checkOrgAccess(
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: Sync data retrieved }
  *       404: { description: Config not found }
@@ -226,7 +226,7 @@ router.get('/sync/:auid', flowController.syncConfig);
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     requestBody:
  *       required: true
  *       content:
@@ -237,23 +237,23 @@ router.get('/sync/:auid', flowController.syncConfig);
  *               setup:
  *                 type: object
  *                 properties:
- *                   requires_configuration: { type: boolean }
- *                   is_configured: { type: boolean }
- *                   wifi_configured: { type: boolean }
- *                   api_key_generated: { type: boolean }
- *                   tank_calibrated: { type: boolean }
- *                   tank_height_mm: { type: integer }
- *                   tank_volume_l: { type: integer }
+ *                   requires_configuration: { type: boolean, example: true }
+ *                   is_configured: { type: boolean, example: true }
+ *                   wifi_configured: { type: boolean, example: true }
+ *                   api_key_generated: { type: boolean, example: true }
+ *                   tank_calibrated: { type: boolean, example: true }
+ *                   tank_height_mm: { type: integer, example: 1 }
+ *                   tank_volume_l: { type: integer, example: 1 }
  *               power_system:
  *                 type: object
  *                 properties:
- *                   architecture: { type: string, enum: [SOLAR, AC, HYBRID] }
+ *                   architecture: { type: string, example: "architecture_example", enum: [SOLAR, AC, HYBRID] }
  *                   capabilities:
  *                     type: object
  *                     properties:
- *                       solar: { type: boolean }
- *                       battery: { type: boolean }
- *                       ac_input: { type: boolean }
+ *                       solar: { type: boolean, example: true }
+ *                       battery: { type: boolean, example: true }
+ *                       ac_input: { type: boolean, example: true }
  *     responses:
  *       200: { description: Setup updated }
  */

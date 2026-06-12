@@ -110,7 +110,7 @@ router.get('/my-organizations', authenticateToken, organizationController.getMyO
  *             type: object
  *             required: [organizationId]
  *             properties:
- *               organizationId: { type: string }
+ *               organizationId: { type: string, example: "org-starter-uuid" }
  *     responses:
  *       200:
  *         description: Context switched successfully
@@ -131,7 +131,7 @@ router.patch('/select', authenticateToken, organizationController.selectOrganiza
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     responses:
  *       200:
  *         description: Organization info retrieved
@@ -150,7 +150,7 @@ router.get('/:orgId/info', authenticateToken, organizationController.getOrganiza
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     responses:
  *       200:
  *         description: Stats retrieved
@@ -173,7 +173,7 @@ router.get('/:orgId/dashboard',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     requestBody:
  *       required: true
  *       content:
@@ -182,8 +182,8 @@ router.get('/:orgId/dashboard',
  *             type: object
  *             required: [email, role]
  *             properties:
- *               email: { type: string, format: email }
- *               role: { type: string, enum: ['org-admin', 'org-support', 'org-user', 'viewer', 'editor', 'admin', 'support', 'user'] }
+ *               email: { type: string, example: "developer@craftedclimate.com", format: email }
+ *               role: { type: string, example: "editor", enum: ['org-admin', 'org-support', 'org-user', 'viewer', 'editor', 'admin', 'support', 'user'] }
  *     responses:
  *       200:
  *         description: User invited successfully
@@ -215,7 +215,7 @@ router.post('/:orgId/add-user',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     requestBody:
  *       required: true
  *       content:
@@ -224,8 +224,8 @@ router.post('/:orgId/add-user',
  *             type: object
  *             required: [email, newRole]
  *             properties:
- *               userid: { type: string }
- *               newRole: { type: string, enum: ['org-admin', 'org-support', 'org-user', 'viewer', 'editor', 'admin', 'support', 'user'] }
+ *               userid: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
+ *               newRole: { type: string, example: "newRole_example", enum: ['org-admin', 'org-support', 'org-user', 'viewer', 'editor', 'admin', 'support', 'user'] }
  *     responses:
  *       200:
  *         description: Role updated successfully
@@ -253,7 +253,7 @@ router.patch('/:orgId/update-user-role',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     responses:
  *       200:
  *         description: List of members with user details
@@ -264,16 +264,16 @@ router.patch('/:orgId/update-user-role',
  *               items:
  *                 type: object
  *                 properties:
- *                   userid: { type: string }
- *                   role: { type: string }
+ *                   userid: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
+ *                   role: { type: string, example: "editor" }
  *                   user:
  *                     type: object
  *                     properties:
- *                       firstName: { type: string }
- *                       lastName: { type: string }
- *                       username: { type: string }
- *                       email: { type: string }
- *                       profilePicture: { type: string }
+ *                       firstName: { type: string, example: "Arnold" }
+ *                       lastName: { type: string, example: "Sylvian" }
+ *                       username: { type: string, example: "arnold_sylvian" }
+ *                       email: { type: string, example: "developer@craftedclimate.com" }
+ *                       profilePicture: { type: string, example: "profilePicture_example" }
  */
 router.get('/:orgId/members',
     authenticateToken,
@@ -293,7 +293,7 @@ router.get('/:orgId/members',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     requestBody:
  *       required: true
  *       content:
@@ -302,7 +302,7 @@ router.get('/:orgId/members',
  *             type: object
  *             required: [email]
  *             properties:
- *               email: { type: string, format: email }
+ *               email: { type: string, example: "developer@craftedclimate.com", format: email }
  *     responses:
  *       200:
  *         description: User removed successfully
@@ -325,11 +325,11 @@ router.post('/:orgId/remove-user',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *     responses:
  *       200:
  *         description: User removed successfully
@@ -352,7 +352,7 @@ router.delete('/:orgId/remove-user/:userid',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     responses:
  *       200:
  *         description: Organization dissolved successfully
@@ -382,7 +382,7 @@ router.delete('/:orgId',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *     responses:
  *       200: { description: List of devices }
  */
@@ -404,11 +404,11 @@ router.get('/:orgId/devices',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: Device details }
  *       404: { description: Device not found }
@@ -431,11 +431,11 @@ router.get('/:orgId/devices/:auid',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     requestBody:
  *       required: true
  *       content:
@@ -443,7 +443,7 @@ router.get('/:orgId/devices/:auid',
  *           schema:
  *             type: object
  *             properties:
- *               name: { type: string }
+ *               name: { type: string, example: "Afrilogic Environmental Solutions" }
  *     responses:
  *       200: { description: Device updated }
  */
@@ -465,11 +465,11 @@ router.put('/:orgId/devices/:auid',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: Device deleted }
  */
@@ -491,11 +491,11 @@ router.delete('/:orgId/devices/:auid',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: Device removed }
  */
@@ -521,11 +521,11 @@ router.delete('/:orgId/devices/:auid/remove',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     requestBody:
  *       required: true
  *       content:
@@ -534,7 +534,7 @@ router.delete('/:orgId/devices/:auid/remove',
  *             type: object
  *             required: [deploymentId]
  *             properties:
- *               deploymentId: { type: string }
+ *               deploymentId: { type: string, example: "dep-starter-uuid" }
  *     responses:
  *       200: { description: Device moved }
  */
@@ -561,12 +561,12 @@ router.post('/:orgId/devices/:auid/move',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *         description: Source Organization ID
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     requestBody:
  *       required: true
  *       content:
@@ -575,7 +575,7 @@ router.post('/:orgId/devices/:auid/move',
  *             type: object
  *             required: [targetOrgId]
  *             properties:
- *               targetOrgId: { type: string }
+ *               targetOrgId: { type: string, example: "org-starter-uuid" }
  *     responses:
  *       200: { description: Device transferred }
  *       403: { description: User not member of target org }
@@ -606,8 +606,10 @@ router.post('/:orgId/devices/:auid/transfer',
  *                 type: array
  *                 items:
  *                   type: string
+ *                   example: "auids_example"
  *               targetOrgId:
  *                 type: string
+ *                 example: "properties_example"
  *     responses:
  *       200:
  *         description: Batch transfer completed

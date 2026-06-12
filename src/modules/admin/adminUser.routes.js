@@ -19,30 +19,36 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: page
  *         schema:
  *           type: integer
+ *           example: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *           example: 10
  *           default: 50
  *       - in: query
  *         name: search
  *         schema:
  *           type: string
+ *           example: "search_example"
  *         description: Search by email, username, or name
  *       - in: query
  *         name: role
  *         schema:
  *           type: string
+ *           example: "editor"
  *           enum: [user, admin]
  *       - in: query
  *         name: verified
  *         schema:
  *           type: boolean
+ *           example: true
  *       - in: query
  *         name: deleted
  *         schema:
  *           type: string
+ *           example: "deleted_example"
  *           enum: [only, include]
  *     responses:
  *       200:
@@ -67,6 +73,7 @@ router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor', 'suppor
  *         required: true
  *         schema:
  *           type: string
+ *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     responses:
  *       200:
  *         description: User details retrieved
@@ -92,6 +99,7 @@ router.get('/:userid', authenticateToken, authorizeRoles('admin', 'supervisor', 
  *         required: true
  *         schema:
  *           type: string
+ *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     requestBody:
  *       required: true
  *       content:
@@ -103,6 +111,7 @@ router.get('/:userid', authenticateToken, authorizeRoles('admin', 'supervisor', 
  *             properties:
  *               role:
  *                 type: string
+ *                 example: "properties_example"
  *                 enum: [user, admin, supervisor, support]
  *             example:
  *               role: supervisor
@@ -131,6 +140,7 @@ router.patch('/:userid/role', authenticateToken, authorizeRoles('admin'), adminU
  *         required: true
  *         schema:
  *           type: string
+ *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     requestBody:
  *       required: true
  *       content:
@@ -142,6 +152,7 @@ router.patch('/:userid/role', authenticateToken, authorizeRoles('admin'), adminU
  *             properties:
  *               reason:
  *                 type: string
+ *                 example: "properties_example"
  *                 minLength: 10
  *             example:
  *               reason: Violation of terms of service
@@ -170,6 +181,7 @@ router.post('/:userid/suspend', authenticateToken, authorizeRoles('admin', 'supe
  *         required: true
  *         schema:
  *           type: string
+ *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     responses:
  *       200:
  *         description: User restored
@@ -195,6 +207,7 @@ router.post('/:userid/restore', authenticateToken, authorizeRoles('admin', 'supe
  *         required: true
  *         schema:
  *           type: string
+ *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     responses:
  *       200:
  *         description: User deleted permanently
@@ -220,6 +233,7 @@ router.delete('/:userid', authenticateToken, requirePlatformAdmin, adminUserCont
  *         required: true
  *         schema:
  *           type: string
+ *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     responses:
  *       200:
  *         description: Password reset initiated
@@ -243,25 +257,30 @@ router.post('/:userid/reset-password', authenticateToken, requirePlatformAdmin, 
  *         required: true
  *         schema:
  *           type: string
+ *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
+ *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
+ *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: page
  *         schema:
  *           type: integer
+ *           example: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *           example: 10
  *           default: 50
  *     responses:
  *       200:

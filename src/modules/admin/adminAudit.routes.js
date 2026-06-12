@@ -18,29 +18,35 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: page
  *         schema:
  *           type: integer
+ *           example: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *           example: 10
  *           default: 100
  *       - in: query
  *         name: action
  *         schema:
  *           type: string
+ *           example: "device:register"
  *       - in: query
  *         name: userid
  *         schema:
  *           type: string
+ *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
+ *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
+ *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
@@ -63,15 +69,18 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminAuditController.ge
  *         required: true
  *         schema:
  *           type: string
+ *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
+ *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
+ *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
@@ -94,15 +103,18 @@ router.get('/user/:userid', authenticateToken, requirePlatformAdmin, adminAuditC
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
+ *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
+ *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
@@ -127,17 +139,22 @@ router.get('/organization/:orgId', authenticateToken, requirePlatformAdmin, admi
  *             properties:
  *               format:
  *                 type: string
+ *                 example: "2026-06-12T11:29:56Z"
  *                 enum: [json, csv]
  *                 default: json
  *               action:
  *                 type: string
+ *                 example: "device:register"
  *               userid:
  *                 type: string
+ *                 example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *               startDate:
  *                 type: string
+ *                 example: "2026-06-01T00:00:00Z"
  *                 format: date
  *               endDate:
  *                 type: string
+ *                 example: "properties_example"
  *                 format: date
  *     responses:
  *       200:

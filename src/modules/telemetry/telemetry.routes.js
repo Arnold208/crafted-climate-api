@@ -28,6 +28,7 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  *         required: true
  *         schema:
  *           type: string
+ *           example: "ENV"
  *         description: The model type.
  *     requestBody:
  *       required: true
@@ -38,6 +39,7 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  *             properties:
  *               i:
  *                 type: string
+ *                 example: "properties_example"
  *     responses:
  *       201:
  *         description: Created
@@ -61,17 +63,18 @@ router.post('/:model', ingestRouteLimiter, enforceTelemetryIngestion, telemetryC
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *         description: User ID requesting telemetry
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *         description: Unique AUID of the device
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *           example: 10
  *           default: 50
  *           maximum: 50
  *         description: Limit the number of telemetry entries returned (max 50)
@@ -85,9 +88,10 @@ router.post('/:model', ingestRouteLimiter, enforceTelemetryIngestion, telemetryC
  *               properties:
  *                 source: { type: string, example: "redis" }
  *                 metadata: { type: object }
- *                 count: { type: integer }
+ *                 count: { type: integer, example: 1 }
  *                 telemetry:
  *                   type: array
+ *                   example: ["example_value"]
  *                   items: { type: object }
  *       403:
  *         description: Forbidden - Device requires configuration
@@ -114,12 +118,12 @@ router.get('/:userid/device/:auid',
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *         description: User ID (must match owner or authorized admin)
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *         description: Device AUID
  *     responses:
  *       200:
@@ -147,17 +151,20 @@ router.delete('/:userid/device/:auid',
  *         name: model
  *         schema:
  *           type: string
+ *           example: "ENV"
  *         description: Filter devices by model (e.g., "env", "gas-solo")
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *           example: 10
  *           default: 50
  *         description: Max telemetry points per device (default 50)
  *       - in: query
  *         name: page
  *         schema:
  *           type: integer
+ *           example: 1
  *           default: 1
  *         description: Page number for pagination
  *     responses:
@@ -211,27 +218,29 @@ router.get('/public/telemetry', publicTelemetryLimiter, telemetryController.getP
  *         required: true
  *         schema:
  *           type: string
+ *           example: "ENV"
  *           enum: [env, aqua, gas-solo, flow]
  *           default: env
  *         description: Telemetry model (e.g. "env").
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *         description: Device AUID (unique identifier).
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *           example: 10
  *           default: 2
  *         description: Maximum number of records to return.
  *       - in: query
  *         name: start
- *         schema: { type: string, format: date-time }
+ *         schema: { type: string, example: "2026-06-01T00:00:00Z", format: date-time }
  *         description: Optional start date/time (ISO string or epoch).
  *       - in: query
  *         name: end
- *         schema: { type: string, format: date-time }
+ *         schema: { type: string, example: "2026-06-12T00:00:00Z", format: date-time }
  *         description: Optional end date/time (ISO string or epoch).
  *     responses:
  *       200:
@@ -241,11 +250,12 @@ router.get('/public/telemetry', publicTelemetryLimiter, telemetryController.getP
  *             schema:
  *               type: object
  *               properties:
- *                 model: { type: string }
- *                 auid: { type: string }
- *                 count: { type: integer }
+ *                 model: { type: string, example: "ENV" }
+ *                 auid: { type: string, example: "GH-ENV-12345XYZ" }
+ *                 count: { type: integer, example: 1 }
  *                 telemetry:
  *                   type: array
+ *                   example: ["example_value"]
  *                   items: { type: object }
  *       403:
  *         description: Forbidden - Device requires configuration
@@ -278,21 +288,22 @@ router.get('/db/:model/:auid',
  *         required: true
  *         schema:
  *           type: string
+ *           example: "ENV"
  *           enum: [env, aqua, gas-solo, flow]
  *           default: env
  *         description: Telemetry model (env, aqua, gas-solo, flow).
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *         description: Device AUID.
  *       - in: query
  *         name: start
- *         schema: { type: string, format: date-time }
+ *         schema: { type: string, example: "2026-06-01T00:00:00Z", format: date-time }
  *         description: Start of time range (inclusive). ISO 8601 or epoch milliseconds.
  *       - in: query
  *         name: end
- *         schema: { type: string, format: date-time }
+ *         schema: { type: string, example: "2026-06-12T00:00:00Z", format: date-time }
  *         description: End of time range (inclusive). ISO 8601 or epoch milliseconds.
  *     responses:
  *       200:
@@ -331,14 +342,14 @@ router.get('/db/:model/:auid/csv',
  *       - in: path
  *         name: model
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "ENV" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *       - in: query
  *         name: limit
- *         schema: { type: integer, default: 100 }
+ *         schema: { type: integer, example: 10, default: 100 }
  *     responses:
  *       200:
  *         description: List of raw telemetry records
@@ -366,11 +377,13 @@ router.get('/db/:model/:auid/raw',
  *         required: true
  *         schema:
  *           type: string
+ *           example: "ENV"
  *       - in: path
  *         name: auid
  *         required: true
  *         schema:
  *           type: string
+ *           example: "GH-ENV-12345XYZ"
  *       - in: query
  *         name: start
  *         required: true

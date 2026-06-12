@@ -25,6 +25,7 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *     responses:
  *       200:
  *         description: AI Insights object

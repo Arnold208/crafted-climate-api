@@ -25,21 +25,27 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *             properties:
  *               title:
  *                 type: string
+ *                 example: "Network Maintenance Notice"
  *                 maxLength: 200
  *               message:
  *                 type: string
+ *                 example: "This is a status update notification."
  *                 maxLength: 2000
  *               type:
  *                 type: string
+ *                 example: "business"
  *                 enum: [info, warning, success, error, maintenance]
  *               priority:
  *                 type: string
+ *                 example: "high"
  *                 enum: [low, medium, high, critical]
  *               targetAudience:
  *                 type: string
+ *                 example: "targetAudience_example"
  *                 enum: [all, admins, users, organizations]
  *               endDate:
  *                 type: string
+ *                 example: "properties_example"
  *                 format: date-time
  *             example:
  *               title: System Upgrade Scheduled
@@ -67,15 +73,18 @@ router.post('/', authenticateToken, requirePlatformAdmin, announcementController
  *         name: active
  *         schema:
  *           type: boolean
+ *           example: true
  *       - in: query
  *         name: type
  *         schema:
  *           type: string
+ *           example: "business"
  *           enum: [info, warning, success, error, maintenance]
  *       - in: query
  *         name: targetAudience
  *         schema:
  *           type: string
+ *           example: "targetAudience_example"
  *           enum: [all, admins, users, organizations]
  *     responses:
  *       200:
@@ -98,6 +107,7 @@ router.get('/', authenticateToken, requirePlatformAdmin, announcementController.
  *         required: true
  *         schema:
  *           type: string
+ *           example: "ann-12345"
  *     requestBody:
  *       content:
  *         application/json:
@@ -106,10 +116,13 @@ router.get('/', authenticateToken, requirePlatformAdmin, announcementController.
  *             properties:
  *               title:
  *                 type: string
+ *                 example: "Network Maintenance Notice"
  *               message:
  *                 type: string
+ *                 example: "This is a status update notification."
  *               active:
  *                 type: boolean
+ *                 example: true
  *     responses:
  *       200:
  *         description: Announcement updated
@@ -131,6 +144,7 @@ router.patch('/:announcementId', authenticateToken, requirePlatformAdmin, announ
  *         required: true
  *         schema:
  *           type: string
+ *           example: "ann-12345"
  *     responses:
  *       200:
  *         description: Announcement deleted

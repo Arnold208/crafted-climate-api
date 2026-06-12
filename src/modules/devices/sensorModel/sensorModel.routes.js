@@ -31,15 +31,19 @@ const authenticateToken = require('../../../middleware/bearermiddleware');
  *             properties:
  *               model:
  *                 type: string
+ *                 example: "ENV"
  *                 description: Name of the sensor model (e.g., SCD4x)
  *               description:
  *                 type: string
+ *                 example: "Battery level has dropped below 15% threshold."
  *                 description: Brief description of the sensor
  *               version:
  *                 type: string
+ *                 example: "1.2.0"
  *                 description: Version of the model (defaults to 1.0)
  *               image:
  *                 type: string
+ *                 example: "properties_example"
  *                 format: binary
  *                 description: Image file for the sensor model
  *             required:
@@ -153,9 +157,11 @@ router.get("/models/:model",
  *             properties:
  *               description:
  *                 type: string
+ *                 example: "Battery level has dropped below 15% threshold."
  *                 description: Updated description
  *               image:
  *                 type: string
+ *                 example: "properties_example"
  *                 format: binary
  *                 description: New image file
  *     responses:

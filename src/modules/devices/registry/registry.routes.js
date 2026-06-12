@@ -36,16 +36,19 @@ const checkFeatureAccess = require('../../../middleware/subscriptions/checkFeatu
  *         name: model
  *         schema:
  *           type: string
+ *           example: "ENV"
  *         description: Filter by sensor model
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
+ *           example: "pending"
  *         description: Filter by status (online/offline)
  *       - in: query
  *         name: online
  *         schema:
  *           type: string
+ *           example: "online_example"
  *         description: Filter by online status (true/false)
  *     responses:
  *       200:
@@ -62,27 +65,37 @@ const checkFeatureAccess = require('../../../middleware/subscriptions/checkFeatu
  *                     properties:
  *                       auid:
  *                         type: string
+ *                         example: "GH-ENV-12345XYZ"
  *                       nickname:
  *                         type: string
+ *                         example: "nickname_example"
  *                       model:
  *                         type: string
+ *                         example: "ENV"
  *                       type:
  *                         type: string
+ *                         example: "business"
  *                       status:
  *                         type: string
+ *                         example: "pending"
  *                       image:
  *                         type: string
+ *                         example: "image_example"
  *                       battery:
  *                         type: number
+ *                         example: 1
  *                       lastSeen:
  *                         type: string
+ *                         example: "metadata_example"
  *                   location:
  *                     type: object
  *                     properties:
  *                       latitude:
  *                         type: number
+ *                         example: 1
  *                       longitude:
  *                         type: number
+ *                         example: 1
  *                   telemetry:
  *                     type: object
  *       429:
@@ -109,6 +122,7 @@ router.get('/public-map', publicMapLimiter, registryController.getPublicDevices)
  *                   type: array
  *                   items:
  *                     type: string
+ *                     example: "properties_example"
  */
 router.get('/public-map/models', publicMapLimiter, registryController.getPublicSensorModels);
 
@@ -158,12 +172,12 @@ router.get('/permissions/catalog',
  *             type: object
  *             required: [auid, serial, location, nickname]
  *             properties:
- *               auid: { type: string }
- *               serial: { type: string }
+ *               auid: { type: string, example: "GH-ENV-12345XYZ" }
+ *               serial: { type: string, example: "SN-987654321" }
  *               location: { type: array, items: { type: number }, example: [5.56, -0.20] }
- *               nickname: { type: string }
- *               frequency: { type: integer, default: 30, description: "Expected reporting interval in minutes" }
- *               batch: { type: integer, default: 2, description: "Telemetry batch size" }
+ *               nickname: { type: string, example: "nickname_example" }
+ *               frequency: { type: integer, example: 1, default: 30, description: "Expected reporting interval in minutes" }
+ *               batch: { type: integer, example: 1, default: 2, description: "Telemetry batch size" }
  *     responses:
  *       201:
  *         description: Device registered successfully
@@ -199,11 +213,11 @@ router.post('/register-device',
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *       - in: query
  *         name: orgId
  *         required: false
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *         description: Optional organization ID to filter devices by workspace
  *     responses:
  *       200: { description: List of registered devices }
@@ -226,7 +240,7 @@ router.get('/user/:userid/registered-devices',
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: Device found }
  *       404: { description: Device not found }
@@ -249,11 +263,11 @@ router.get('/find-registered-device/:auid',
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: Device deleted }
  *       404: { description: Device not found }
@@ -276,7 +290,7 @@ router.delete('/delete-device/:userid/:auid',
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *     responses:
  *       200: { description: Device locations retrieved }
  */
@@ -298,11 +312,11 @@ router.get('/user/:userid/device-locations',
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: specific device location }
  *       404: { description: Location not found }
@@ -326,11 +340,11 @@ router.get('/user/:userid/device/:auid/location',
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     requestBody:
  *       required: true
  *       content:
@@ -338,17 +352,17 @@ router.get('/user/:userid/device/:auid/location',
  *           schema:
  *             type: object
  *             properties:
- *               nickname: { type: string }
+ *               nickname: { type: string, example: "nickname_example" }
  *               location: { type: array, items: { type: number }, example: [5.56, -0.20] }
- *               frequency: { type: integer, description: "Expected reporting interval in minutes" }
- *               batch: { type: integer, description: "Telemetry batch size" }
+ *               frequency: { type: integer, example: 1, description: "Expected reporting interval in minutes" }
+ *               batch: { type: integer, example: 1, description: "Telemetry batch size" }
  *               notificationPreferences:
  *                 type: object
  *                 properties:
- *                   enabled: { type: boolean }
- *                   offlineAlert: { type: boolean }
- *                   alertThresholdMinutes: { type: number }
- *                   recipients: { type: array, items: { type: string } }
+ *                   enabled: { type: boolean, example: true }
+ *                   offlineAlert: { type: boolean, example: true }
+ *                   alertThresholdMinutes: { type: number, example: 1 }
+ *                   recipients: { type: array, example: ["example_value"], items: { type: string } }
  *     responses:
  *       200: { description: Device updated }
  *       404: { description: Device not found }
@@ -371,7 +385,7 @@ router.put('/user/:userid/device/:auid/update',
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     requestBody:
  *       required: true
  *       content:
@@ -380,8 +394,8 @@ router.put('/user/:userid/device/:auid/update',
  *             type: object
  *             required: [targetOrgId]
  *             properties:
- *               targetOrgId: { type: string }
- *               targetDeploymentId: { type: string }
+ *               targetOrgId: { type: string, example: "org-starter-uuid" }
+ *               targetDeploymentId: { type: string, example: "dep-starter-uuid" }
  *     responses:
  *       200: { description: Device transferred }
  *       404: { description: Device or Organization not found }
@@ -404,11 +418,11 @@ router.post('/device/:auid/transfer',
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     requestBody:
  *       required: true
  *       content:
@@ -419,14 +433,17 @@ router.post('/device/:auid/transfer',
  *             properties:
  *               email:
  *                 type: string
+ *                 example: "developer@craftedclimate.com"
  *                 format: email
  *               role:
  *                 type: string
+ *                 example: "editor"
  *                 enum: ['device-admin', 'device-support', 'device-user', 'viewer', 'editor', 'admin', 'support', 'user']
  *               permissions:
  *                 type: array
  *                 items:
  *                   type: string
+ *                   example: "properties_example"
  *     responses:
  *       201: { description: Collaborator added }
  */
@@ -446,11 +463,11 @@ router.post('/:userid/device/:auid/collaborators',
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: Collaborator removed }
  */
@@ -472,11 +489,11 @@ router.delete('/:userid/device/:auid/collaborators',
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200:
  *         description: List of collaborators with user details
@@ -487,18 +504,18 @@ router.delete('/:userid/device/:auid/collaborators',
  *               items:
  *                 type: object
  *                 properties:
- *                   userid: { type: string }
- *                   role: { type: string }
- *                   permissions: { type: array, items: { type: string } }
- *                   addedAt: { type: string, format: date-time }
+ *                   userid: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
+ *                   role: { type: string, example: "editor" }
+ *                   permissions: { type: array, example: ["org.devices.view", "org.telemetry.read"], items: { type: string } }
+ *                   addedAt: { type: string, example: "2026-06-12T11:29:56Z", format: date-time }
  *                   user:
  *                     type: object
  *                     properties:
- *                       firstName: { type: string }
- *                       lastName: { type: string }
- *                       username: { type: string }
- *                       email: { type: string }
- *                       profilePicture: { type: string }
+ *                       firstName: { type: string, example: "Arnold" }
+ *                       lastName: { type: string, example: "Sylvian" }
+ *                       username: { type: string, example: "arnold_sylvian" }
+ *                       email: { type: string, example: "developer@craftedclimate.com" }
+ *                       profilePicture: { type: string, example: "profilePicture_example" }
  */
 router.get('/:userid/device/:auid/collaborators',
     authenticateToken,
@@ -517,11 +534,11 @@ router.get('/:userid/device/:auid/collaborators',
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     requestBody:
  *       required: true
  *       content:
@@ -530,7 +547,7 @@ router.get('/:userid/device/:auid/collaborators',
  *             type: object
  *             required: [email]
  *             properties:
- *               email: { type: string }
+ *               email: { type: string, example: "developer@craftedclimate.com" }
  *     responses:
  *       200:
  *         description: Role and permissions returned
@@ -555,11 +572,11 @@ router.post('/:userid/device/:auid/collaborators/permissions',
  *       - in: path
  *         name: userid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     requestBody:
  *       required: true
  *       content:
@@ -570,6 +587,7 @@ router.post('/:userid/device/:auid/collaborators/permissions',
  *             properties:
  *               availability:
  *                 type: string
+ *                 example: "properties_example"
  *                 enum: ['public', 'private']
  *                 description: Device accessibility
  *     responses:
@@ -612,7 +630,7 @@ const stateChangeLimiter = rateLimit({
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *         description: Device AUID
  *     requestBody:
  *       required: true
@@ -624,6 +642,7 @@ const stateChangeLimiter = rateLimit({
  *             properties:
  *               state:
  *                 type: string
+ *                 example: "properties_example"
  *                 enum: ['active', 'inactive', 'disabled']
  *                 description: |
  *                   - `active`   - Device is operational and should report data.
@@ -637,11 +656,11 @@ const stateChangeLimiter = rateLimit({
  *             schema:
  *               type: object
  *               properties:
- *                 message:    { type: string }
- *                 auid:       { type: string }
- *                 state:      { type: string, enum: ['active', 'inactive', 'disabled'] }
- *                 stateChangedAt: { type: string, format: date-time }
- *                 stateChangedBy: { type: string }
+ *                 message:    { type: string, example: "This is a status update notification." }
+ *                 auid:       { type: string, example: "GH-ENV-12345XYZ" }
+ *                 state:      { type: string, example: "state_example", enum: ['active', 'inactive', 'disabled'] }
+ *                 stateChangedAt: { type: string, example: "2026-06-12T11:29:56Z", format: date-time }
+ *                 stateChangedBy: { type: string, example: "stateChangedBy_example" }
  *       400: { description: Invalid state value }
  *       403: { description: Forbidden - insufficient permissions }
  *       404: { description: Device not found }

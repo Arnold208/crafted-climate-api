@@ -41,6 +41,7 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  *                 type: array
  *                 items:
  *                   type: string
+ *                   example: "items_example"
  *                   enum: [device.online, device.offline, threshold.breached]
  *                 example: ["device.offline", "threshold.breached"]
  *     responses:
@@ -101,6 +102,7 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
+ *           example: "sub-premium-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -110,14 +112,17 @@ router.get(
  *             properties:
  *               url:
  *                 type: string
+ *                 example: "https://webhook.my-service.com/events"
  *                 format: uri
  *               events:
  *                 type: array
  *                 items:
  *                   type: string
+ *                   example: "events_example"
  *                   enum: [device.online, device.offline, threshold.breached]
  *               status:
  *                 type: string
+ *                 example: "properties_example"
  *                 enum: [active, inactive]
  *     responses:
  *       200:
@@ -150,6 +155,7 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
+ *           example: "sub-premium-uuid"
  *     responses:
  *       200:
  *         description: Webhook subscription deleted successfully

@@ -61,6 +61,7 @@ const verifyApiKeyOrTokenAdmin = (req, res, next) => {
  *                 type: array
  *                 items:
  *                   type: string
+ *                   example: "items_example"
  *                 example: ["temperature", "humidity", "pm2_5", "uv"]
  *               noteDevUuid:
  *                 type: string
@@ -133,11 +134,11 @@ router.patch('/update-note-uuid', verifyApiKeyOrTokenAdmin, manufacturerControll
  *               items:
  *                 type: object
  *                 properties:
- *                   devid: { type: string }
- *                   model: { type: string }
- *                   sku: { type: string }
- *                   mac: { type: string }
- *                   status: { type: string }
+ *                   devid: { type: string, example: "devid_example" }
+ *                   model: { type: string, example: "ENV" }
+ *                   sku: { type: string, example: "sku_example" }
+ *                   mac: { type: string, example: "mac_example" }
+ *                   status: { type: string, example: "pending" }
  *       403:
  *         description: Forbidden (Admin/Supervisor only)
  */
@@ -156,7 +157,7 @@ router.get('/', verifyApiKeyOrTokenAdmin, manufacturerController.getAllDevices);
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "id_example" }
  *     responses:
  *       200:
  *         description: Device details found
@@ -180,6 +181,7 @@ router.get('/:id', verifyApiKeyOrTokenAdmin, manufacturerController.getDeviceByI
  *         required: true
  *         schema:
  *           type: string
+ *           example: "id_example"
  *         description: Manufacturing ID of the device
  *     requestBody:
  *       required: true
@@ -226,7 +228,7 @@ router.put('/:id', verifyApiKeyOrTokenAdmin, manufacturerController.updateDevice
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "id_example" }
  *     responses:
  *       200:
  *         description: Device deleted successfully

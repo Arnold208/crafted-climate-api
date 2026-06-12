@@ -18,20 +18,24 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: page
  *         schema:
  *           type: integer
+ *           example: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *           example: 10
  *           default: 50
  *       - in: query
  *         name: organizationId
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
+ *           example: "pending"
  *           enum: [active, suspended, revoked]
  *     responses:
  *       200:
@@ -56,6 +60,7 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminApiKeyController.l
  *         required: true
  *         schema:
  *           type: string
+ *           example: "key-rotation-uuid"
  *     responses:
  *       200:
  *         description: API key details retrieved
@@ -79,6 +84,7 @@ router.get('/:keyId', authenticateToken, requirePlatformAdmin, adminApiKeyContro
  *         required: true
  *         schema:
  *           type: string
+ *           example: "key-rotation-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -90,6 +96,7 @@ router.get('/:keyId', authenticateToken, requirePlatformAdmin, adminApiKeyContro
  *             properties:
  *               reason:
  *                 type: string
+ *                 example: "properties_example"
  *                 minLength: 10
  *             example:
  *               reason: Security breach detected
@@ -114,6 +121,7 @@ router.delete('/:keyId/revoke', authenticateToken, requirePlatformAdmin, adminAp
  *         required: true
  *         schema:
  *           type: string
+ *           example: "key-rotation-uuid"
  *     responses:
  *       200:
  *         description: API key suspended
@@ -135,6 +143,7 @@ router.post('/:keyId/suspend', authenticateToken, requirePlatformAdmin, adminApi
  *         required: true
  *         schema:
  *           type: string
+ *           example: "key-rotation-uuid"
  *     responses:
  *       200:
  *         description: API key restored
@@ -155,11 +164,13 @@ router.post('/:keyId/restore', authenticateToken, requirePlatformAdmin, adminApi
  *         name: startDate
  *         schema:
  *           type: string
+ *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
+ *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:

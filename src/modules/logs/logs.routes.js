@@ -33,19 +33,19 @@ const logQueryLimiter = rateLimit({
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *       - in: query
  *         name: page
- *         schema: { type: integer, default: 1 }
+ *         schema: { type: integer, example: 1, default: 1 }
  *       - in: query
  *         name: limit
- *         schema: { type: integer, default: 50 }
+ *         schema: { type: integer, example: 10, default: 50 }
  *       - in: query
  *         name: action
- *         schema: { type: string }
+ *         schema: { type: string, example: "device:register" }
  *       - in: query
  *         name: actor
- *         schema: { type: string }
+ *         schema: { type: string, example: "actor_example" }
  *     responses:
  *       200: { description: Logs retrieved successfully }
  *       403: { description: Forbidden }
@@ -68,10 +68,10 @@ router.get('/org/:orgId/logs',
  *     parameters:
  *       - in: query
  *         name: page
- *         schema: { type: integer, default: 1 }
+ *         schema: { type: integer, example: 1, default: 1 }
  *       - in: query
  *         name: limit
- *         schema: { type: integer, default: 50 }
+ *         schema: { type: integer, example: 10, default: 50 }
  *     responses:
  *       200: { description: Platform logs retrieved }
  *       403: { description: Admin access required }

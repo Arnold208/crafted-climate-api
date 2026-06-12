@@ -22,7 +22,7 @@ const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess'
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "id_example" }
  *     requestBody:
  *       required: true
  *       content:
@@ -31,7 +31,7 @@ const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess'
  *             type: object
  *             required: [enabled]
  *             properties:
- *               enabled: { type: boolean }
+ *               enabled: { type: boolean, example: true }
  *     responses:
  *       200: { description: Status updated }
  */
@@ -51,7 +51,7 @@ router.patch('/thresholds/:id/status',
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: Datapoint metadata retrieved }
  */
@@ -71,7 +71,7 @@ router.get('/devices/:auid/metadata',
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: List of thresholds }
  */
@@ -91,7 +91,7 @@ router.get('/devices/:auid/thresholds',
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       201: { description: Threshold created }
  */
@@ -111,7 +111,7 @@ router.post('/devices/:auid/thresholds',
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "id_example" }
  *     responses:
  *       200: { description: Threshold updated }
  *       404: { description: Threshold not found }
@@ -132,7 +132,7 @@ router.put('/thresholds/:id',
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "id_example" }
  *     responses:
  *       200: { description: Threshold deleted }
  *       404: { description: Threshold not found }
@@ -153,7 +153,7 @@ router.delete('/thresholds/:id',
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *     responses:
  *       200: { description: Threshold parameters retrieved }
  */

@@ -18,30 +18,36 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: page
  *         schema:
  *           type: integer
+ *           example: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *           example: 10
  *           default: 50
  *       - in: query
  *         name: search
  *         schema:
  *           type: string
+ *           example: "search_example"
  *         description: Search by organization name
  *       - in: query
  *         name: type
  *         schema:
  *           type: string
+ *           example: "business"
  *           enum: [personal, business, non-profit]
  *       - in: query
  *         name: verified
  *         schema:
  *           type: boolean
+ *           example: true
  *       - in: query
  *         name: partner
  *         schema:
  *           type: boolean
+ *           example: true
  *     responses:
  *       200:
  *         description: Organizations retrieved
@@ -65,6 +71,7 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminOrgController.list
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *     responses:
  *       200:
  *         description: Organization details retrieved
@@ -88,6 +95,7 @@ router.get('/:orgId', authenticateToken, requirePlatformAdmin, adminOrgControlle
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *     responses:
  *       200:
  *         description: Organization deleted
@@ -111,6 +119,7 @@ router.delete('/:orgId', authenticateToken, requirePlatformAdmin, adminOrgContro
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -122,6 +131,7 @@ router.delete('/:orgId', authenticateToken, requirePlatformAdmin, adminOrgContro
  *             properties:
  *               reason:
  *                 type: string
+ *                 example: "properties_example"
  *                 minLength: 10
  *             example:
  *               reason: Violation of terms of service
@@ -148,6 +158,7 @@ router.post('/:orgId/suspend', authenticateToken, requirePlatformAdmin, adminOrg
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *     responses:
  *       200:
  *         description: Organization restored
@@ -171,6 +182,7 @@ router.post('/:orgId/restore', authenticateToken, requirePlatformAdmin, adminOrg
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *     responses:
  *       200:
  *         description: Members retrieved
@@ -194,6 +206,7 @@ router.get('/:orgId/members', authenticateToken, requirePlatformAdmin, adminOrgC
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -205,6 +218,7 @@ router.get('/:orgId/members', authenticateToken, requirePlatformAdmin, adminOrgC
  *             properties:
  *               newOwnerId:
  *                 type: string
+ *                 example: "properties_example"
  *             example:
  *               newOwnerId: PM85RAIXJB
  *     responses:

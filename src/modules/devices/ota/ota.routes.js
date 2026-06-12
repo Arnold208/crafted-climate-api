@@ -76,7 +76,7 @@ router.get("/list-firmware",
  *       - in: path
  *         name: uuid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "uuid-9b1deb4d-3b7d-4bad" }
  *     responses:
  *       200: { description: Firmware deleted }
  *       404: { description: Firmware not found }

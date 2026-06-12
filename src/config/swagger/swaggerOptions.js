@@ -123,6 +123,31 @@ Sensors separate **connectivity status** from **intentional operational state**:
 \`\`\`
 
 ---
+
+## **Paystack Payment & Onboarding Workflow**
+The system integrates with **Paystack** for handling subscription payments (specifically GHS and other configured currencies).
+
+### **1. Onboarding Payment Flow (Organization Creation)**
+When a user wants to create a new verified organization on a paid plan, the flow is as follows:
+1. **Submit Organization Request**: The client calls \`POST /api/org/request-creation\` with organization details and a selected \`planId\` and \`billingCycle\`.
+2. **Obtain Checkout Link**: If the selected plan is a paid plan (price > 0), the response contains \`checkoutUrl\` (a Paystack authorization URL) and a \`request\` object with status \`payment_pending\`.
+3. **Redirect to Paystack**: The client redirects the user to \`checkoutUrl\` to complete the payment.
+4. **Webhook Notification**: Upon successful payment, Paystack sends a \`charge.success\` webhook to \`/api/subscriptions/paystack/webhook\`.
+5. **Request Approved for Review**: The backend verifies the webhook signature, logs the transaction, updates the onboarding request status to \`pending\`, and updates the payment status to \`success\`.
+6. **Platform Admin Approval**: A platform admin reviews the documents/request and approves it via \`PUT /api/org/admin/creation-requests/{requestId}/approve\`, which provisions the organization and its initial subscription.
+
+### **2. Payment Retry Flow**
+If a payment fails or the checkout window expires:
+1. The requester calls \`POST /api/org/creation-requests/{requestId}/retry-payment\`.
+2. The server generates a new Paystack checkout transaction and returns a new \`checkoutUrl\`.
+3. The user completes payment via Paystack, triggering the same webhook flow to update the request to \`pending\`.
+
+### **3. Webhook Handling & Signature Verification**
+- **Endpoint**: \`POST /api/subscriptions/paystack/webhook\` (Public)
+- **Signature Header**: \`X-Paystack-Signature\` containing the HMAC SHA512 hash of the raw request body signed with the \`PAYSTACK_SECRET_KEY\`.
+- **Note**: In the development environment, signature verification falls back to a warning/bypass if no key is configured, but is strictly enforced in production.
+
+---
 `,
       contact: {
         name: 'CraftedClimate Support',
@@ -213,7 +238,8 @@ Sensors separate **connectivity status** from **intentional operational state**:
     tags: [
       { name: 'Authentication', description: 'User signup, login, and profile management' },
       { name: 'Organizations', description: 'Multi-tenant organization management with RBAC and membership' },
-      // { name: 'Devices', description: 'Device registration and general management' }, // Removed as duplicate
+      { name: 'Organizations (Platform User)', description: 'Organization creation requests, billing checkouts, and details for platform users' },
+      { name: 'Organizations (Platform Admin)', description: 'Platform admin endpoints to approve/reject organization creation requests' },
       { name: 'Manufacturer', description: 'Device manufacturing and identity management' },
       { name: 'Device Registry', description: 'Technical device registration and tracking' },
       { name: 'Sensor Models', description: 'Sensor hardware definitions and parameters' },
@@ -221,6 +247,8 @@ Sensors separate **connectivity status** from **intentional operational state**:
       { name: 'Telemetry', description: 'Device telemetry ingestion and retrieval' },
       { name: 'Thresholds', description: 'Alert threshold configuration and monitoring' },
       { name: 'Subscriptions', description: 'Subscription management and billing' },
+      { name: 'Organization Subscriptions', description: 'Organization-scoped plan upgrades, downgrades, and billing cycles' },
+      { name: 'Subscription Plans', description: 'Platform admin endpoints to manage available subscription packages' },
       { name: 'Audit Logs', description: 'Access audit logs for organizations and platform' },
       { name: 'Support', description: 'Ticketing and customer support system' },
       { name: 'Analytics', description: 'System-wide and organization-specific analytics' },

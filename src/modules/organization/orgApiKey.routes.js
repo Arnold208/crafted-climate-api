@@ -18,6 +18,7 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -29,19 +30,23 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *             properties:
  *               name:
  *                 type: string
+ *                 example: "Afrilogic Environmental Solutions"
  *                 maxLength: 100
  *               permissions:
  *                 type: array
  *                 items:
  *                   type: string
+ *                   example: "permissions_example"
  *                   enum: [telemetry:read, telemetry:write, devices:read, devices:write, analytics:read]
  *               rateLimit:
  *                 type: object
  *                 properties:
  *                   requests:
  *                     type: integer
+ *                     example: 1
  *                   windowMs:
  *                     type: integer
+ *                     example: 1
  *               expiresAt:
  *                 type: string
  *                 format: date-time
@@ -52,6 +57,7 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *                 type: array
  *                 items:
  *                   type: string
+ *                   example: "properties_example"
  *             example:
  *               name: Production API Key
  *               permissions: [telemetry:write, devices:read]
@@ -69,16 +75,20 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 data:
  *                   type: object
  *                   properties:
  *                     key:
  *                       type: string
+ *                       example: "key_example"
  *                       description: Full API key (shown only once)
  *                     keyPrefix:
  *                       type: string
+ *                       example: "keyPrefix_example"
  *                     message:
  *                       type: string
+ *                       example: "properties_example"
  */
 router.post('/', authenticateToken, orgApiKeyController.generateApiKey);
 
@@ -97,10 +107,12 @@ router.post('/', authenticateToken, orgApiKeyController.generateApiKey);
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
+ *           example: "pending"
  *           enum: [active, suspended, revoked]
  *     responses:
  *       200:
@@ -123,11 +135,13 @@ router.get('/', authenticateToken, orgApiKeyController.listOrgApiKeys);
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *       - in: path
  *         name: keyId
  *         required: true
  *         schema:
  *           type: string
+ *           example: "key-rotation-uuid"
  *     responses:
  *       200:
  *         description: API key rotated successfully
@@ -149,11 +163,13 @@ router.post('/:keyId/rotate', authenticateToken, orgApiKeyController.rotateApiKe
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *       - in: path
  *         name: keyId
  *         required: true
  *         schema:
  *           type: string
+ *           example: "key-rotation-uuid"
  *     requestBody:
  *       content:
  *         application/json:
@@ -162,6 +178,7 @@ router.post('/:keyId/rotate', authenticateToken, orgApiKeyController.rotateApiKe
  *             properties:
  *               reason:
  *                 type: string
+ *                 example: "properties_example"
  *     responses:
  *       200:
  *         description: API key revoked
@@ -183,20 +200,24 @@ router.delete('/:keyId', authenticateToken, orgApiKeyController.revokeApiKey);
  *         required: true
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *       - in: path
  *         name: keyId
  *         required: true
  *         schema:
  *           type: string
+ *           example: "key-rotation-uuid"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
+ *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
+ *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:

@@ -43,6 +43,7 @@ router.get('/', (req, res, next) => {
  *         name: code
  *         schema:
  *           type: string
+ *           example: "code_example"
  *         required: true
  *         description: Authorization code from Google
  *     responses:
@@ -55,10 +56,13 @@ router.get('/', (req, res, next) => {
  *               properties:
  *                 message:
  *                   type: string
+ *                   example: "This is a status update notification."
  *                 accessToken:
  *                   type: string
+ *                   example: "accessToken_example"
  *                 refreshToken:
  *                   type: string
+ *                   example: "ref-tok-abcdef123456"
  *                 user:
  *                   type: object
  */

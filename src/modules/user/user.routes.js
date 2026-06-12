@@ -25,25 +25,34 @@ const { otpLimiter } = require('../../middleware/rateLimiter');
  *             properties:
  *               username:
  *                 type: string
+ *                 example: "arnold_sylvian"
  *               email:
  *                 type: string
+ *                 example: "developer@craftedclimate.com"
  *                 format: email
  *               password:
  *                 type: string
+ *                 example: "Password123!"
  *                 format: password
  *               firstName:
  *                 type: string
+ *                 example: "Arnold"
  *               lastName:
  *                 type: string
+ *                 example: "Sylvian"
  *               country:
  *                 type: string
+ *                 example: "Ghana"
  *                 default: Ghana
  *               contact:
  *                 type: string
+ *                 example: "+233240000000"
  *               invitationId:
  *                 type: string
+ *                 example: "invitationId_example"
  *               profilePicture:
  *                 type: string
+ *                 example: "properties_example"
  *                 format: binary
  *     responses:
  *       201:
@@ -71,9 +80,11 @@ router.post('/signup', otpLimiter, upload.single('profilePicture'), userControll
  *             properties:
  *               email:
  *                 type: string
+ *                 example: "developer@craftedclimate.com"
  *                 format: email
  *               password:
  *                 type: string
+ *                 example: "properties_example"
  *                 format: password
  *     responses:
  *       200:
@@ -101,9 +112,11 @@ router.post('/login', userController.login);
  *             properties:
  *               email:
  *                 type: string
+ *                 example: "developer@craftedclimate.com"
  *                 format: email
  *               otp:
  *                 type: string
+ *                 example: "properties_example"
  *                 description: OTP Code
  *     responses:
  *       200:
@@ -130,6 +143,7 @@ router.post('/verify-otp', otpLimiter, userController.verifyOtp);
  *             properties:
  *               email:
  *                 type: string
+ *                 example: "properties_example"
  *                 format: email
  *     responses:
  *       200:
@@ -157,6 +171,7 @@ router.post('/resend-otp', otpLimiter, userController.resendOtp);
  *             properties:
  *               email:
  *                 type: string
+ *                 example: "properties_example"
  *                 format: email
  *     responses:
  *       200:
@@ -185,11 +200,14 @@ router.post('/forgot-password', otpLimiter, userController.forgotPassword);
  *             properties:
  *               email:
  *                 type: string
+ *                 example: "developer@craftedclimate.com"
  *                 format: email
  *               otp:
  *                 type: string
+ *                 example: "123456"
  *               newPassword:
  *                 type: string
+ *                 example: "properties_example"
  *                 format: password
  *     responses:
  *       200:
@@ -217,6 +235,7 @@ router.post('/reset-password', otpLimiter, userController.resetPassword);
  *             properties:
  *               refreshToken:
  *                 type: string
+ *                 example: "properties_example"
  *     responses:
  *       200:
  *         description: New tokens issued
@@ -227,8 +246,10 @@ router.post('/reset-password', otpLimiter, userController.resetPassword);
  *               properties:
  *                 accessToken:
  *                   type: string
+ *                   example: "accessToken_example"
  *                 refreshToken:
  *                   type: string
+ *                   example: "properties_example"
  *       401:
  *         description: Invalid or expired refresh token
  *       403:
@@ -284,6 +305,7 @@ router.get('/profile', authenticateToken, userController.getProfile);
  *             properties:
  *               profilePicture:
  *                 type: string
+ *                 example: "profilePicture_example"
  *                 format: binary
  *               firstName: { type: string, example: "Jane" }
  *               lastName: { type: string, example: "Doe" }
@@ -405,7 +427,7 @@ router.patch('/security/password', authenticateToken, userController.changePassw
  *             schema:
  *               type: object
  *               properties:
- *                 mutedDevices: { type: array, items: { type: string } }
+ *                 mutedDevices: { type: array, example: ["example_value"], items: { type: string } }
  */
 router.get('/devices/muted', authenticateToken, userController.getMutedDevices);
 
@@ -421,7 +443,7 @@ router.get('/devices/muted', authenticateToken, userController.getMutedDevices);
  *       - in: path
  *         name: deviceId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "device-starter-uuid" }
  *     responses:
  *       200: { description: Device muted successfully }
  */
@@ -439,7 +461,7 @@ router.post('/devices/:deviceId/mute', authenticateToken, userController.muteDev
  *       - in: path
  *         name: deviceId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "device-starter-uuid" }
  *     responses:
  *       200: { description: Device unmuted successfully }
  */

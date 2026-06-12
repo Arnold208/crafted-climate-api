@@ -54,7 +54,7 @@ const checkOrgAccess     = require('../../../middleware/organization/checkOrgAcc
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *         description: Device AUID
  *     requestBody:
  *       required: true
@@ -78,12 +78,12 @@ const checkOrgAccess     = require('../../../middleware/organization/checkOrgAcc
  *             schema:
  *               type: object
  *               properties:
- *                 auid:         { type: string }
- *                 noteDevUuid:  { type: string }
- *                 projectUid:   { type: string }
+ *                 auid:         { type: string, example: "GH-ENV-12345XYZ" }
+ *                 noteDevUuid:  { type: string, example: "noteDevUuid_example" }
+ *                 projectUid:   { type: string, example: "projectUid_example" }
  *                 updated:      { type: object }
- *                 skipped:      { type: boolean }
- *                 reason:       { type: string, description: "Set when skipped=true" }
+ *                 skipped:      { type: boolean, example: true }
+ *                 reason:       { type: string, example: "reason_example", description: "Set when skipped=true" }
  *                 notehubResponse: { type: object }
  *       403: { description: Forbidden }
  *       404: { description: Device not found }
@@ -137,7 +137,7 @@ router.put('/:auid/notehub-env',
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *         description: Device AUID
  *     responses:
  *       200:
@@ -147,12 +147,12 @@ router.put('/:auid/notehub-env',
  *             schema:
  *               type: object
  *               properties:
- *                 auid:        { type: string }
- *                 noteDevUuid: { type: string }
- *                 projectUid:  { type: string }
+ *                 auid:        { type: string, example: "GH-ENV-12345XYZ" }
+ *                 noteDevUuid: { type: string, example: "noteDevUuid_example" }
+ *                 projectUid:  { type: string, example: "projectUid_example" }
  *                 data:        { type: object, description: "Raw Notehub response" }
- *                 skipped:     { type: boolean }
- *                 reason:      { type: string }
+ *                 skipped:     { type: boolean, example: true }
+ *                 reason:      { type: string, example: "reason_example" }
  *       403: { description: Forbidden }
  *       404: { description: Device not found }
  */
@@ -178,12 +178,12 @@ router.get('/:auid/notehub-env',
  *       - in: path
  *         name: auid
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "GH-ENV-12345XYZ" }
  *         description: Device AUID
  *       - in: path
  *         name: key
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "key_example" }
  *         description: Env var key to delete (e.g. `CC_STATE`)
  *     responses:
  *       200:
@@ -193,10 +193,10 @@ router.get('/:auid/notehub-env',
  *             schema:
  *               type: object
  *               properties:
- *                 message:     { type: string }
- *                 auid:        { type: string }
- *                 noteDevUuid: { type: string }
- *                 deletedKey:  { type: string }
+ *                 message:     { type: string, example: "This is a status update notification." }
+ *                 auid:        { type: string, example: "GH-ENV-12345XYZ" }
+ *                 noteDevUuid: { type: string, example: "noteDevUuid_example" }
+ *                 deletedKey:  { type: string, example: "deletedKey_example" }
  *       403: { description: Forbidden }
  *       404: { description: Device not found }
  */
@@ -226,13 +226,14 @@ router.delete('/:auid/notehub-env/:key',
  *       - in: path
  *         name: deploymentId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "dep-starter-uuid" }
  *         description: Deployment ID
  *       - in: query
  *         name: model
  *         required: true
  *         schema:
  *           type: string
+ *           example: "ENV"
  *           enum: [env, aqua, gas, gas-solo, flow, terra]
  *         description: Device model to target within the deployment
  *     requestBody:
@@ -253,18 +254,18 @@ router.delete('/:auid/notehub-env/:key',
  *             schema:
  *               type: object
  *               properties:
- *                 deploymentId:  { type: string }
- *                 model:         { type: string }
- *                 totalDevices:  { type: integer }
+ *                 deploymentId:  { type: string, example: "dep-starter-uuid" }
+ *                 model:         { type: string, example: "ENV" }
+ *                 totalDevices:  { type: integer, example: 1 }
  *                 results:
  *                   type: array
  *                   items:
  *                     type: object
  *                     properties:
- *                       auid:   { type: string }
- *                       status: { type: string, enum: [success, skipped, error] }
- *                       reason: { type: string }
- *                       error:  { type: string }
+ *                       auid:   { type: string, example: "GH-ENV-12345XYZ" }
+ *                       status: { type: string, example: "pending", enum: [success, skipped, error] }
+ *                       reason: { type: string, example: "reason_example" }
+ *                       error:  { type: string, example: "error_example" }
  *       400: { description: Missing model query param }
  *       403: { description: Forbidden }
  *       404: { description: Deployment not found }
@@ -284,7 +285,7 @@ router.delete('/:auid/notehub-env/:key',
  *       - in: path
  *         name: deploymentId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "dep-starter-uuid" }
  *     responses:
  *       200:
  *         description: Models and Notecard stats
@@ -293,11 +294,11 @@ router.delete('/:auid/notehub-env/:key',
  *             schema:
  *               type: object
  *               properties:
- *                 deploymentId:            { type: string }
- *                 models:                  { type: array, items: { type: string } }
- *                 totalDevices:            { type: integer }
- *                 notecardEnabledDevices:  { type: integer }
- *                 nonNotecardDevices:      { type: integer }
+ *                 deploymentId:            { type: string, example: "dep-starter-uuid" }
+ *                 models:                  { type: array, example: ["example_value"], items: { type: string } }
+ *                 totalDevices:            { type: integer, example: 1 }
+ *                 notecardEnabledDevices:  { type: integer, example: 1 }
+ *                 nonNotecardDevices:      { type: integer, example: 1 }
  *       404: { description: Deployment not found }
  */
 // ─────────────────────────────────────────────────────────────────────────────
@@ -326,13 +327,14 @@ router.delete('/:auid/notehub-env/:key',
  *       - in: path
  *         name: orgId
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: string, example: "org-starter-uuid" }
  *         description: Organization ID
  *       - in: query
  *         name: model
  *         required: false
  *         schema:
  *           type: string
+ *           example: "ENV"
  *           enum: [env, aqua, gas, gas-solo, flow, terra]
  *         description: Optional — filter by device model. Omit to target all models.
  *     requestBody:
@@ -354,25 +356,25 @@ router.delete('/:auid/notehub-env/:key',
  *             schema:
  *               type: object
  *               properties:
- *                 orgId:        { type: string }
- *                 model:        { type: string }
- *                 totalDevices: { type: integer }
+ *                 orgId:        { type: string, example: "org-starter-uuid" }
+ *                 model:        { type: string, example: "ENV" }
+ *                 totalDevices: { type: integer, example: 1 }
  *                 summary:
  *                   type: object
  *                   properties:
- *                     success: { type: integer }
- *                     skipped: { type: integer }
- *                     error:   { type: integer }
+ *                     success: { type: integer, example: 1 }
+ *                     skipped: { type: integer, example: 1 }
+ *                     error:   { type: integer, example: 1 }
  *                 results:
  *                   type: array
  *                   items:
  *                     type: object
  *                     properties:
- *                       auid:     { type: string }
- *                       nickname: { type: string }
- *                       status:   { type: string, enum: [success, skipped, error] }
- *                       reason:   { type: string }
- *                       error:    { type: string }
+ *                       auid:     { type: string, example: "GH-ENV-12345XYZ" }
+ *                       nickname: { type: string, example: "nickname_example" }
+ *                       status:   { type: string, example: "pending", enum: [success, skipped, error] }
+ *                       reason:   { type: string, example: "reason_example" }
+ *                       error:    { type: string, example: "error_example" }
  *       400: { description: Missing or invalid request body }
  *       403: { description: Forbidden — org context mismatch }
  */

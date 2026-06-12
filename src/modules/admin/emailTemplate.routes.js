@@ -18,11 +18,13 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: category
  *         schema:
  *           type: string
+ *           example: "hardware"
  *           enum: [auth, billing, support, marketing, system, notification]
  *       - in: query
  *         name: active
  *         schema:
  *           type: boolean
+ *           example: true
  *     responses:
  *       200:
  *         description: Templates retrieved
@@ -44,6 +46,7 @@ router.get('/', authenticateToken, requirePlatformAdmin, emailTemplateController
  *         required: true
  *         schema:
  *           type: string
+ *           example: "billing-alert-template"
  *     responses:
  *       200:
  *         description: Template retrieved
@@ -73,16 +76,22 @@ router.get('/:slug', authenticateToken, requirePlatformAdmin, emailTemplateContr
  *             properties:
  *               name:
  *                 type: string
+ *                 example: "Afrilogic Environmental Solutions"
  *               slug:
  *                 type: string
+ *                 example: "billing-alert-template"
  *               subject:
  *                 type: string
+ *                 example: "Sensor connectivity alert"
  *               htmlBody:
  *                 type: string
+ *                 example: "htmlBody_example"
  *               textBody:
  *                 type: string
+ *                 example: "textBody_example"
  *               category:
  *                 type: string
+ *                 example: "hardware"
  *                 enum: [auth, billing, support, marketing, system, notification]
  *               variables:
  *                 type: array
@@ -91,10 +100,13 @@ router.get('/:slug', authenticateToken, requirePlatformAdmin, emailTemplateContr
  *                   properties:
  *                     name:
  *                       type: string
+ *                       example: "Afrilogic Environmental Solutions"
  *                     description:
  *                       type: string
+ *                       example: "Battery level has dropped below 15% threshold."
  *                     required:
  *                       type: boolean
+ *                       example: true
  *             example:
  *               name: Welcome Email
  *               slug: welcome-email
@@ -126,6 +138,7 @@ router.post('/', authenticateToken, requirePlatformAdmin, emailTemplateControlle
  *         required: true
  *         schema:
  *           type: string
+ *           example: "billing-alert-template"
  *     requestBody:
  *       content:
  *         application/json:
@@ -134,14 +147,19 @@ router.post('/', authenticateToken, requirePlatformAdmin, emailTemplateControlle
  *             properties:
  *               name:
  *                 type: string
+ *                 example: "Afrilogic Environmental Solutions"
  *               subject:
  *                 type: string
+ *                 example: "Sensor connectivity alert"
  *               htmlBody:
  *                 type: string
+ *                 example: "htmlBody_example"
  *               textBody:
  *                 type: string
+ *                 example: "textBody_example"
  *               active:
  *                 type: boolean
+ *                 example: true
  *     responses:
  *       200:
  *         description: Template updated
@@ -163,6 +181,7 @@ router.patch('/:slug', authenticateToken, requirePlatformAdmin, emailTemplateCon
  *         required: true
  *         schema:
  *           type: string
+ *           example: "billing-alert-template"
  *     responses:
  *       200:
  *         description: Template deleted
@@ -184,6 +203,7 @@ router.delete('/:slug', authenticateToken, requirePlatformAdmin, emailTemplateCo
  *         required: true
  *         schema:
  *           type: string
+ *           example: "billing-alert-template"
  *     requestBody:
  *       content:
  *         application/json:
@@ -217,6 +237,7 @@ router.post('/:slug/preview', authenticateToken, requirePlatformAdmin, emailTemp
  *         required: true
  *         schema:
  *           type: string
+ *           example: "billing-alert-template"
  *     requestBody:
  *       required: true
  *       content:
@@ -228,6 +249,7 @@ router.post('/:slug/preview', authenticateToken, requirePlatformAdmin, emailTemp
  *             properties:
  *               to:
  *                 type: string
+ *                 example: "to_example"
  *                 format: email
  *               variables:
  *                 type: object

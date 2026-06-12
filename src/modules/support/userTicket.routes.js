@@ -25,19 +25,24 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *             properties:
  *               subject:
  *                 type: string
+ *                 example: "Sensor connectivity alert"
  *                 maxLength: 200
  *               description:
  *                 type: string
+ *                 example: "Battery level has dropped below 15% threshold."
  *                 maxLength: 5000
  *               priority:
  *                 type: string
+ *                 example: "high"
  *                 enum: [low, medium, high, urgent]
  *                 default: medium
  *               category:
  *                 type: string
+ *                 example: "hardware"
  *                 enum: [technical, billing, feature_request, bug, account, other]
  *               organizationId:
  *                 type: string
+ *                 example: "properties_example"
  *             example:
  *               subject: Unable to upload telemetry data
  *               description: Getting 500 error when trying to upload sensor data
@@ -64,24 +69,29 @@ router.post('/', authenticateToken, userTicketController.createTicket);
  *         name: page
  *         schema:
  *           type: integer
+ *           example: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *           example: 10
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
+ *           example: "pending"
  *           enum: [open, in_progress, waiting_customer, resolved, closed]
  *       - in: query
  *         name: priority
  *         schema:
  *           type: string
+ *           example: "high"
  *           enum: [low, medium, high, urgent]
  *       - in: query
  *         name: organizationId
  *         schema:
  *           type: string
+ *           example: "org-starter-uuid"
  *     responses:
  *       200:
  *         description: Tickets retrieved
@@ -103,6 +113,7 @@ router.get('/', authenticateToken, userTicketController.listMyTickets);
  *         required: true
  *         schema:
  *           type: string
+ *           example: "ticket-9b1deb4d-3b7d"
  *     responses:
  *       200:
  *         description: Ticket details retrieved
@@ -126,6 +137,7 @@ router.get('/:ticketId', authenticateToken, userTicketController.getTicketDetail
  *         required: true
  *         schema:
  *           type: string
+ *           example: "ticket-9b1deb4d-3b7d"
  *     requestBody:
  *       required: true
  *       content:
@@ -137,6 +149,7 @@ router.get('/:ticketId', authenticateToken, userTicketController.getTicketDetail
  *             properties:
  *               message:
  *                 type: string
+ *                 example: "properties_example"
  *             example:
  *               message: I tried the suggested fix but still getting the error
  *     responses:
