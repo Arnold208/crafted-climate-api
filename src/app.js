@@ -66,6 +66,7 @@ const emailTemplateRoutes = require('./modules/admin/emailTemplate.routes');
 const { globalRateLimiter, swaggerRateLimiter } = require('./middleware/rateLimiter');
 const auditLogger = require('./middleware/auditLogger');
 const auth = require('./middleware/docsAuthMiddleware');
+const adminAuth = require('./middleware/adminDocsAuthMiddleware');
 const passport = require('./config/passport');
 const googleRoutes = require('./modules/auth/google.routes');
 
@@ -102,19 +103,19 @@ app.get('/docs/redoc', auth, redoc({
 app.get('/docs/swagger-json', (req, res) => res.json(swaggerSpec));
 
 // Swagger UI (Backoffice / Admin Developer Docs)
-app.use('/docs/admin-swagger', auth, swaggerUi.serveFiles(adminSwaggerSpec), swaggerUi.setup(adminSwaggerSpec, {
+app.use('/docs/admin-swagger', adminAuth, swaggerUi.serveFiles(adminSwaggerSpec), swaggerUi.setup(adminSwaggerSpec, {
     customCss: '.swagger-ui .topbar { display: none }',
     customSiteTitle: 'CraftedClimate Backoffice API Documentation',
 }));
 
 // Admin ReDoc
-app.get('/docs/admin-redoc', auth, redoc({
+app.get('/docs/admin-redoc', adminAuth, redoc({
     title: 'CraftedClimate Backoffice API Documentation',
     specUrl: '/docs/admin-swagger-json',
     redocOptions: { theme: { typography: { fontFamily: 'Inter, sans-serif' } } },
 }));
 
-app.get('/docs/admin-swagger-json', (req, res) => res.json(adminSwaggerSpec));
+app.get('/docs/admin-swagger-json', adminAuth, (req, res) => res.json(adminSwaggerSpec));
 
 const helmet = require('helmet');
 const { dynamicCorsMiddleware } = require('./middleware/dynamicCors');
