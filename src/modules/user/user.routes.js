@@ -128,6 +128,145 @@ router.post('/verify-otp', otpLimiter, userController.verifyOtp);
 
 /**
  * @swagger
+ * /api/auth/backoffice/login:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Initiate Backoffice Admin Login (MFA Step 1)
+ *     description: Authenticate administrative credentials (admin/supervisor/support) and trigger SMS OTP.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: "admin@example.com"
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 example: "Password123!"
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Login credentials verified, OTP sent via SMS
+ *       401:
+ *         description: Invalid credentials
+ *       403:
+ *         description: Unauthorized role
+ */
+router.post('/backoffice/login', userController.backofficeLogin);
+
+/**
+ * @swagger
+ * /api/auth/backoffice/verify-otp:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Verify Backoffice OTP (MFA Step 2)
+ *     description: Verify the SMS OTP code and generate final JWT tokens.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - tempSessionId
+ *               - otp
+ *             properties:
+ *               tempSessionId:
+ *                 type: string
+ *                 example: "a1b2c3d4e5f6..."
+ *                 description: The temporary session reference returned by the login step
+ *               otp:
+ *                 type: string
+ *                 example: "123456"
+ *                 description: 6-digit SMS OTP code
+ *     responses:
+ *       200:
+ *         description: Authentication successful, tokens generated
+ *       400:
+ *         description: Invalid OTP or session expired
+ */
+router.post('/backoffice/verify-otp', otpLimiter, userController.backofficeVerifyOtp);
+
+/**
+ * @swagger
+ * /api/auth/backoffice/forgot-password:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Initiate Backoffice Admin Password Reset Request
+ *     description: Submits a password reset request which requires peer-approval by another Platform Administrator.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: "admin@example.com"
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Reset request successfully submitted for approval
+ *       403:
+ *         description: Restrictive roles only
+ *       404:
+ *         description: User not found
+ */
+router.post('/backoffice/forgot-password', otpLimiter, userController.requestAdminPasswordReset);
+
+/**
+ * @swagger
+ * /api/auth/backoffice/reset-password:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Complete Backoffice Admin Password Reset
+ *     description: Reset backoffice user's password using the single-use token from the approved request.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - requestId
+ *               - token
+ *               - newPassword
+ *             properties:
+ *               requestId:
+ *                 type: string
+ *                 example: "req-pwd-12345"
+ *                 description: The password reset request ID
+ *               token:
+ *                 type: string
+ *                 example: "token-uuid-12345"
+ *                 description: The reset token sent via email
+ *               newPassword:
+ *                 type: string
+ *                 example: "NewPassword123!"
+ *                 format: password
+ *                 description: The new password to set
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *       400:
+ *         description: Invalid parameters, request not approved, expired or incorrect token
+ *       404:
+ *         description: Reset request or target user not found
+ */
+router.post('/backoffice/reset-password', otpLimiter, userController.backofficeResetPassword);
+
+/**
+ * @swagger
  * /api/auth/resend-otp:
  *   post:
  *     tags: [Authentication]

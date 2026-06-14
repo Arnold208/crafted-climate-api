@@ -15,6 +15,8 @@ const { sendEmail } = require('../../config/mail/nodemailer');
 const { containerClient, generateSignedUrl } = require('../../config/storage/storage');
 const { generateUserId } = require('../../utils/idGenerator');
 const { createAuditLog } = require('../../utils/auditLogger');
+const { client: redisClient } = require('../../config/redis/redis');
+const AdminPasswordResetRequest = require('../../models/user/AdminPasswordResetRequest');
 
 function normalizeContact(contact) {
     if (!contact) return contact;
@@ -888,6 +890,284 @@ class UserService {
             await user.save();
         }
         return user;
+    }
+
+    /**
+     * Initiate login specifically for the Backoffice Console (MFA step 1)
+     */
+    async initiateBackofficeLogin({ email, password }) {
+        if (!email || !password) {
+            throw new Error('Please provide email and password');
+        }
+
+        const user = await User.findOne({ email: email.toLowerCase() });
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        if (user.deletedAt) {
+            throw new Error('Account Suspended: Your account has been suspended. Please contact support.');
+        }
+
+        if (!user.verified) {
+            throw new Error('Account not verified');
+        }
+
+        const validPassword = await bcrypt.compare(password, user.password);
+        if (!validPassword) {
+            throw new Error('Invalid Password');
+        }
+
+        // Role check: must be admin, supervisor, or support
+        const validRoles = ['admin', 'supervisor', 'support'];
+        if (!validRoles.includes(user.role)) {
+            throw new Error('Unauthorized Access: Backoffice console is restricted to administrators.');
+        }
+
+        // Phone number check
+        if (!user.contact) {
+            throw new Error('MFA Error: No phone number configured for SMS authentication. Please contact a platform admin.');
+        }
+
+        // Generate 6-digit OTP
+        const otpCode = crypto.randomInt(100000, 999999);
+        const tempSessionId = crypto.randomBytes(32).toString('hex');
+
+        // Store temporary session in Redis (expires in 5 minutes)
+        const sessionData = {
+            userid: user.userid,
+            email: user.email,
+            otp: otpCode
+        };
+        await redisClient.set(`backoffice:mfa:${tempSessionId}`, JSON.stringify(sessionData), {
+            EX: 300 // 5 minutes
+        });
+
+        // Send SMS OTP
+        const message = `Your CraftedClimate Backoffice Console OTP is ${otpCode}. Expires in 5m.`;
+        try {
+            await sendSMS(user.contact, message);
+        } catch (err) {
+            console.error('[UserService] Backoffice SMS OTP Send Error:', err.message);
+        }
+
+        // Also mock email for debugging/local testing if needed
+        try {
+            await sendEmail(user.email, 'CraftedClimate - Backoffice OTP', message);
+        } catch (err) { /* ignore */ }
+
+        return {
+            tempSessionId,
+            message: 'MFA OTP successfully sent via SMS and Email.'
+        };
+    }
+
+    /**
+     * Verify Backoffice OTP (MFA step 2)
+     */
+    async verifyBackofficeOtp({ tempSessionId, otp }) {
+        if (!tempSessionId || !otp) {
+            throw new Error('Session ID and OTP are required');
+        }
+
+        const sessionKey = `backoffice:mfa:${tempSessionId}`;
+        const sessionDataStr = await redisClient.get(sessionKey);
+        if (!sessionDataStr) {
+            throw new Error('Session expired or invalid');
+        }
+
+        const sessionData = JSON.parse(sessionDataStr);
+        if (parseInt(otp) !== sessionData.otp) {
+            throw new Error('Invalid OTP');
+        }
+
+        const user = await User.findOne({ userid: sessionData.userid });
+        if (!user || user.deletedAt) {
+            throw new Error('User not found or suspended');
+        }
+
+        // Cleanup temp session
+        await redisClient.del(sessionKey);
+
+        // Auto-heal user context
+        await this._ensureUserContext(user);
+
+        // Generate JWT tokens
+        const payload = {
+            userid: user.userid,
+            email: user.email,
+            username: user.username,
+            platformRole: user.role,
+            organizations: user.organization,
+            currentOrganizationId: user.currentOrganizationId
+        };
+
+        const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
+            expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN,
+        });
+        const refreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
+            expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN
+        });
+
+        // Resolve subscription tier for frontend
+        let subscriptionTier = 'free';
+        let sub = null;
+        if (user.subscription) {
+            sub = await UserSubscription.findOne({ subscriptionId: user.subscription });
+        }
+        if (!sub || sub.status !== 'active') {
+            const activeSubs = await UserSubscription.find({
+                userid: user.userid,
+                status: 'active',
+                subscriptionScope: 'personal'
+            });
+            const activeSub = activeSubs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
+            if (activeSub) {
+                sub = activeSub;
+            }
+        }
+        if (sub && sub.status === 'active') {
+            const plan = await Plan.findOne({ planId: sub.planId });
+            if (plan) subscriptionTier = plan.name;
+        }
+
+        // Audit log
+        await createAuditLog({
+            action: 'USER_BACKOFFICE_LOGIN_SUCCESS',
+            userid: user.userid,
+            details: { email: user.email, role: user.role },
+            ipAddress: null
+        });
+
+        return {
+            message: 'Backoffice authentication successful',
+            accessToken,
+            refreshToken,
+            user: {
+                userid: user.userid,
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                verified: user.verified,
+                organization: user.organization,
+                personalOrganizationId: user.personalOrganizationId,
+                currentOrganizationId: user.currentOrganizationId,
+                subscription: user.subscription,
+                subscriptionTier
+            }
+        };
+    }
+
+    /**
+     * Initiate password reset request for Backoffice Admin (peer-approved)
+     */
+    async requestAdminPasswordReset({ email }) {
+        if (!email) {
+            throw new Error('Email is required');
+        }
+
+        const user = await User.findOne({ email: email.toLowerCase() });
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        const validRoles = ['admin', 'supervisor', 'support'];
+        if (!validRoles.includes(user.role)) {
+            throw new Error('Unauthorized Operation: This endpoint is restricted to backoffice administrators.');
+        }
+
+        // Check if there is already a pending request to prevent spam
+        const existingPending = await AdminPasswordResetRequest.findOne({ userid: user.userid, status: 'pending' });
+        if (existingPending) {
+            return {
+                message: 'A password reset request is already pending approval by a platform administrator.'
+            };
+        }
+
+        const requestId = 'req-pwd-' + crypto.randomBytes(16).toString('hex');
+        await AdminPasswordResetRequest.create({
+            requestId,
+            userid: user.userid,
+            email: user.email,
+            status: 'pending'
+        });
+
+        // Notify other admins via email (non-blocking)
+        const otherAdmins = await User.find({ role: 'admin', userid: { $ne: user.userid } });
+        const notificationText = `A backoffice password reset request has been initiated by ${user.email} (${user.userid}).\n\nPlease log into the Backoffice console to approve or reject this request (Request ID: ${requestId}).`;
+        
+        for (const admin of otherAdmins) {
+            try {
+                await sendEmail(admin.email, 'CraftedClimate - Admin Password Reset Approval Required', notificationText);
+            } catch (err) { /* ignore */ }
+        }
+
+        // Audit Log
+        await createAuditLog({
+            action: 'ADMIN_PASSWORD_RESET_REQUESTED',
+            userid: user.userid,
+            details: { requestId, email: user.email },
+            ipAddress: null
+        });
+
+        return {
+            message: 'Password reset request submitted successfully. A platform administrator must approve this request.'
+        };
+    }
+
+    /**
+     * Reset Backoffice Password using approved request token
+     */
+    async resetBackofficePassword({ requestId, token, newPassword }) {
+        if (!requestId || !token || !newPassword) {
+            throw new Error('Request ID, Token, and New Password are required');
+        }
+
+        const request = await AdminPasswordResetRequest.findOne({ requestId });
+        if (!request) {
+            throw new Error('Password reset request not found');
+        }
+
+        if (request.status !== 'approved') {
+            throw new Error(`Request is not authorized (current status: ${request.status})`);
+        }
+
+        if (request.token !== token) {
+            throw new Error('Invalid verification token');
+        }
+
+        if (request.tokenExpiresAt && new Date(request.tokenExpiresAt) < new Date()) {
+            throw new Error('Password reset token has expired');
+        }
+
+        const user = await User.findOne({ userid: request.userid });
+        if (!user) {
+            throw new Error('Target user not found');
+        }
+
+        // Hash and save new password
+        user.password = await bcrypt.hash(newPassword, 10);
+        user.mustChangePassword = false; // Reset the flag
+        await user.save();
+
+        // Clear token to make it single-use
+        request.token = null;
+        request.tokenExpiresAt = null;
+        request.status = 'completed'; // Mark as fully completed
+        await request.save();
+
+        // Audit log
+        await createAuditLog({
+            action: 'ADMIN_PASSWORD_RESET_COMPLETED',
+            userid: user.userid,
+            details: { requestId },
+            ipAddress: null
+        });
+
+        return {
+            success: true,
+            message: 'Password updated successfully. You can now log in with your new password.'
+        };
     }
 }
 

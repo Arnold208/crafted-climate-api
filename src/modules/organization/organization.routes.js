@@ -265,7 +265,7 @@ router.patch('/:orgId/update-user-role',
  *                 type: object
  *                 properties:
  *                   userid: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
- *                   role: { type: string, example: "editor" }
+ *                   role: { type: string, example: "editor", enum: ['org-admin', 'org-support', 'org-user', 'viewer', 'editor', 'admin', 'support', 'user'] }
  *                   user:
  *                     type: object
  *                     properties:

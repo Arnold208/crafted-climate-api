@@ -18,7 +18,6 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *         required: true
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -107,12 +106,10 @@ router.post('/', authenticateToken, orgApiKeyController.generateApiKey);
  *         required: true
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
- *           example: "pending"
  *           enum: [active, suspended, revoked]
  *     responses:
  *       200:
@@ -135,13 +132,11 @@ router.get('/', authenticateToken, orgApiKeyController.listOrgApiKeys);
  *         required: true
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *       - in: path
  *         name: keyId
  *         required: true
  *         schema:
  *           type: string
- *           example: "key-rotation-uuid"
  *     responses:
  *       200:
  *         description: API key rotated successfully
@@ -163,13 +158,11 @@ router.post('/:keyId/rotate', authenticateToken, orgApiKeyController.rotateApiKe
  *         required: true
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *       - in: path
  *         name: keyId
  *         required: true
  *         schema:
  *           type: string
- *           example: "key-rotation-uuid"
  *     requestBody:
  *       content:
  *         application/json:
@@ -200,24 +193,20 @@ router.delete('/:keyId', authenticateToken, orgApiKeyController.revokeApiKey);
  *         required: true
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *       - in: path
  *         name: keyId
  *         required: true
  *         schema:
  *           type: string
- *           example: "key-rotation-uuid"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
- *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
- *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:

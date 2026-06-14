@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminAuditController = require('./adminAudit.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -18,41 +18,35 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: page
  *         schema:
  *           type: integer
- *           example: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           example: 10
  *           default: 100
  *       - in: query
  *         name: action
  *         schema:
  *           type: string
- *           example: "device:register"
  *       - in: query
  *         name: userid
  *         schema:
  *           type: string
- *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
- *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
- *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
  *         description: Audit logs retrieved
  */
-router.get('/', authenticateToken, requirePlatformAdmin, adminAuditController.getAllLogs);
+router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminAuditController.getAllLogs);
 
 /**
  * @swagger
@@ -69,24 +63,21 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminAuditController.ge
  *         required: true
  *         schema:
  *           type: string
- *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
- *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
- *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
  *         description: User audit logs retrieved
  */
-router.get('/user/:userid', authenticateToken, requirePlatformAdmin, adminAuditController.getUserLogs);
+router.get('/user/:userid', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminAuditController.getUserLogs);
 
 /**
  * @swagger
@@ -103,24 +94,21 @@ router.get('/user/:userid', authenticateToken, requirePlatformAdmin, adminAuditC
  *         required: true
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
- *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
- *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
  *         description: Organization audit logs retrieved
  */
-router.get('/organization/:orgId', authenticateToken, requirePlatformAdmin, adminAuditController.getOrganizationLogs);
+router.get('/organization/:orgId', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminAuditController.getOrganizationLogs);
 
 /**
  * @swagger
@@ -160,6 +148,6 @@ router.get('/organization/:orgId', authenticateToken, requirePlatformAdmin, admi
  *       200:
  *         description: Export initiated
  */
-router.post('/export', authenticateToken, requirePlatformAdmin, adminAuditController.exportLogs);
+router.post('/export', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminAuditController.exportLogs);
 
 module.exports = router;

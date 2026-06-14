@@ -24,21 +24,14 @@ const MAX_RETRIES = 3;
 const RETRY_DELAYS = [100, 500, 2000]; // ms
 
 function auditLogger(req, res, next) {
-  // Skip logging for auth routes
-  const skipPaths = [
-    '/api/auth',
-    '/api/user/login',
-    '/api/user/signup'
-  ];
-
-  if (skipPaths.some(path => req.originalUrl.startsWith(path))) {
+  // Only log API requests or Google OAuth requests
+  const isApiRequest = req.originalUrl.startsWith('/api') || req.originalUrl.startsWith('/auth/google');
+  if (!isApiRequest) {
     return next();
   }
 
-  // GLOBAL POLICY: Only log state changes (POST, PUT, PATCH, DELETE)
-  // Ignore reads (GET, HEAD, OPTIONS)
-  const stateChangingMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
-  if (!stateChangingMethods.includes(req.method)) {
+  // Skip protocol-level request methods
+  if (req.method === 'OPTIONS' || req.method === 'HEAD') {
     return next();
   }
 
@@ -77,11 +70,19 @@ function auditLogger(req, res, next) {
   const organizationId = currentOrgId || req.currentOrgId || null;
   const partitionKey = organizationId || 'platform';
 
-  // Sanitize request body (remove sensitive fields)
+  // Sanitize request body and URL route path to redact credentials recursively
   let requestBody = {};
   if (req.body) {
     requestBody = sanitizeRequestBody(req.body);
   }
+  const sanitizedRoute = sanitizeUrl(req.originalUrl);
+
+  // Capture network/client details
+  const ipAddress = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || 'unknown';
+  const userAgent = req.headers['user-agent'] || 'unknown';
+  const origin = req.headers['origin'] || 'unknown';
+  const referer = req.headers['referer'] || 'unknown';
+  const host = req.headers['host'] || 'unknown';
 
   // Create base audit log entity
   const auditLog = {
@@ -91,18 +92,28 @@ function auditLogger(req, res, next) {
     userid: userid || 'anonymous',
     platformRole: platformRole || null,
     organizationId: organizationId,
-    route: req.originalUrl,
+    route: sanitizedRoute,
     method: req.method,
-    ipAddress: req.ip || req.connection.remoteAddress || 'unknown',
+    ipAddress,
+    userAgent,
+    origin,
+    referer,
+    host,
     requestBody: JSON.stringify(requestBody),
     permissionUsed: req.permissionUsed || null,
     meta: JSON.stringify(req.auditMeta || {})
   };
 
-  // Hook into response.on('finish') to capture status code
+  const startHrTime = process.hrtime();
+
+  // Hook into response.on('finish') to capture status code and latency duration
   res.on('finish', () => {
     auditLog.statusCode = res.statusCode;
     auditLog.allowed = res.statusCode < 400;
+
+    const elapsedHrTime = process.hrtime(startHrTime);
+    const durationMs = Math.round(elapsedHrTime[0] * 1000 + elapsedHrTime[1] / 1e6);
+    auditLog.durationMs = durationMs;
 
     // Write to Azure Table Storage with retry logic and fallback
     writeAuditLogWithRetry(auditLog).catch(err => {
@@ -175,21 +186,78 @@ function delay(ms) {
 }
 
 /**
- * Sanitize request body to remove sensitive fields
+ * Helper to identify sensitive credential or token keys
+ */
+function isSensitiveKey(key) {
+  if (typeof key !== 'string') return false;
+  const k = key.toLowerCase();
+  
+  // Substring matches for key parameters containing credentials
+  const sensitiveSubstrings = ['password', 'token', 'secret', 'key', 'auth', 'mfa', 'otp', 'pin', 'cvv', 'credential'];
+  if (sensitiveSubstrings.some(s => k.includes(s))) {
+    return true;
+  }
+  
+  // Exact matches for other credential fields (avoiding false positives like countryCode)
+  const sensitiveExact = ['code', 'signature', 'pass', 'pwd'];
+  if (sensitiveExact.includes(k)) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Recursively redacts credentials nested in object payloads and arrays
+ */
+function sanitizeValue(value) {
+  if (value === null || value === undefined) return value;
+  
+  if (Array.isArray(value)) {
+    return value.map(sanitizeValue);
+  }
+  
+  if (typeof value === 'object') {
+    const sanitized = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (isSensitiveKey(k)) {
+        sanitized[k] = '[REDACTED]';
+      } else {
+        sanitized[k] = sanitizeValue(v);
+      }
+    }
+    return sanitized;
+  }
+  
+  return value;
+}
+
+/**
+ * Redacts credentials present inside URL query strings
+ */
+function sanitizeUrl(urlStr) {
+  if (!urlStr) return urlStr;
+  try {
+    const urlParts = urlStr.split('?');
+    if (urlParts.length < 2) return urlStr;
+    const path = urlParts[0];
+    const searchParams = new URLSearchParams(urlParts[1]);
+    for (const [key, value] of searchParams.entries()) {
+      if (isSensitiveKey(key)) {
+        searchParams.set(key, '[REDACTED]');
+      }
+    }
+    return `${path}?${searchParams.toString()}`;
+  } catch (err) {
+    return urlStr;
+  }
+}
+
+/**
+ * Sanitize request body to remove sensitive fields recursively
  */
 function sanitizeRequestBody(body) {
-  const sensitive = ['password', 'token', 'secret', 'key', 'authorization'];
-  const sanitized = {};
-
-  for (const [key, value] of Object.entries(body)) {
-    if (sensitive.some(s => key.toLowerCase().includes(s))) {
-      sanitized[key] = '[REDACTED]';
-    } else {
-      sanitized[key] = value;
-    }
-  }
-
-  return sanitized;
+  return sanitizeValue(body);
 }
 
 /**

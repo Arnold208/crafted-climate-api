@@ -65,6 +65,11 @@ exports.googleCallback = (req, res) => {
             }
         }
 
+        if (decodedState.platform === 'api' || decodedState.platform === 'swagger') {
+            console.log(`🔌 API/Swagger OAuth Success: Returning JSON payload`);
+            return res.status(200).json(responseData);
+        }
+
         if (decodedState.platform === 'mobile') {
             const encodedData = encodeURIComponent(JSON.stringify(responseData));
             const deepLink = `crowdsense://auth-callback?data=${encodedData}`;
@@ -72,8 +77,24 @@ exports.googleCallback = (req, res) => {
             return res.redirect(302, deepLink);
         }
 
-        // For API usage (Postman/Web), JSON is correct.
-        res.status(200).json(responseData);
+        // Web Redirect Flow
+        const defaultAppUrl = process.env.APP_URL || 'https://app.craftedclimate.com';
+        const targetUrlStr = decodedState.redirectUri || defaultAppUrl;
+
+        try {
+            const redirectUrl = new URL(targetUrlStr);
+            redirectUrl.searchParams.set('accessToken', accessToken);
+            redirectUrl.searchParams.set('refreshToken', refreshToken);
+            redirectUrl.searchParams.set('userid', responseUser.userid);
+            redirectUrl.searchParams.set('username', responseUser.username);
+            redirectUrl.searchParams.set('email', responseUser.email);
+
+            console.log(`🌐 Web OAuth Success: Redirecting to client: ${redirectUrl.origin}`);
+            return res.redirect(302, redirectUrl.toString());
+        } catch (err) {
+            console.error('[GoogleAuth] Invalid target redirect URL, falling back to JSON response');
+            return res.status(200).json(responseData);
+        }
 
     } catch (error) {
         console.error('[GoogleAuth] Callback Controller Error:', error);

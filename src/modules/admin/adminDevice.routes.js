@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminDeviceController = require('./adminDevice.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -18,43 +18,37 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: page
  *         schema:
  *           type: integer
- *           example: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           example: 10
  *           default: 50
  *       - in: query
  *         name: search
  *         schema:
  *           type: string
- *           example: "search_example"
  *         description: Search by device ID, serial, or nickname
  *       - in: query
  *         name: organizationId
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
- *           example: "pending"
  *           enum: [online, offline]
  *       - in: query
  *         name: type
  *         schema:
  *           type: string
- *           example: "business"
  *     responses:
  *       200:
  *         description: Devices retrieved
  *       403:
  *         description: Forbidden
  */
-router.get('/', authenticateToken, requirePlatformAdmin, adminDeviceController.listDevices);
+router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminDeviceController.listDevices);
 
 /**
  * @swagger
@@ -85,7 +79,7 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminDeviceController.l
  *                 typeBreakdown:
  *                   type: object
  */
-router.get('/statistics', authenticateToken, requirePlatformAdmin, adminDeviceController.getStatistics);
+router.get('/statistics', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminDeviceController.getStatistics);
 
 /**
  * @swagger
@@ -102,14 +96,13 @@ router.get('/statistics', authenticateToken, requirePlatformAdmin, adminDeviceCo
  *         required: true
  *         schema:
  *           type: string
- *           example: "device-starter-uuid"
  *     responses:
  *       200:
  *         description: Device deleted
  *       404:
  *         description: Device not found
  */
-router.delete('/:deviceId', authenticateToken, requirePlatformAdmin, adminDeviceController.removeDevice);
+router.delete('/:deviceId', authenticateToken, authorizeRoles('admin'), adminDeviceController.removeDevice);
 
 /**
  * @swagger
@@ -125,14 +118,13 @@ router.delete('/:deviceId', authenticateToken, requirePlatformAdmin, adminDevice
  *         name: hours
  *         schema:
  *           type: integer
- *           example: 24
  *           default: 24
  *         description: Threshold in hours
  *     responses:
  *       200:
  *         description: Offline devices retrieved
  */
-router.get('/offline/list', authenticateToken, requirePlatformAdmin, adminDeviceController.getOfflineDevices);
+router.get('/offline/list', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminDeviceController.getOfflineDevices);
 
 /**
  * @swagger
@@ -149,7 +141,6 @@ router.get('/offline/list', authenticateToken, requirePlatformAdmin, adminDevice
  *         required: true
  *         schema:
  *           type: string
- *           example: "device-starter-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -170,6 +161,6 @@ router.get('/offline/list', authenticateToken, requirePlatformAdmin, adminDevice
  *       400:
  *         description: Invalid organization
  */
-router.post('/:deviceId/reassign', authenticateToken, requirePlatformAdmin, adminDeviceController.reassignDevice);
+router.post('/:deviceId/reassign', authenticateToken, authorizeRoles('admin', 'supervisor'), adminDeviceController.reassignDevice);
 
 module.exports = router;

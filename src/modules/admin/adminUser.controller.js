@@ -176,6 +176,50 @@ class AdminUserController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+
+    /**
+     * List admin password reset requests
+     */
+    async listPasswordResetRequests(req, res) {
+        try {
+            const { status } = req.query;
+            const requests = await adminUserService.listPasswordResetRequests(status);
+            res.status(200).json({ success: true, data: requests });
+        } catch (error) {
+            console.error('[AdminUserController] List password reset requests error:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
+     * Approve admin password reset request
+     */
+    async approvePasswordResetRequest(req, res) {
+        try {
+            const { requestId } = req.params;
+            const adminId = req.user.userid;
+            const result = await adminUserService.approvePasswordResetRequest(requestId, adminId);
+            res.status(200).json(result);
+        } catch (error) {
+            console.error('[AdminUserController] Approve password reset error:', error);
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
+     * Reject admin password reset request
+     */
+    async rejectPasswordResetRequest(req, res) {
+        try {
+            const { requestId } = req.params;
+            const adminId = req.user.userid;
+            const result = await adminUserService.rejectPasswordResetRequest(requestId, adminId);
+            res.status(200).json(result);
+        } catch (error) {
+            console.error('[AdminUserController] Reject password reset error:', error);
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
 }
 
 module.exports = new AdminUserController();

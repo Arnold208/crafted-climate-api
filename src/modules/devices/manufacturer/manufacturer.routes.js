@@ -138,7 +138,7 @@ router.patch('/update-note-uuid', verifyApiKeyOrTokenAdmin, manufacturerControll
  *                   model: { type: string, example: "ENV" }
  *                   sku: { type: string, example: "sku_example" }
  *                   mac: { type: string, example: "mac_example" }
- *                   status: { type: string, example: "pending" }
+ *                   status: { type: string, example: "MANUFACTURED", enum: [MANUFACTURED, ASSIGNED, REGISTERED] }
  *       403:
  *         description: Forbidden (Admin/Supervisor only)
  */

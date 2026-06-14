@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminTicketController = require('./adminTicket.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -18,50 +18,42 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: page
  *         schema:
  *           type: integer
- *           example: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           example: 10
  *       - in: query
  *         name: organizationId
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
- *           example: "pending"
  *           enum: [open, in_progress, waiting_customer, resolved, closed]
  *       - in: query
  *         name: priority
  *         schema:
  *           type: string
- *           example: "high"
  *           enum: [low, medium, high, urgent]
  *       - in: query
  *         name: assignedTo
  *         schema:
  *           type: string
- *           example: "assignedTo_example"
  *       - in: query
  *         name: category
  *         schema:
  *           type: string
- *           example: "hardware"
  *           enum: [technical, billing, feature_request, bug, account, other]
  *       - in: query
  *         name: search
  *         schema:
  *           type: string
- *           example: "search_example"
  *     responses:
  *       200:
  *         description: Tickets retrieved
  */
-router.get('/', authenticateToken, requirePlatformAdmin, adminTicketController.listAllTickets);
+router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminTicketController.listAllTickets);
 
 /**
  * @swagger
@@ -78,12 +70,11 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminTicketController.l
  *         required: true
  *         schema:
  *           type: string
- *           example: "ticket-9b1deb4d-3b7d"
  *     responses:
  *       200:
  *         description: Ticket details retrieved
  */
-router.get('/:ticketId', authenticateToken, requirePlatformAdmin, adminTicketController.getTicketDetails);
+router.get('/:ticketId', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminTicketController.getTicketDetails);
 
 /**
  * @swagger
@@ -100,7 +91,6 @@ router.get('/:ticketId', authenticateToken, requirePlatformAdmin, adminTicketCon
  *         required: true
  *         schema:
  *           type: string
- *           example: "ticket-9b1deb4d-3b7d"
  *     requestBody:
  *       required: true
  *       content:
@@ -119,7 +109,7 @@ router.get('/:ticketId', authenticateToken, requirePlatformAdmin, adminTicketCon
  *       200:
  *         description: Ticket assigned
  */
-router.patch('/:ticketId/assign', authenticateToken, requirePlatformAdmin, adminTicketController.assignTicket);
+router.patch('/:ticketId/assign', authenticateToken, authorizeRoles('admin', 'supervisor'), adminTicketController.assignTicket);
 
 /**
  * @swagger
@@ -136,7 +126,6 @@ router.patch('/:ticketId/assign', authenticateToken, requirePlatformAdmin, admin
  *         required: true
  *         schema:
  *           type: string
- *           example: "ticket-9b1deb4d-3b7d"
  *     requestBody:
  *       required: true
  *       content:
@@ -160,7 +149,7 @@ router.patch('/:ticketId/assign', authenticateToken, requirePlatformAdmin, admin
  *       201:
  *         description: Reply added
  */
-router.post('/:ticketId/reply', authenticateToken, requirePlatformAdmin, adminTicketController.replyToTicket);
+router.post('/:ticketId/reply', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminTicketController.replyToTicket);
 
 /**
  * @swagger
@@ -177,7 +166,6 @@ router.post('/:ticketId/reply', authenticateToken, requirePlatformAdmin, adminTi
  *         required: true
  *         schema:
  *           type: string
- *           example: "ticket-9b1deb4d-3b7d"
  *     requestBody:
  *       required: true
  *       content:
@@ -197,7 +185,7 @@ router.post('/:ticketId/reply', authenticateToken, requirePlatformAdmin, adminTi
  *       200:
  *         description: Status updated
  */
-router.patch('/:ticketId/status', authenticateToken, requirePlatformAdmin, adminTicketController.updateTicketStatus);
+router.patch('/:ticketId/status', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminTicketController.updateTicketStatus);
 
 /**
  * @swagger
@@ -214,12 +202,11 @@ router.patch('/:ticketId/status', authenticateToken, requirePlatformAdmin, admin
  *         required: true
  *         schema:
  *           type: string
- *           example: "ticket-9b1deb4d-3b7d"
  *     responses:
  *       200:
  *         description: Ticket closed
  */
-router.patch('/:ticketId/close', authenticateToken, requirePlatformAdmin, adminTicketController.closeTicket);
+router.patch('/:ticketId/close', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminTicketController.closeTicket);
 
 /**
  * @swagger
@@ -235,28 +222,24 @@ router.patch('/:ticketId/close', authenticateToken, requirePlatformAdmin, adminT
  *         name: organizationId
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *       - in: query
  *         name: assignedTo
  *         schema:
  *           type: string
- *           example: "assignedTo_example"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
- *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
- *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
  *         description: Statistics retrieved
  */
-router.get('/statistics/summary', authenticateToken, requirePlatformAdmin, adminTicketController.getTicketStatistics);
+router.get('/statistics/summary', authenticateToken, authorizeRoles('admin', 'supervisor'), adminTicketController.getTicketStatistics);
 
 module.exports = router;

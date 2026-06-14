@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminOrgController = require('./adminOrganization.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -18,43 +18,37 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: page
  *         schema:
  *           type: integer
- *           example: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           example: 10
  *           default: 50
  *       - in: query
  *         name: search
  *         schema:
  *           type: string
- *           example: "search_example"
  *         description: Search by organization name
  *       - in: query
  *         name: type
  *         schema:
  *           type: string
- *           example: "business"
  *           enum: [personal, business, non-profit]
  *       - in: query
  *         name: verified
  *         schema:
  *           type: boolean
- *           example: true
  *       - in: query
  *         name: partner
  *         schema:
  *           type: boolean
- *           example: true
  *     responses:
  *       200:
  *         description: Organizations retrieved
  *       403:
  *         description: Forbidden
  */
-router.get('/', authenticateToken, requirePlatformAdmin, adminOrgController.listOrganizations);
+router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminOrgController.listOrganizations);
 
 /**
  * @swagger
@@ -71,14 +65,13 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminOrgController.list
  *         required: true
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *     responses:
  *       200:
  *         description: Organization details retrieved
  *       404:
  *         description: Organization not found
  */
-router.get('/:orgId', authenticateToken, requirePlatformAdmin, adminOrgController.getOrganizationDetails);
+router.get('/:orgId', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminOrgController.getOrganizationDetails);
 
 /**
  * @swagger
@@ -95,14 +88,13 @@ router.get('/:orgId', authenticateToken, requirePlatformAdmin, adminOrgControlle
  *         required: true
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *     responses:
  *       200:
  *         description: Organization deleted
  *       400:
  *         description: Cannot delete (has members/devices or is personal org)
  */
-router.delete('/:orgId', authenticateToken, requirePlatformAdmin, adminOrgController.deleteOrganization);
+router.delete('/:orgId', authenticateToken, authorizeRoles('admin'), adminOrgController.deleteOrganization);
 
 /**
  * @swagger
@@ -119,7 +111,6 @@ router.delete('/:orgId', authenticateToken, requirePlatformAdmin, adminOrgContro
  *         required: true
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -141,7 +132,7 @@ router.delete('/:orgId', authenticateToken, requirePlatformAdmin, adminOrgContro
  *       400:
  *         description: Cannot suspend personal organization
  */
-router.post('/:orgId/suspend', authenticateToken, requirePlatformAdmin, adminOrgController.suspendOrganization);
+router.post('/:orgId/suspend', authenticateToken, authorizeRoles('admin', 'supervisor'), adminOrgController.suspendOrganization);
 
 /**
  * @swagger
@@ -158,14 +149,13 @@ router.post('/:orgId/suspend', authenticateToken, requirePlatformAdmin, adminOrg
  *         required: true
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *     responses:
  *       200:
  *         description: Organization restored
  *       400:
  *         description: Organization not suspended
  */
-router.post('/:orgId/restore', authenticateToken, requirePlatformAdmin, adminOrgController.restoreOrganization);
+router.post('/:orgId/restore', authenticateToken, authorizeRoles('admin', 'supervisor'), adminOrgController.restoreOrganization);
 
 /**
  * @swagger
@@ -182,14 +172,13 @@ router.post('/:orgId/restore', authenticateToken, requirePlatformAdmin, adminOrg
  *         required: true
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *     responses:
  *       200:
  *         description: Members retrieved
  *       404:
  *         description: Organization not found
  */
-router.get('/:orgId/members', authenticateToken, requirePlatformAdmin, adminOrgController.getMembers);
+router.get('/:orgId/members', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminOrgController.getMembers);
 
 /**
  * @swagger
@@ -206,7 +195,6 @@ router.get('/:orgId/members', authenticateToken, requirePlatformAdmin, adminOrgC
  *         required: true
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -227,6 +215,6 @@ router.get('/:orgId/members', authenticateToken, requirePlatformAdmin, adminOrgC
  *       400:
  *         description: New owner must be a member
  */
-router.post('/:orgId/transfer-owner', authenticateToken, requirePlatformAdmin, adminOrgController.transferOwnership);
+router.post('/:orgId/transfer-owner', authenticateToken, authorizeRoles('admin', 'supervisor'), adminOrgController.transferOwnership);
 
 module.exports = router;

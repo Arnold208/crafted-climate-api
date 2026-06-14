@@ -39,7 +39,6 @@ const fileUpload = require('../../utils/fileUpload');
  *         required: true
  *         schema:
  *           type: string
- *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -91,7 +90,6 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
- *           example: org-starter-uuid
  *     responses:
  *       200:
  *         description: Name history retrieved successfully
@@ -123,7 +121,6 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
- *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -173,7 +170,6 @@ router.post(
  *         required: true
  *         schema:
  *           type: string
- *           example: org-starter-uuid
  *     responses:
  *       200:
  *         description: Verification details submitted successfully
@@ -206,7 +202,6 @@ router.post(
  *         required: true
  *         schema:
  *           type: string
- *           example: org-starter-uuid
  *     responses:
  *       200:
  *         description: Partner application submitted successfully
@@ -243,7 +238,6 @@ router.post(
  *         schema:
  *           type: string
  *           enum: [pending, approved, rejected, all]
- *           example: pending
  *     responses:
  *       200:
  *         description: Type change requests retrieved successfully
@@ -273,7 +267,6 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
- *           example: org-starter-uuid
  *     responses:
  *       200:
  *         description: Type change request approved successfully
@@ -305,7 +298,6 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
- *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -349,7 +341,6 @@ router.put(
  *         schema:
  *           type: string
  *           enum: [pending, approved, rejected, all]
- *           example: pending
  *     responses:
  *       200:
  *         description: Verification requests retrieved successfully
@@ -379,7 +370,6 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
- *           example: org-starter-uuid
  *     responses:
  *       200:
  *         description: Business verification approved successfully
@@ -411,7 +401,6 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
- *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -455,7 +444,6 @@ router.put(
  *         schema:
  *           type: string
  *           enum: [pending, approved, rejected, all]
- *           example: pending
  *     responses:
  *       200:
  *         description: Partner applications retrieved successfully
@@ -485,7 +473,6 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
- *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -530,7 +517,6 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
- *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -574,7 +560,6 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
- *           example: org-starter-uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -718,7 +703,6 @@ router.post(
  *         required: true
  *         schema:
  *           type: string
- *           example: req-8f9a2b3c-4d5e-6f7g-8h9i-0j1k2l3m4n5o
  *     responses:
  *       200:
  *         description: Payment initialized successfully. Returns new checkout link.
@@ -759,7 +743,6 @@ router.post(
  *         schema:
  *           type: string
  *           enum: [pending, approved, rejected, all]
- *           example: pending
  *     responses:
  *       200:
  *         description: List of requests
@@ -787,7 +770,6 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
- *           example: req-8f9a2b3c-4d5e-6f7g-8h9i-0j1k2l3m4n5o
  *     responses:
  *       200:
  *         description: Request details
@@ -815,7 +797,6 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
- *           example: req-8f9a2b3c-4d5e-6f7g-8h9i-0j1k2l3m4n5o
  *     responses:
  *       200:
  *         description: Organization created successfully
@@ -843,7 +824,6 @@ router.put(
  *         required: true
  *         schema:
  *           type: string
- *           example: req-8f9a2b3c-4d5e-6f7g-8h9i-0j1k2l3m4n5o
  *     requestBody:
  *       required: true
  *       content:

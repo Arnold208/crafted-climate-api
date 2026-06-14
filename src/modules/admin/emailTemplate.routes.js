@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const emailTemplateController = require('./emailTemplate.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -18,18 +18,16 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: category
  *         schema:
  *           type: string
- *           example: "hardware"
  *           enum: [auth, billing, support, marketing, system, notification]
  *       - in: query
  *         name: active
  *         schema:
  *           type: boolean
- *           example: true
  *     responses:
  *       200:
  *         description: Templates retrieved
  */
-router.get('/', authenticateToken, requirePlatformAdmin, emailTemplateController.listTemplates);
+router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor'), emailTemplateController.listTemplates);
 
 /**
  * @swagger
@@ -46,12 +44,11 @@ router.get('/', authenticateToken, requirePlatformAdmin, emailTemplateController
  *         required: true
  *         schema:
  *           type: string
- *           example: "billing-alert-template"
  *     responses:
  *       200:
  *         description: Template retrieved
  */
-router.get('/:slug', authenticateToken, requirePlatformAdmin, emailTemplateController.getTemplate);
+router.get('/:slug', authenticateToken, authorizeRoles('admin', 'supervisor'), emailTemplateController.getTemplate);
 
 /**
  * @swagger
@@ -121,7 +118,7 @@ router.get('/:slug', authenticateToken, requirePlatformAdmin, emailTemplateContr
  *       201:
  *         description: Template created
  */
-router.post('/', authenticateToken, requirePlatformAdmin, emailTemplateController.createTemplate);
+router.post('/', authenticateToken, authorizeRoles('admin'), emailTemplateController.createTemplate);
 
 /**
  * @swagger
@@ -138,7 +135,6 @@ router.post('/', authenticateToken, requirePlatformAdmin, emailTemplateControlle
  *         required: true
  *         schema:
  *           type: string
- *           example: "billing-alert-template"
  *     requestBody:
  *       content:
  *         application/json:
@@ -164,7 +160,7 @@ router.post('/', authenticateToken, requirePlatformAdmin, emailTemplateControlle
  *       200:
  *         description: Template updated
  */
-router.patch('/:slug', authenticateToken, requirePlatformAdmin, emailTemplateController.updateTemplate);
+router.patch('/:slug', authenticateToken, authorizeRoles('admin'), emailTemplateController.updateTemplate);
 
 /**
  * @swagger
@@ -181,12 +177,11 @@ router.patch('/:slug', authenticateToken, requirePlatformAdmin, emailTemplateCon
  *         required: true
  *         schema:
  *           type: string
- *           example: "billing-alert-template"
  *     responses:
  *       200:
  *         description: Template deleted
  */
-router.delete('/:slug', authenticateToken, requirePlatformAdmin, emailTemplateController.deleteTemplate);
+router.delete('/:slug', authenticateToken, authorizeRoles('admin'), emailTemplateController.deleteTemplate);
 
 /**
  * @swagger
@@ -203,7 +198,6 @@ router.delete('/:slug', authenticateToken, requirePlatformAdmin, emailTemplateCo
  *         required: true
  *         schema:
  *           type: string
- *           example: "billing-alert-template"
  *     requestBody:
  *       content:
  *         application/json:
@@ -220,7 +214,7 @@ router.delete('/:slug', authenticateToken, requirePlatformAdmin, emailTemplateCo
  *       200:
  *         description: Template rendered
  */
-router.post('/:slug/preview', authenticateToken, requirePlatformAdmin, emailTemplateController.previewTemplate);
+router.post('/:slug/preview', authenticateToken, authorizeRoles('admin', 'supervisor'), emailTemplateController.previewTemplate);
 
 /**
  * @swagger
@@ -237,7 +231,6 @@ router.post('/:slug/preview', authenticateToken, requirePlatformAdmin, emailTemp
  *         required: true
  *         schema:
  *           type: string
- *           example: "billing-alert-template"
  *     requestBody:
  *       required: true
  *       content:
@@ -261,7 +254,7 @@ router.post('/:slug/preview', authenticateToken, requirePlatformAdmin, emailTemp
  *       200:
  *         description: Test email sent
  */
-router.post('/:slug/test', authenticateToken, requirePlatformAdmin, emailTemplateController.sendTestEmail);
+router.post('/:slug/test', authenticateToken, authorizeRoles('admin'), emailTemplateController.sendTestEmail);
 
 /**
  * @swagger
@@ -276,7 +269,7 @@ router.post('/:slug/test', authenticateToken, requirePlatformAdmin, emailTemplat
  *       200:
  *         description: Statistics retrieved
  */
-router.get('/stats/summary', authenticateToken, requirePlatformAdmin, emailTemplateController.getStatistics);
+router.get('/stats/summary', authenticateToken, authorizeRoles('admin', 'supervisor'), emailTemplateController.getStatistics);
 
 /**
  * @swagger
@@ -291,6 +284,6 @@ router.get('/stats/summary', authenticateToken, requirePlatformAdmin, emailTempl
  *       200:
  *         description: Default templates created
  */
-router.post('/initialize/defaults', authenticateToken, requirePlatformAdmin, emailTemplateController.initializeDefaults);
+router.post('/initialize/defaults', authenticateToken, authorizeRoles('admin'), emailTemplateController.initializeDefaults);
 
 module.exports = router;

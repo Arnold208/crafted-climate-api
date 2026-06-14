@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const announcementController = require('./announcement.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -57,7 +57,7 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *       201:
  *         description: Announcement created
  */
-router.post('/', authenticateToken, requirePlatformAdmin, announcementController.createAnnouncement);
+router.post('/', authenticateToken, authorizeRoles('admin', 'supervisor'), announcementController.createAnnouncement);
 
 /**
  * @swagger
@@ -73,24 +73,21 @@ router.post('/', authenticateToken, requirePlatformAdmin, announcementController
  *         name: active
  *         schema:
  *           type: boolean
- *           example: true
  *       - in: query
  *         name: type
  *         schema:
  *           type: string
- *           example: "business"
  *           enum: [info, warning, success, error, maintenance]
  *       - in: query
  *         name: targetAudience
  *         schema:
  *           type: string
- *           example: "targetAudience_example"
  *           enum: [all, admins, users, organizations]
  *     responses:
  *       200:
  *         description: Announcements retrieved
  */
-router.get('/', authenticateToken, requirePlatformAdmin, announcementController.listAnnouncements);
+router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), announcementController.listAnnouncements);
 
 /**
  * @swagger
@@ -107,7 +104,6 @@ router.get('/', authenticateToken, requirePlatformAdmin, announcementController.
  *         required: true
  *         schema:
  *           type: string
- *           example: "ann-12345"
  *     requestBody:
  *       content:
  *         application/json:
@@ -127,7 +123,7 @@ router.get('/', authenticateToken, requirePlatformAdmin, announcementController.
  *       200:
  *         description: Announcement updated
  */
-router.patch('/:announcementId', authenticateToken, requirePlatformAdmin, announcementController.updateAnnouncement);
+router.patch('/:announcementId', authenticateToken, authorizeRoles('admin', 'supervisor'), announcementController.updateAnnouncement);
 
 /**
  * @swagger
@@ -144,11 +140,10 @@ router.patch('/:announcementId', authenticateToken, requirePlatformAdmin, announ
  *         required: true
  *         schema:
  *           type: string
- *           example: "ann-12345"
  *     responses:
  *       200:
  *         description: Announcement deleted
  */
-router.delete('/:announcementId', authenticateToken, requirePlatformAdmin, announcementController.deleteAnnouncement);
+router.delete('/:announcementId', authenticateToken, authorizeRoles('admin', 'supervisor'), announcementController.deleteAnnouncement);
 
 module.exports = router;

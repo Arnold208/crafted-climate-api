@@ -1,12 +1,13 @@
 const User = require('../models/user/userModel');
 const Organization = require('../models/organization/organizationModel');
 const UserSubscription = require('../models/subscriptions/UserSubscription');
-// const AdminActivity = require('../models/admin/adminActivity'); // Removed: Module does not exist and is unused
-// const AdminActivity = require('../models/admin/adminActivity'); // Removed: Module does not exist and is unused
 const RegisterDevice = require('../models/devices/registerDevice');
 const { createAuditLog } = require('../utils/auditLogger');
 const emailTemplateService = require('./emailTemplate.service');
 const adminAuditService = require('./adminAudit.service');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const AdminPasswordResetRequest = require('../models/user/AdminPasswordResetRequest');
 
 /**
  * Admin User Service
@@ -45,7 +46,7 @@ class AdminUserService {
         }
 
         if (platformRole) {
-            query.role = platformRole;
+            query.platformRole = platformRole;
         }
 
         if (verified !== undefined) {
@@ -158,6 +159,7 @@ class AdminUserService {
             throw new Error('Cannot demote yourself');
         }
 
+        user.platformRole = newRole;
         user.role = newRole;
         await user.save();
 
@@ -331,6 +333,106 @@ class AdminUserService {
             userid,
             activities: result.logs,
             message: `Retrieved ${result.logs.length} activity records`
+        };
+    }
+
+    /**
+     * List admin password reset requests
+     */
+    async listPasswordResetRequests(status) {
+        const query = {};
+        if (status) {
+            query.status = status;
+        }
+        return await AdminPasswordResetRequest.find(query).sort({ createdAt: -1 }).lean();
+    }
+
+    /**
+     * Approve admin password reset request
+     */
+    async approvePasswordResetRequest(requestId, adminId) {
+        const request = await AdminPasswordResetRequest.findOne({ requestId });
+        if (!request) {
+            throw new Error('Password reset request not found');
+        }
+
+        if (request.status !== 'pending') {
+            throw new Error(`Request has already been ${request.status}`);
+        }
+
+        const targetUser = await User.findOne({ userid: request.userid });
+        if (!targetUser) {
+            throw new Error('Target user not found');
+        }
+
+        // Generate secure reset token
+        const token = crypto.randomBytes(32).toString('hex');
+        const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+        // Send reset link email
+        const resetLink = `${process.env.APP_URL || 'http://localhost:3000'}/backoffice/reset-password?token=${token}&requestId=${requestId}`;
+        const message = `Your password reset request has been approved. Please click the link below to securely set your new password:\n\n${resetLink}\n\nThis link will expire in 24 hours.`;
+        
+        try {
+            const { sendEmail } = require('../config/mail/nodemailer');
+            await sendEmail(targetUser.email, 'CraftedClimate - Backoffice Password Reset Approved', message);
+        } catch (err) {
+            console.error('[AdminUserService] Send reset link email error:', err.message);
+        }
+
+        // Update request state
+        request.status = 'approved';
+        request.resolvedAt = new Date();
+        request.resolvedBy = adminId;
+        request.token = token;
+        request.tokenExpiresAt = tokenExpiresAt;
+        await request.save();
+
+        // Audit log
+        await createAuditLog({
+            action: 'ADMIN_APPROVED_PASSWORD_RESET',
+            userid: adminId,
+            targetUserId: request.userid,
+            details: { requestId },
+            ipAddress: null
+        });
+
+        return {
+            success: true,
+            message: 'Password reset request approved successfully. Reset link has been sent to the target user via email.'
+        };
+    }
+
+    /**
+     * Reject admin password reset request
+     */
+    async rejectPasswordResetRequest(requestId, adminId) {
+        const request = await AdminPasswordResetRequest.findOne({ requestId });
+        if (!request) {
+            throw new Error('Password reset request not found');
+        }
+
+        if (request.status !== 'pending') {
+            throw new Error(`Request has already been ${request.status}`);
+        }
+
+        request.status = 'rejected';
+        request.resolvedAt = new Date();
+        request.resolvedBy = adminId;
+        await request.save();
+
+        // Audit log
+        await createAuditLog({
+            action: 'ADMIN_REJECTED_PASSWORD_RESET',
+            userid: adminId,
+            targetUserId: request.userid,
+            details: { requestId },
+            ipAddress: null
+        });
+
+        return {
+            success: true,
+            message: 'Password reset request rejected.'
         };
     }
 }

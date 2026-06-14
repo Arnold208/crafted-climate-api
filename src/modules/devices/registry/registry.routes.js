@@ -42,7 +42,8 @@ const checkFeatureAccess = require('../../../middleware/subscriptions/checkFeatu
  *         name: status
  *         schema:
  *           type: string
- *           example: "pending"
+ *           example: "online"
+ *           enum: [online, offline]
  *         description: Filter by status (online/offline)
  *       - in: query
  *         name: online
@@ -77,7 +78,8 @@ const checkFeatureAccess = require('../../../middleware/subscriptions/checkFeatu
  *                         example: "business"
  *                       status:
  *                         type: string
- *                         example: "pending"
+ *                         example: "online"
+ *                         enum: [online, offline]
  *                       image:
  *                         type: string
  *                         example: "image_example"
@@ -505,7 +507,7 @@ router.delete('/:userid/device/:auid/collaborators',
  *                 type: object
  *                 properties:
  *                   userid: { type: string, example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
- *                   role: { type: string, example: "editor" }
+ *                   role: { type: string, example: "editor", enum: ['device-admin', 'device-support', 'device-user', 'viewer', 'editor', 'admin', 'support', 'user'] }
  *                   permissions: { type: array, example: ["org.devices.view", "org.telemetry.read"], items: { type: string } }
  *                   addedAt: { type: string, example: "2026-06-12T11:29:56Z", format: date-time }
  *                   user:

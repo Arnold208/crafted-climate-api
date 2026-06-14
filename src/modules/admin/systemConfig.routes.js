@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const systemConfigController = require('./systemConfig.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -19,7 +19,7 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *       403:
  *         description: Forbidden
  */
-router.get('/', authenticateToken, requirePlatformAdmin, systemConfigController.getConfig);
+router.get('/', authenticateToken, authorizeRoles('admin'), systemConfigController.getConfig);
 
 /**
  * @swagger
@@ -57,7 +57,7 @@ router.get('/', authenticateToken, requirePlatformAdmin, systemConfigController.
  *       200:
  *         description: Features updated
  */
-router.patch('/features', authenticateToken, requirePlatformAdmin, systemConfigController.updateFeatures);
+router.patch('/features', authenticateToken, authorizeRoles('admin'), systemConfigController.updateFeatures);
 
 /**
  * @swagger
@@ -96,7 +96,7 @@ router.patch('/features', authenticateToken, requirePlatformAdmin, systemConfigC
  *       200:
  *         description: Rate limits updated
  */
-router.patch('/rate-limits', authenticateToken, requirePlatformAdmin, systemConfigController.updateRateLimits);
+router.patch('/rate-limits', authenticateToken, authorizeRoles('admin'), systemConfigController.updateRateLimits);
 
 /**
  * @swagger
@@ -129,7 +129,7 @@ router.patch('/rate-limits', authenticateToken, requirePlatformAdmin, systemConf
  *       200:
  *         description: Maintenance mode updated
  */
-router.patch('/maintenance', authenticateToken, requirePlatformAdmin, systemConfigController.toggleMaintenance);
+router.patch('/maintenance', authenticateToken, authorizeRoles('admin'), systemConfigController.toggleMaintenance);
 
 /**
  * @swagger
@@ -144,6 +144,6 @@ router.patch('/maintenance', authenticateToken, requirePlatformAdmin, systemConf
  *       200:
  *         description: Change history retrieved
  */
-router.get('/history', authenticateToken, requirePlatformAdmin, systemConfigController.getChangeHistory);
+router.get('/history', authenticateToken, authorizeRoles('admin'), systemConfigController.getChangeHistory);
 
 module.exports = router;

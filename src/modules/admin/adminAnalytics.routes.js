@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminAnalyticsController = require('./adminAnalytics.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -18,13 +18,11 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: startDate
  *         schema:
  *           type: string
- *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
- *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
@@ -47,7 +45,7 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *                   type: array
  *                   example: ["example_value"]
  */
-router.get('/users', authenticateToken, requirePlatformAdmin, adminAnalyticsController.getUserGrowth);
+router.get('/users', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminAnalyticsController.getUserGrowth);
 
 /**
  * @swagger
@@ -63,19 +61,17 @@ router.get('/users', authenticateToken, requirePlatformAdmin, adminAnalyticsCont
  *         name: startDate
  *         schema:
  *           type: string
- *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
- *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
  *         description: Device metrics retrieved
  */
-router.get('/devices', authenticateToken, requirePlatformAdmin, adminAnalyticsController.getDeviceUsage);
+router.get('/devices', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminAnalyticsController.getDeviceUsage);
 
 /**
  * @swagger
@@ -110,7 +106,7 @@ router.get('/devices', authenticateToken, requirePlatformAdmin, adminAnalyticsCo
  *                   type: integer
  *                   example: 1
  */
-router.get('/organizations', authenticateToken, requirePlatformAdmin, adminAnalyticsController.getOrganizationMetrics);
+router.get('/organizations', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminAnalyticsController.getOrganizationMetrics);
 
 /**
  * @swagger
@@ -126,19 +122,17 @@ router.get('/organizations', authenticateToken, requirePlatformAdmin, adminAnaly
  *         name: startDate
  *         schema:
  *           type: string
- *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
- *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
  *         description: API usage stats retrieved
  */
-router.get('/api-usage', authenticateToken, requirePlatformAdmin, adminAnalyticsController.getAPIUsage);
+router.get('/api-usage', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminAnalyticsController.getAPIUsage);
 
 /**
  * @swagger
@@ -166,6 +160,6 @@ router.get('/api-usage', authenticateToken, requirePlatformAdmin, adminAnalytics
  *                 subscriptions:
  *                   type: object
  */
-router.get('/overview', authenticateToken, requirePlatformAdmin, adminAnalyticsController.getPlatformOverview);
+router.get('/overview', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminAnalyticsController.getPlatformOverview);
 
 module.exports = router;

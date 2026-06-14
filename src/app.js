@@ -9,6 +9,7 @@ dotenv.config({ path: path.resolve(__dirname, `../${envFile}`) });
 const redoc = require('redoc-express');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger/swaggerOptions');
+const adminSwaggerSpec = require('./config/swagger/adminSwaggerOptions');
 
 const basicAuth = require('express-basic-auth');
 
@@ -86,11 +87,7 @@ app.get('/docs', auth, (req, res) => {
 });
 
 // Swagger UI
-app.use('/docs/swagger', auth, swaggerUi.serve);
-// Note: swaggerSpec needs to be checked if it relies on existing routes. 
-// If swaggerSpec scans 'routes/**/*.js', it will find old files.
-// Ideally usage of swagger-jsdoc would scan 'src/**/*.js' too.
-app.get('/docs/swagger', auth, swaggerUi.setup(swaggerSpec, {
+app.use('/docs/swagger', auth, swaggerUi.serveFiles(swaggerSpec), swaggerUi.setup(swaggerSpec, {
     customCss: '.swagger-ui .topbar { display: none }',
     customSiteTitle: 'CraftedClimate API Documentation',
 }));
@@ -103,6 +100,21 @@ app.get('/docs/redoc', auth, redoc({
 }));
 
 app.get('/docs/swagger-json', (req, res) => res.json(swaggerSpec));
+
+// Swagger UI (Backoffice / Admin Developer Docs)
+app.use('/docs/admin-swagger', auth, swaggerUi.serveFiles(adminSwaggerSpec), swaggerUi.setup(adminSwaggerSpec, {
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'CraftedClimate Backoffice API Documentation',
+}));
+
+// Admin ReDoc
+app.get('/docs/admin-redoc', auth, redoc({
+    title: 'CraftedClimate Backoffice API Documentation',
+    specUrl: '/docs/admin-swagger-json',
+    redocOptions: { theme: { typography: { fontFamily: 'Inter, sans-serif' } } },
+}));
+
+app.get('/docs/admin-swagger-json', (req, res) => res.json(adminSwaggerSpec));
 
 const helmet = require('helmet');
 const { dynamicCorsMiddleware } = require('./middleware/dynamicCors');
@@ -141,8 +153,9 @@ app.use('/climate-docs', swaggerRateLimiter, docsAuth, (req, res, next) => {
     // ... legacy docs logic ...
     const useSwagger = req.query.ui === 'swagger';
     if (useSwagger) {
-        app.use('/climate-docs', swaggerUi.serve);
-        return swaggerUi.setup(swaggerSpec)(req, res, next);
+        const router = express.Router();
+        router.use('/', swaggerUi.serveFiles(swaggerSpec), swaggerUi.setup(swaggerSpec));
+        return router(req, res, next);
     } else {
         redoc({ title: 'Crafted Climate', specUrl: '/climate-docs/swagger.json' })(req, res, next);
     }
@@ -220,6 +233,7 @@ app.use('/api', thresholdRoutes);
 
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/subscriptions/paystack', require('./modules/subscription/paystackWebhook.routes'));
+app.use('/api/v1/payments', require('./modules/subscription/paystackWebhook.routes'));
 app.use('/api/webhooks', require('./modules/webhook/webhook.routes'));
 const adminPlanRoutes = require('./modules/admin/adminPlan.routes');
 app.use('/api/admin/plans', adminPlanRoutes);

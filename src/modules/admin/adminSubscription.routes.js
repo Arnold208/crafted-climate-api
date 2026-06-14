@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminSubscriptionController = require('./adminSubscription.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -18,41 +18,35 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: page
  *         schema:
  *           type: integer
- *           example: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           example: 10
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
- *           example: "pending"
  *           enum: [active, inactive, expired, cancelled, grace_period]
  *       - in: query
  *         name: planId
  *         schema:
  *           type: string
- *           example: "plan-starter-uuid"
  *       - in: query
  *         name: billingCycle
  *         schema:
  *           type: string
- *           example: "monthly"
  *           enum: [free, monthly, yearly]
  *       - in: query
  *         name: userid
  *         schema:
  *           type: string
- *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     responses:
  *       200:
  *         description: Subscriptions retrieved
  *       403:
  *         description: Forbidden
  */
-router.get('/', authenticateToken, requirePlatformAdmin, adminSubscriptionController.listSubscriptions);
+router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminSubscriptionController.listSubscriptions);
 
 /**
  * @swagger
@@ -68,14 +62,13 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminSubscriptionContro
  *         required: true
  *         schema:
  *           type: string
- *           example: "sub-premium-uuid"
  *     responses:
  *       200:
  *         description: Subscription details
  *       404:
  *         description: Not found
  */
-router.get('/:subscriptionId', authenticateToken, requirePlatformAdmin, adminSubscriptionController.getSubscriptionDetails);
+router.get('/:subscriptionId', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminSubscriptionController.getSubscriptionDetails);
 
 /**
  * @swagger
@@ -91,7 +84,6 @@ router.get('/:subscriptionId', authenticateToken, requirePlatformAdmin, adminSub
  *         required: true
  *         schema:
  *           type: string
- *           example: "sub-premium-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -108,7 +100,7 @@ router.get('/:subscriptionId', authenticateToken, requirePlatformAdmin, adminSub
  *       200:
  *         description: Plan changed
  */
-router.patch('/:subscriptionId/plan', authenticateToken, requirePlatformAdmin, adminSubscriptionController.changePlan);
+router.patch('/:subscriptionId/plan', authenticateToken, authorizeRoles('admin', 'supervisor'), adminSubscriptionController.changePlan);
 
 /**
  * @swagger
@@ -124,7 +116,6 @@ router.patch('/:subscriptionId/plan', authenticateToken, requirePlatformAdmin, a
  *         required: true
  *         schema:
  *           type: string
- *           example: "sub-premium-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -142,7 +133,7 @@ router.patch('/:subscriptionId/plan', authenticateToken, requirePlatformAdmin, a
  *       200:
  *         description: Subscription extended
  */
-router.post('/:subscriptionId/extend', authenticateToken, requirePlatformAdmin, adminSubscriptionController.extendExpiry);
+router.post('/:subscriptionId/extend', authenticateToken, authorizeRoles('admin', 'supervisor'), adminSubscriptionController.extendExpiry);
 
 /**
  * @swagger
@@ -158,7 +149,6 @@ router.post('/:subscriptionId/extend', authenticateToken, requirePlatformAdmin, 
  *         required: true
  *         schema:
  *           type: string
- *           example: "sub-premium-uuid"
  *     requestBody:
  *       content:
  *         application/json:
@@ -172,7 +162,7 @@ router.post('/:subscriptionId/extend', authenticateToken, requirePlatformAdmin, 
  *       200:
  *         description: Subscription cancelled
  */
-router.delete('/:subscriptionId', authenticateToken, requirePlatformAdmin, adminSubscriptionController.cancelSubscription);
+router.delete('/:subscriptionId', authenticateToken, authorizeRoles('admin'), adminSubscriptionController.cancelSubscription);
 
 /**
  * @swagger
@@ -187,13 +177,12 @@ router.delete('/:subscriptionId', authenticateToken, requirePlatformAdmin, admin
  *         name: days
  *         schema:
  *           type: integer
- *           example: 30
  *           default: 7
  *     responses:
  *       200:
  *         description: Expiring subscriptions
  */
-router.get('/expiring/list', authenticateToken, requirePlatformAdmin, adminSubscriptionController.getExpiringSubscriptions);
+router.get('/expiring/list', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminSubscriptionController.getExpiringSubscriptions);
 
 /**
  * @swagger
@@ -208,18 +197,16 @@ router.get('/expiring/list', authenticateToken, requirePlatformAdmin, adminSubsc
  *         name: startDate
  *         schema:
  *           type: string
- *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
- *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
  *         description: Revenue metrics
  */
-router.get('/revenue/analytics', authenticateToken, requirePlatformAdmin, adminSubscriptionController.getRevenueAnalytics);
+router.get('/revenue/analytics', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminSubscriptionController.getRevenueAnalytics);
 
 module.exports = router;

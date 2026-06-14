@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminPlanController = require('./adminPlan.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -18,7 +18,6 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: active
  *         schema:
  *           type: boolean
- *           example: true
  *         description: Filter by active status
  *     responses:
  *       200:
@@ -26,7 +25,7 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *       403:
  *         description: Forbidden
  */
-router.get('/', authenticateToken, requirePlatformAdmin, adminPlanController.listPlans);
+router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminPlanController.listPlans);
 
 /**
  * @swagger
@@ -150,7 +149,7 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminPlanController.lis
  *       400:
  *         description: Invalid input or duplicate name
  */
-router.post('/', authenticateToken, requirePlatformAdmin, adminPlanController.createPlan);
+router.post('/', authenticateToken, authorizeRoles('admin'), adminPlanController.createPlan);
 
 /**
  * @swagger
@@ -166,14 +165,13 @@ router.post('/', authenticateToken, requirePlatformAdmin, adminPlanController.cr
  *         required: true
  *         schema:
  *           type: string
- *           example: "plan-starter-uuid"
  *     responses:
  *       200:
  *         description: Plan details
  *       404:
  *         description: Plan not found
  */
-router.get('/:planId', authenticateToken, requirePlatformAdmin, adminPlanController.getPlan);
+router.get('/:planId', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminPlanController.getPlan);
 
 /**
  * @swagger
@@ -190,7 +188,6 @@ router.get('/:planId', authenticateToken, requirePlatformAdmin, adminPlanControl
  *         required: true
  *         schema:
  *           type: string
- *           example: "plan-starter-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -295,7 +292,7 @@ router.get('/:planId', authenticateToken, requirePlatformAdmin, adminPlanControl
  *       404:
  *         description: Plan not found
  */
-router.put('/:planId', authenticateToken, requirePlatformAdmin, adminPlanController.updatePlan);
+router.put('/:planId', authenticateToken, authorizeRoles('admin'), adminPlanController.updatePlan);
 
 /**
  * @swagger
@@ -312,13 +309,12 @@ router.put('/:planId', authenticateToken, requirePlatformAdmin, adminPlanControl
  *         required: true
  *         schema:
  *           type: string
- *           example: "plan-starter-uuid"
  *     responses:
  *       200:
  *         description: Plan deactivated
  *       404:
  *         description: Plan not found
  */
-router.delete('/:planId', authenticateToken, requirePlatformAdmin, adminPlanController.deletePlan);
+router.delete('/:planId', authenticateToken, authorizeRoles('admin'), adminPlanController.deletePlan);
 
 module.exports = router;

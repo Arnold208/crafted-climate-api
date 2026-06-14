@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminNotificationController = require('./adminNotification.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -64,7 +64,7 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *       201:
  *         description: Notification sent
  */
-router.post('/send', authenticateToken, requirePlatformAdmin, adminNotificationController.sendNotification);
+router.post('/send', authenticateToken, authorizeRoles('admin', 'supervisor'), adminNotificationController.sendNotification);
 
 /**
  * @swagger
@@ -102,7 +102,8 @@ router.post('/send', authenticateToken, requirePlatformAdmin, adminNotificationC
  *                 enum: [security, billing, updates, support, admin, system]
  *               role:
  *                 type: string
- *                 example: "editor"
+ *                 example: "user"
+ *                 enum: [admin, supervisor, support, user]
  *                 description: Filter by user role
  *               verified:
  *                 type: boolean
@@ -121,7 +122,7 @@ router.post('/send', authenticateToken, requirePlatformAdmin, adminNotificationC
  *       201:
  *         description: Notification broadcast
  */
-router.post('/broadcast', authenticateToken, requirePlatformAdmin, adminNotificationController.broadcastToAll);
+router.post('/broadcast', authenticateToken, authorizeRoles('admin', 'supervisor'), adminNotificationController.broadcastToAll);
 
 /**
  * @swagger
@@ -137,23 +138,20 @@ router.post('/broadcast', authenticateToken, requirePlatformAdmin, adminNotifica
  *         name: userid
  *         schema:
  *           type: string
- *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
- *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
- *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
  *         description: Statistics retrieved
  */
-router.get('/statistics', authenticateToken, requirePlatformAdmin, adminNotificationController.getStatistics);
+router.get('/statistics', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminNotificationController.getStatistics);
 
 module.exports = router;

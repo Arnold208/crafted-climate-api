@@ -251,6 +251,71 @@ class UserController {
             res.status(500).json({ message: error.message });
         }
     }
+
+    async backofficeLogin(req, res) {
+        try {
+            const { email, password } = req.body;
+            const result = await userService.initiateBackofficeLogin({ email, password });
+            res.status(200).json(result);
+        } catch (error) {
+            console.error('[UserController] Backoffice Login Error:', error.message);
+            if (error.message.includes('User not found') || error.message.includes('Invalid Password')) {
+                return res.status(401).json({ message: error.message });
+            }
+            if (error.message.includes('restricted') || error.message.includes('Suspended')) {
+                return res.status(403).json({ message: error.message });
+            }
+            res.status(500).json({ message: error.message });
+        }
+    }
+
+    async backofficeVerifyOtp(req, res) {
+        try {
+            const { tempSessionId, otp } = req.body;
+            const result = await userService.verifyBackofficeOtp({ tempSessionId, otp });
+            res.status(200).json(result);
+        } catch (error) {
+            console.error('[UserController] Backoffice Verify OTP Error:', error.message);
+            if (error.message.includes('expired') || error.message.includes('invalid') || error.message.includes('Invalid OTP')) {
+                return res.status(400).json({ message: error.message });
+            }
+            res.status(500).json({ message: error.message });
+        }
+    }
+
+    async requestAdminPasswordReset(req, res) {
+        try {
+            const { email } = req.body;
+            const result = await userService.requestAdminPasswordReset({ email });
+            res.status(200).json(result);
+        } catch (error) {
+            console.error('[UserController] Backoffice Password Request Error:', error.message);
+            if (error.message.includes('restricted') || error.message.includes('Unauthorized')) {
+                return res.status(403).json({ message: error.message });
+            }
+            if (error.message.includes('not found')) {
+                return res.status(404).json({ message: error.message });
+            }
+            res.status(500).json({ message: error.message });
+        }
+    }
+
+    async backofficeResetPassword(req, res) {
+        try {
+            const { requestId, token, newPassword } = req.body;
+            const result = await userService.resetBackofficePassword({ requestId, token, newPassword });
+            res.status(200).json(result);
+        } catch (error) {
+            console.error('[UserController] Backoffice Password Reset Error:', error.message);
+            if (error.message.includes('not authorized') || error.message.includes('Invalid') || error.message.includes('expired')) {
+                return res.status(400).json({ message: error.message });
+            }
+            if (error.message.includes('not found')) {
+                return res.status(404).json({ message: error.message });
+            }
+            res.status(500).json({ message: error.message });
+        }
+    }
 }
 
 module.exports = new UserController();

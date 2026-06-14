@@ -60,6 +60,7 @@ const userSchema = new mongoose.Schema({
   otpExpiresAt: { type: Date, default: 0 },
   lastOtpSentAt: { type: Date },
   verified: { type: Boolean, default: false },
+  mustChangePassword: { type: Boolean, default: false },
 
   /** OLD system RBAC - kept for backwards compatibility */
   role: {

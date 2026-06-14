@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminApiKeyController = require('./adminApiKey.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -18,24 +18,20 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: page
  *         schema:
  *           type: integer
- *           example: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           example: 10
  *           default: 50
  *       - in: query
  *         name: organizationId
  *         schema:
  *           type: string
- *           example: "org-starter-uuid"
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
- *           example: "pending"
  *           enum: [active, suspended, revoked]
  *     responses:
  *       200:
@@ -43,7 +39,7 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *       403:
  *         description: Forbidden
  */
-router.get('/', authenticateToken, requirePlatformAdmin, adminApiKeyController.listAllApiKeys);
+router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor'), adminApiKeyController.listAllApiKeys);
 
 /**
  * @swagger
@@ -60,14 +56,13 @@ router.get('/', authenticateToken, requirePlatformAdmin, adminApiKeyController.l
  *         required: true
  *         schema:
  *           type: string
- *           example: "key-rotation-uuid"
  *     responses:
  *       200:
  *         description: API key details retrieved
  *       404:
  *         description: API key not found
  */
-router.get('/:keyId', authenticateToken, requirePlatformAdmin, adminApiKeyController.getApiKeyDetails);
+router.get('/:keyId', authenticateToken, authorizeRoles('admin', 'supervisor'), adminApiKeyController.getApiKeyDetails);
 
 /**
  * @swagger
@@ -84,7 +79,6 @@ router.get('/:keyId', authenticateToken, requirePlatformAdmin, adminApiKeyContro
  *         required: true
  *         schema:
  *           type: string
- *           example: "key-rotation-uuid"
  *     requestBody:
  *       required: true
  *       content:
@@ -104,7 +98,7 @@ router.get('/:keyId', authenticateToken, requirePlatformAdmin, adminApiKeyContro
  *       200:
  *         description: API key revoked
  */
-router.delete('/:keyId/revoke', authenticateToken, requirePlatformAdmin, adminApiKeyController.revokeApiKey);
+router.delete('/:keyId/revoke', authenticateToken, authorizeRoles('admin'), adminApiKeyController.revokeApiKey);
 
 /**
  * @swagger
@@ -121,12 +115,11 @@ router.delete('/:keyId/revoke', authenticateToken, requirePlatformAdmin, adminAp
  *         required: true
  *         schema:
  *           type: string
- *           example: "key-rotation-uuid"
  *     responses:
  *       200:
  *         description: API key suspended
  */
-router.post('/:keyId/suspend', authenticateToken, requirePlatformAdmin, adminApiKeyController.suspendApiKey);
+router.post('/:keyId/suspend', authenticateToken, authorizeRoles('admin'), adminApiKeyController.suspendApiKey);
 
 /**
  * @swagger
@@ -143,12 +136,11 @@ router.post('/:keyId/suspend', authenticateToken, requirePlatformAdmin, adminApi
  *         required: true
  *         schema:
  *           type: string
- *           example: "key-rotation-uuid"
  *     responses:
  *       200:
  *         description: API key restored
  */
-router.post('/:keyId/restore', authenticateToken, requirePlatformAdmin, adminApiKeyController.restoreApiKey);
+router.post('/:keyId/restore', authenticateToken, authorizeRoles('admin'), adminApiKeyController.restoreApiKey);
 
 /**
  * @swagger
@@ -164,18 +156,16 @@ router.post('/:keyId/restore', authenticateToken, requirePlatformAdmin, adminApi
  *         name: startDate
  *         schema:
  *           type: string
- *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
- *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *     responses:
  *       200:
  *         description: Usage statistics retrieved
  */
-router.get('/usage/stats', authenticateToken, requirePlatformAdmin, adminApiKeyController.getPlatformUsageStats);
+router.get('/usage/stats', authenticateToken, authorizeRoles('admin', 'supervisor'), adminApiKeyController.getPlatformUsageStats);
 
 module.exports = router;

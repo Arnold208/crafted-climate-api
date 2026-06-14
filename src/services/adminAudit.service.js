@@ -189,6 +189,11 @@ class AdminAuditService {
             statusCode: entity.statusCode,
             allowed: entity.allowed,
             ipAddress: entity.ipAddress,
+            userAgent: entity.userAgent || null,
+            origin: entity.origin || null,
+            referer: entity.referer || null,
+            host: entity.host || null,
+            durationMs: entity.durationMs !== undefined ? Number(entity.durationMs) : null,
             requestBody: entity.requestBody ? JSON.parse(entity.requestBody) : null,
             meta: entity.meta ? JSON.parse(entity.meta) : null
         };

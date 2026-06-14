@@ -3,7 +3,149 @@ const router = express.Router();
 const adminUserController = require('./adminUser.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
 const authorizeRoles = require('../../middleware/rbacMiddleware');
-const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
+
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Authentication
+ *     description: Backoffice admin authentication — MFA login, OTP verification, and password reset
+ */
+
+/**
+ * @swagger
+ * /api/auth/backoffice/login:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Initiate Backoffice Admin Login (MFA Step 1)
+ *     description: Authenticate administrative credentials (admin/supervisor/support) and trigger SMS OTP.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: "admin@example.com"
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 example: "Password123!"
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Login credentials verified, OTP sent via SMS
+ *       401:
+ *         description: Invalid credentials
+ *       403:
+ *         description: Unauthorized role
+ */
+
+/**
+ * @swagger
+ * /api/auth/backoffice/verify-otp:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Verify Backoffice OTP (MFA Step 2)
+ *     description: Verify the SMS OTP code and generate final JWT tokens.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - tempSessionId
+ *               - otp
+ *             properties:
+ *               tempSessionId:
+ *                 type: string
+ *                 example: "a1b2c3d4e5f6..."
+ *                 description: The temporary session reference returned by the login step
+ *               otp:
+ *                 type: string
+ *                 example: "123456"
+ *                 description: 6-digit SMS OTP code
+ *     responses:
+ *       200:
+ *         description: Authentication successful, tokens generated
+ *       400:
+ *         description: Invalid OTP or session expired
+ */
+
+/**
+ * @swagger
+ * /api/auth/backoffice/forgot-password:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Initiate Backoffice Admin Password Reset Request
+ *     description: Submits a password reset request which requires peer-approval by another Platform Administrator.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: "admin@example.com"
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Reset request successfully submitted for approval
+ *       403:
+ *         description: Restrictive roles only
+ *       404:
+ *         description: User not found
+ */
+
+/**
+ * @swagger
+ * /api/auth/backoffice/reset-password:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Complete Backoffice Admin Password Reset
+ *     description: Reset backoffice user's password using the single-use token from the approved request.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - requestId
+ *               - token
+ *               - newPassword
+ *             properties:
+ *               requestId:
+ *                 type: string
+ *                 example: "req-pwd-12345"
+ *                 description: The password reset request ID
+ *               token:
+ *                 type: string
+ *                 example: "token-uuid-12345"
+ *                 description: The reset token sent via email
+ *               newPassword:
+ *                 type: string
+ *                 example: "NewPassword123!"
+ *                 format: password
+ *                 description: The new password to set
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *       400:
+ *         description: Invalid parameters, request not approved, expired or incorrect token
+ *       404:
+ *         description: Reset request or target user not found
+ */
 
 /**
  * @swagger
@@ -19,36 +161,30 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         name: page
  *         schema:
  *           type: integer
- *           example: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           example: 10
  *           default: 50
  *       - in: query
  *         name: search
  *         schema:
  *           type: string
- *           example: "search_example"
  *         description: Search by email, username, or name
  *       - in: query
  *         name: role
  *         schema:
  *           type: string
- *           example: "editor"
- *           enum: [user, admin]
+ *           enum: [user, admin, supervisor, support]
  *       - in: query
  *         name: verified
  *         schema:
  *           type: boolean
- *           example: true
  *       - in: query
  *         name: deleted
  *         schema:
  *           type: string
- *           example: "deleted_example"
  *           enum: [only, include]
  *     responses:
  *       200:
@@ -57,6 +193,81 @@ const requirePlatformAdmin = require('../../middleware/requirePlatformAdmin');
  *         description: Forbidden - Platform admin, supervisor, or support required
  */
 router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor', 'support'), adminUserController.listUsers);
+
+/**
+ * @swagger
+ * /api/admin/users/password-reset-requests:
+ *   get:
+ *     tags: [Authentication]
+ *     summary: List platform admin password reset requests
+ *     description: Retrieve list of password reset requests for platform admin/supervisor/support roles (Platform Admin/Supervisor only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, approved, rejected, completed]
+ *         description: Filter requests by status
+ *     responses:
+ *       200:
+ *         description: List of password reset requests retrieved successfully
+ *       403:
+ *         description: Forbidden - Platform admin or supervisor required
+ */
+router.get('/password-reset-requests', authenticateToken, authorizeRoles('admin', 'supervisor'), adminUserController.listPasswordResetRequests);
+
+/**
+ * @swagger
+ * /api/admin/users/password-reset-requests/{requestId}/approve:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Approve administrative password reset request
+ *     description: Approve password reset for backoffice roles, generating a secure single-use token sent via Email link (Platform Admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: requestId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Request approved, single-use token generated and reset link sent via email
+ *       400:
+ *         description: Request not found or not in pending status
+ *       403:
+ *         description: Forbidden - Platform admin required
+ */
+router.post('/password-reset-requests/:requestId/approve', authenticateToken, authorizeRoles('admin'), adminUserController.approvePasswordResetRequest);
+
+/**
+ * @swagger
+ * /api/admin/users/password-reset-requests/{requestId}/reject:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Reject administrative password reset request
+ *     description: Reject password reset request for backoffice roles (Platform Admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: requestId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Request rejected successfully
+ *       400:
+ *         description: Request not found or not in pending status
+ *       403:
+ *         description: Forbidden - Platform admin required
+ */
+router.post('/password-reset-requests/:requestId/reject', authenticateToken, authorizeRoles('admin'), adminUserController.rejectPasswordResetRequest);
+
 
 /**
  * @swagger
@@ -73,7 +284,6 @@ router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor', 'suppor
  *         required: true
  *         schema:
  *           type: string
- *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     responses:
  *       200:
  *         description: User details retrieved
@@ -99,7 +309,6 @@ router.get('/:userid', authenticateToken, authorizeRoles('admin', 'supervisor', 
  *         required: true
  *         schema:
  *           type: string
- *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     requestBody:
  *       required: true
  *       content:
@@ -140,7 +349,6 @@ router.patch('/:userid/role', authenticateToken, authorizeRoles('admin'), adminU
  *         required: true
  *         schema:
  *           type: string
- *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     requestBody:
  *       required: true
  *       content:
@@ -181,7 +389,6 @@ router.post('/:userid/suspend', authenticateToken, authorizeRoles('admin', 'supe
  *         required: true
  *         schema:
  *           type: string
- *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     responses:
  *       200:
  *         description: User restored
@@ -207,7 +414,6 @@ router.post('/:userid/restore', authenticateToken, authorizeRoles('admin', 'supe
  *         required: true
  *         schema:
  *           type: string
- *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     responses:
  *       200:
  *         description: User deleted permanently
@@ -216,7 +422,7 @@ router.post('/:userid/restore', authenticateToken, authorizeRoles('admin', 'supe
  *       403:
  *         description: Forbidden
  */
-router.delete('/:userid', authenticateToken, requirePlatformAdmin, adminUserController.deleteUser);
+router.delete('/:userid', authenticateToken, authorizeRoles('admin'), adminUserController.deleteUser);
 
 /**
  * @swagger
@@ -233,14 +439,13 @@ router.delete('/:userid', authenticateToken, requirePlatformAdmin, adminUserCont
  *         required: true
  *         schema:
  *           type: string
- *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *     responses:
  *       200:
  *         description: Password reset initiated
  *       403:
  *         description: Forbidden
  */
-router.post('/:userid/reset-password', authenticateToken, requirePlatformAdmin, adminUserController.forcePasswordReset);
+router.post('/:userid/reset-password', authenticateToken, authorizeRoles('admin', 'supervisor'), adminUserController.forcePasswordReset);
 
 /**
  * @swagger
@@ -257,30 +462,25 @@ router.post('/:userid/reset-password', authenticateToken, requirePlatformAdmin, 
  *         required: true
  *         schema:
  *           type: string
- *           example: "user-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
  *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
- *           example: "2026-06-01T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
- *           example: "2026-06-12T00:00:00Z"
  *           format: date
  *       - in: query
  *         name: page
  *         schema:
  *           type: integer
- *           example: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           example: 10
  *           default: 50
  *     responses:
  *       200:

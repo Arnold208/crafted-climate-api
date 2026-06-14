@@ -43,6 +43,7 @@ const paystackWebhookController = require('./paystackWebhook.controller');
  *                   status:
  *                     type: string
  *                     example: success
+ *                     enum: [success, failed, reversed]
  *                   reference:
  *                     type: string
  *                     example: ref-mock-1718182902345
@@ -84,6 +85,7 @@ const paystackWebhookController = require('./paystackWebhook.controller');
  *                 status:
  *                   type: string
  *                   example: success
+ *                   enum: [success]
  *       401:
  *         description: Unauthorized. Missing or invalid signature.
  *       500:

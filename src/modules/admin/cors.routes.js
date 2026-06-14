@@ -2,17 +2,7 @@ const express = require('express');
 const router = express.Router();
 const corsController = require('./cors.controller');
 const authenticateToken = require('../../middleware/bearermiddleware');
-
-// Middleware to check platform admin role
-const requirePlatformAdmin = (req, res, next) => {
-    if (req.user.platformRole !== 'admin') {
-        return res.status(403).json({
-            success: false,
-            message: 'Forbidden: Platform admin access required'
-        });
-    }
-    next();
-};
+const authorizeRoles = require('../../middleware/rbacMiddleware');
 
 /**
  * @swagger
@@ -51,7 +41,7 @@ const requirePlatformAdmin = (req, res, next) => {
  *       403:
  *         description: Forbidden - Platform admin access required
  */
-router.get('/', authenticateToken, requirePlatformAdmin, corsController.getSettings);
+router.get('/', authenticateToken, authorizeRoles('admin'), corsController.getSettings);
 
 /**
  * @swagger
@@ -95,7 +85,7 @@ router.get('/', authenticateToken, requirePlatformAdmin, corsController.getSetti
  *       403:
  *         description: Forbidden - Platform admin access required
  */
-router.put('/', authenticateToken, requirePlatformAdmin, corsController.updateSettings);
+router.put('/', authenticateToken, authorizeRoles('admin'), corsController.updateSettings);
 
 /**
  * @swagger
@@ -129,7 +119,7 @@ router.put('/', authenticateToken, requirePlatformAdmin, corsController.updateSe
  *       403:
  *         description: Forbidden - Platform admin access required
  */
-router.post('/origins', authenticateToken, requirePlatformAdmin, corsController.addOrigin);
+router.post('/origins', authenticateToken, authorizeRoles('admin'), corsController.addOrigin);
 
 /**
  * @swagger
@@ -163,7 +153,7 @@ router.post('/origins', authenticateToken, requirePlatformAdmin, corsController.
  *       403:
  *         description: Forbidden - Platform admin access required
  */
-router.delete('/origins', authenticateToken, requirePlatformAdmin, corsController.removeOrigin);
+router.delete('/origins', authenticateToken, authorizeRoles('admin'), corsController.removeOrigin);
 
 /**
  * @swagger
@@ -197,7 +187,7 @@ router.delete('/origins', authenticateToken, requirePlatformAdmin, corsControlle
  *       403:
  *         description: Forbidden - Platform admin access required
  */
-router.patch('/toggle', authenticateToken, requirePlatformAdmin, corsController.toggleEnforcement);
+router.patch('/toggle', authenticateToken, authorizeRoles('admin'), corsController.toggleEnforcement);
 
 /**
  * @swagger
@@ -214,6 +204,6 @@ router.patch('/toggle', authenticateToken, requirePlatformAdmin, corsController.
  *       403:
  *         description: Forbidden - Platform admin access required
  */
-router.get('/history', authenticateToken, requirePlatformAdmin, corsController.getHistory);
+router.get('/history', authenticateToken, authorizeRoles('admin'), corsController.getHistory);
 
 module.exports = router;

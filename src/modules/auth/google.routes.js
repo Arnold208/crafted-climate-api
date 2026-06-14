@@ -21,8 +21,9 @@ const googleController = require('./google.controller');
 router.get('/', (req, res, next) => {
     const platform = req.query.platform || 'web';
     const invitationId = req.query.invitationId || null;
+    const redirectUri = req.query.redirectUri || null;
 
-    const stateObj = { platform, invitationId };
+    const stateObj = { platform, invitationId, redirectUri };
     const stateStr = Buffer.from(JSON.stringify(stateObj)).toString('base64');
 
     passport.authenticate('google', {
@@ -66,9 +67,26 @@ router.get('/', (req, res, next) => {
  *                 user:
  *                   type: object
  */
-router.get('/callback',
-    passport.authenticate('google', { failureRedirect: '/api/auth/login', session: false }),
-    googleController.googleCallback
-);
+router.get('/callback', (req, res, next) => {
+    let failureRedirect = '/api/auth/login';
+    const state = req.query.state;
+    if (state) {
+        try {
+            const decodedState = JSON.parse(Buffer.from(state, 'base64').toString('utf8'));
+            if (decodedState.redirectUri) {
+                const failureUrl = new URL(decodedState.redirectUri);
+                failureUrl.searchParams.set('error', 'Authentication failed');
+                failureRedirect = failureUrl.toString();
+            } else {
+                const defaultAppUrl = process.env.APP_URL || 'https://app.craftedclimate.com';
+                failureRedirect = `${defaultAppUrl}/login?error=Authentication failed`;
+            }
+        } catch (e) {
+            // Fallback on JSON parse error
+        }
+    }
+
+    passport.authenticate('google', { failureRedirect, session: false })(req, res, next);
+}, googleController.googleCallback);
 
 module.exports = router;
