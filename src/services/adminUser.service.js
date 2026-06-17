@@ -302,6 +302,8 @@ class AdminUserService {
 
         // Invalidate all refresh tokens
         user.refreshToken = null;
+        user.refreshTokens = [];
+        user.markModified('refreshTokens');
         await user.save();
 
         // Send password reset email using template

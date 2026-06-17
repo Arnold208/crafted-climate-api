@@ -115,7 +115,7 @@ app.get('/docs/admin-redoc', adminAuth, redoc({
     redocOptions: { theme: { typography: { fontFamily: 'Inter, sans-serif' } } },
 }));
 
-app.get('/docs/admin-swagger-json', adminAuth, (req, res) => res.json(adminSwaggerSpec));
+app.get('/docs/admin-swagger-json', (req, res) => res.json(adminSwaggerSpec));
 
 const helmet = require('helmet');
 const { dynamicCorsMiddleware } = require('./middleware/dynamicCors');

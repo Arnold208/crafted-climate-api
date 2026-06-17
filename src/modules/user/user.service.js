@@ -255,11 +255,21 @@ class UserService {
         };
 
         const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
-            expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN,
+            expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m',
         });
         const refreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
-            expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN
+            expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d'
         });
+
+        // Save refresh token to user document
+        user.refreshTokens = user.refreshTokens || [];
+        user.refreshTokens.push(refreshToken);
+        if (user.refreshTokens.length > 10) {
+            user.refreshTokens.shift();
+        }
+        user.markModified('refreshTokens');
+        user.refreshToken = refreshToken;
+        await user.save();
 
         // Resolve subscription tier for frontend
         let subscriptionTier = 'free';
@@ -434,6 +444,8 @@ class UserService {
         user.otp = null;
         user.otpExpiresAt = null;
         user.refreshToken = ""; // Invalidate sessions
+        user.refreshTokens = []; // Clear all active sessions
+        user.markModified('refreshTokens');
         await user.save();
 
         // AUDIT LOG
@@ -564,6 +576,17 @@ class UserService {
             if (!user) throw new Error('User not found');
             if (user.deletedAt) throw new Error('Account Suspended');
 
+            // 🔒 REFRESH TOKEN ROTATION (RTR) & SECURITY CHECK
+            user.refreshTokens = user.refreshTokens || [];
+            if (!user.refreshTokens.includes(token)) {
+                // Potential token reuse / theft detected! Invalidate all refresh tokens for security.
+                user.refreshTokens = [];
+                user.markModified('refreshTokens');
+                user.refreshToken = "";
+                await user.save();
+                throw new Error('Refresh token reuse detected or invalid token. Please login again.');
+            }
+
             // ✨ AUTO-HEALING: Ensure user has valid organization context
             await this._ensureUserContext(user);
 
@@ -579,11 +602,21 @@ class UserService {
             };
 
             const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
-                expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN,
+                expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m',
             });
             const newRefreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
-                expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN
+                expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d'
             });
+
+            // Rotate: remove the old token, add the new token
+            user.refreshTokens = user.refreshTokens.filter(t => t !== token);
+            user.refreshTokens.push(newRefreshToken);
+            if (user.refreshTokens.length > 10) {
+                user.refreshTokens.shift();
+            }
+            user.markModified('refreshTokens');
+            user.refreshToken = newRefreshToken;
+            await user.save();
 
             return {
                 accessToken,
@@ -776,9 +809,11 @@ class UserService {
             ipAddress: null
         });
 
-        // Optionally revoke other sessions?
-        // user.refreshToken = ""; 
-        // await user.save();
+        // Revoke all other sessions on password change
+        user.refreshToken = ""; 
+        user.refreshTokens = [];
+        user.markModified('refreshTokens');
+        await user.save();
 
         return true;
     }
@@ -1003,11 +1038,21 @@ class UserService {
         };
 
         const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
-            expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN,
+            expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m',
         });
         const refreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
-            expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN
+            expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d'
         });
+
+        // Save refresh token to user document
+        user.refreshTokens = user.refreshTokens || [];
+        user.refreshTokens.push(refreshToken);
+        if (user.refreshTokens.length > 10) {
+            user.refreshTokens.shift();
+        }
+        user.markModified('refreshTokens');
+        user.refreshToken = refreshToken;
+        await user.save();
 
         // Resolve subscription tier for frontend
         let subscriptionTier = 'free';

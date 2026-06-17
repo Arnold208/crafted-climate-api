@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema({
   googleId: { type: String, default: null },
 
   refreshToken: { type: String, default: "" },
+  refreshTokens: { type: [String], default: [] },
 
   contact: { type: String, default: "" },
   firstName: { type: String, default: "" },

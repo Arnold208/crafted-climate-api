@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
  * Handle Google OAuth Callback
  * Generates JWT tokens and returns them
  */
-exports.googleCallback = (req, res) => {
+exports.googleCallback = async (req, res) => {
     try {
         const user = req.user;
         if (!user) {
@@ -24,11 +24,21 @@ exports.googleCallback = (req, res) => {
         };
 
         const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
-            expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN,
+            expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m',
         });
         const refreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, {
-            expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN
+            expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d'
         });
+
+        // Save refresh token to user document
+        user.refreshTokens = user.refreshTokens || [];
+        user.refreshTokens.push(refreshToken);
+        if (user.refreshTokens.length > 10) {
+            user.refreshTokens.shift();
+        }
+        user.markModified('refreshTokens');
+        user.refreshToken = refreshToken;
+        await user.save();
 
         // Determine subscription tier (Simplified logic or mirroring login)
         // Ideally we'd fetch this, but for now we'll match the login response structure.
