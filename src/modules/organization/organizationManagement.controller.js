@@ -694,6 +694,30 @@ class OrganizationManagementController {
             return res.status(400).json({ message: error.message });
         }
     }
+
+    async listUserCreationRequests(req, res) {
+        try {
+            const userid = req.user.userid;
+            const requests = await organizationManagementService.getUserCreationRequests(userid);
+            return res.status(200).json(requests);
+        } catch (error) {
+            return res.status(400).json({ message: error.message });
+        }
+    }
+
+    async getUserCreationRequest(req, res) {
+        try {
+            const { requestId } = req.params;
+            const userid = req.user.userid;
+            const request = await organizationManagementService.getUserCreationRequestById(requestId, userid);
+            return res.status(200).json(request);
+        } catch (error) {
+            if (error.message.includes('not found')) {
+                return res.status(404).json({ message: error.message });
+            }
+            return res.status(400).json({ message: error.message });
+        }
+    }
 }
 
 module.exports = new OrganizationManagementController();

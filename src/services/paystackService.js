@@ -6,7 +6,7 @@ class PaystackService {
         const callbackUrl = process.env.PAYSTACK_CALLBACK_URL || 'https://app.craftedclimate.com/payment/callback';
 
         // Mock mode for testing/local env without keys
-        if (process.env.NODE_ENV === 'development' || !secretKey) {
+        if (!secretKey) {
             console.log(`[PaystackService] MOCK Initializing transaction for ${email}, amount: ${amountInPesewas} Pesewas`);
             const mockReference = `ref-mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
             return {
@@ -45,7 +45,7 @@ class PaystackService {
     async verifyTransaction(reference) {
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
 
-        if (process.env.NODE_ENV === 'development' || !secretKey) {
+        if (!secretKey) {
             console.log(`[PaystackService] MOCK Verifying transaction ref: ${reference}`);
             return {
                 status: true,

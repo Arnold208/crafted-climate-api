@@ -700,6 +700,16 @@ class OrganizationManagementService {
         return { message: "Request rejected" };
     }
 
+    async getUserCreationRequests(userId) {
+        return await OrganizationRequest.find({ requesterUserId: userId }).sort({ requestedAt: -1 });
+    }
+
+    async getUserCreationRequestById(requestId, userId) {
+        const request = await OrganizationRequest.findOne({ requestId });
+        if (!request) throw new Error("Request not found");
+        if (request.requesterUserId !== userId) throw new Error("Unauthorized access to organization request");
+        return request;
+    }
 }
 
 module.exports = new OrganizationManagementService();

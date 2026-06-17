@@ -352,6 +352,15 @@ class SubscriptionController {
             res.status(500).json({ error: error.message });
         }
     }
+
+    async getActivePlans(req, res) {
+        try {
+            const plans = await subscriptionService.getActivePlans();
+            res.status(200).json(plans);
+        } catch (err) {
+            res.status(500).json({ message: "Internal server error", error: err.message });
+        }
+    }
 }
 
 module.exports = new SubscriptionController();

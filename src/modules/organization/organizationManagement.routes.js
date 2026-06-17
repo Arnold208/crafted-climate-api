@@ -731,6 +731,50 @@ router.post(
 
 /**
  * @swagger
+ * /api/org/my-creation-requests:
+ *   get:
+ *     summary: List all organization creation requests for the logged-in user
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of creation requests
+ */
+router.get(
+    '/my-creation-requests',
+    auth,
+    organizationManagementController.listUserCreationRequests
+);
+
+/**
+ * @swagger
+ * /api/org/creation-requests/{requestId}:
+ *   get:
+ *     summary: Get details of a specific organization creation request for the logged-in user
+ *     tags: [Organizations (Platform User)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: requestId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Onboarding request details
+ *       404:
+ *         description: Request not found
+ */
+router.get(
+    '/creation-requests/:requestId',
+    auth,
+    organizationManagementController.getUserCreationRequest
+);
+
+/**
+ * @swagger
  * /api/org/admin/creation-requests:
  *   get:
  *     summary: List organization creation requests (admin only)

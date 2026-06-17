@@ -305,6 +305,10 @@ class SubscriptionService {
 
         return savedSub;
     }
+
+    async getActivePlans() {
+        return await Plan.find({ isActive: true });
+    }
 }
 
 module.exports = new SubscriptionService();

@@ -136,6 +136,22 @@ router.patch('/admin/toggle-plan/:planId',
     subscriptionController.togglePlan
 );
 
+/**
+ * @swagger
+ * /api/subscriptions/plans:
+ *   get:
+ *     tags: [Subscriptions]
+ *     summary: List all active subscription plans
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: List of active plans }
+ */
+router.get('/plans',
+    authenticateToken,
+    subscriptionController.getActivePlans
+);
+
 // --- User Routes ---
 
 /**
