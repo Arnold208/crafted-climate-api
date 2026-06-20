@@ -27,6 +27,12 @@ const testRoutes = require('./modules/test/test.routes');
 const adminRoutes = require('./modules/admin/admin.routes');
 const flowRoutes = require('./modules/devices/flow/flow.routes');
 
+// ============================================================
+// MRV ENGINE — Measurement, Reporting and Verification
+// ============================================================
+const { mrvRouter, vvbRouter } = require('./modules/mrv/mrv.routes');
+const mrvIngestRoutes = require('./modules/mrv/evidence/ingest.routes');
+
 // PLATFORM ADMIN - CORS MANAGEMENT
 const corsAdminRoutes = require('./modules/admin/cors.routes');
 // PLATFORM ADMIN - USER MANAGEMENT
@@ -168,6 +174,13 @@ app.use('/climate-docs', swaggerRateLimiter, docsAuth, (req, res, next) => {
 
 app.use('/api', testRoutes);
 
+// DEV-ONLY: Test setup helpers (auto-verify, force-plan, etc.)
+// Not loaded in production — route itself also guards NODE_ENV
+if (process.env.NODE_ENV === 'development') {
+  const testHelpersRoutes = require('./modules/test/testHelpers.routes');
+  app.use('/api/test-helpers', testHelpersRoutes);
+}
+
 // GOOGLE AUTH
 app.use('/auth/google', googleRoutes);
 
@@ -242,6 +255,19 @@ const analyticsRoutes = require('./modules/analytics/analytics.routes');
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/logs', logsRoutes);
+
+// ============================================================
+// MRV ENGINE ROUTES
+// All routes under /api/mrv use tag 'MRV Engine' in Swagger docs
+// ============================================================
+app.use('/api/mrv', mrvRouter);
+app.use('/api/ingest', mrvIngestRoutes);
+
+// ============================================================
+// VVB DATA ROOM — Validation/Verification Body read-only access
+// Uses scoped VVB API key auth (not JWT) — mounted separately
+// ============================================================
+app.use('/api/vvb', vvbRouter);
 
 // ============================================
 // CSRF TOKEN ENDPOINT

@@ -56,6 +56,30 @@ class CacheService {
     }
 
     /**
+     * Proactive warm-up: always re-fetches from the fetcher and writes to Redis.
+     * Call this immediately after invalidate() to eliminate the cold window.
+     * Unlike getOrSet(), this never reads the cached value — it always overwrites.
+     *
+     * @param {string} key - Redis key
+     * @param {Function} fetcher - Async function to fetch fresh data from DB
+     * @param {number} ttlSeconds - Time to live in seconds (default 86400 = 24h)
+     */
+    async warmUp(key, fetcher, ttlSeconds = 86400) {
+        if (!client.isOpen) return; // Redis offline — skip warm-up silently
+        try {
+            const freshData = await fetcher();
+            if (freshData !== undefined && freshData !== null) {
+                await client.setEx(key, ttlSeconds, JSON.stringify(freshData));
+                // console.log(`[CacheService] WARM-UP: ${key}`);
+            }
+        } catch (error) {
+            // Non-fatal: lazy re-population will still happen on next access
+            console.warn(`[CacheService] WarmUp failed for ${key}: ${error.message}`);
+        }
+    }
+
+
+    /**
      * Invalidate multiple keys by pattern
      * Use sparingly - SCAN is expensive in large DBs, but okay for targeted cleanup
      * @param {string} pattern - e.g. "org:123:*"

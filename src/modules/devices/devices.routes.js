@@ -6,7 +6,8 @@ const sensorModelRoutes = require('./sensorModel/sensorModel.routes');
 const registryRoutes = require('./registry/registry.routes');
 const otaRoutes = require('./ota/ota.routes');
 const deploymentRoutes = require('./deployment/deployment.routes');
-const notecardRoutes = require('./notecard/notecard.routes');
+const notecardRoutes  = require('./notecard/notecard.routes');
+const eventLogRoutes  = require('./eventLog/eventLog.routes');
 
 // Mount sub-modules
 // Manufacturer is mounted at /manufacturer to avoid root conflicts if any, and maintain clear namespace
@@ -20,5 +21,7 @@ router.use('/', otaRoutes);
 router.use('/', deploymentRoutes);
 
 router.use('/', notecardRoutes);
+router.use('/', eventLogRoutes);
+
 
 module.exports = router;

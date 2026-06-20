@@ -10,6 +10,22 @@ const { client: redisClient } = require('../../../config/redis/redis');
 const registerNewDevice = require('../../../models/devices/registerDevice');
 const logger = require('../../../utils/logger');
 
+// ============================================================
+// MRV ENGINE: Canonical envelope + evidence queue
+// Loaded lazily so MRV workers don't block startup if unavailable
+// ============================================================
+let mrvEvidenceQueue;
+let buildCanonicalEnvelope;
+let SensorInstallation; // loaded lazily to avoid circular deps
+try {
+    ({ mrvEvidenceQueue } = require('../../../workers/mrv/queues'));
+    ({ buildCanonicalEnvelope } = require('../evidence/envelope'));
+    SensorInstallation = require('../../../models/mrv/evidence/SensorInstallation.model');
+} catch (e) {
+    // MRV module not yet loaded — operational path continues normally
+    logger.warn('[TelemetryWorker] MRV modules not loaded yet:', e.message);
+}
+
 function startTelemetryWorker() {
     let envFile;
 
@@ -40,8 +56,21 @@ function startTelemetryWorker() {
             // 🔒 Rule: if there's no body, it is NOT telemetry → skip
             if (!body) return;
 
-            // (Optional) light validation; skip if clearly not a datapoint
-            if (!body.devid) return;
+            // MRV FIX: If devid is missing, quarantine the event rather than silent drop
+            if (!body.devid) {
+                logger.warn(`[TelemetryWorker] Event ${job.id} has no devid — event quarantined (unresolved)`);
+                // Attempt MRV unresolved receipt if MRV path is active
+                if (mrvEvidenceQueue && buildCanonicalEnvelope) {
+                    try {
+                        const envelope = buildCanonicalEnvelope({ rawEvent: data.body || data, devid: null, transport: data.transport || 'notehub-mqtt', sourceEventId: data.event || null });
+                        envelope.quarantineReason = 'MISSING_DEVID';
+                        await mrvEvidenceQueue.add('evidence', envelope, { jobId: `unresolved-${envelope.ingestionId}`, attempts: 2, backoff: { type: 'fixed', delay: 5000 } });
+                    } catch (mrvErr) {
+                        logger.error('[TelemetryWorker] Failed to quarantine unresolved event:', mrvErr.message);
+                    }
+                }
+                return;
+            }
 
             const devid = body.devid;
             let devmod = (body.devmod || '').toUpperCase();
@@ -76,11 +105,47 @@ function startTelemetryWorker() {
                 logger.error(`⚠️ Failed to dynamically resolve devmod for devid ${devid}: %s`, err.message);
             }
 
+            // ── MRV: Resolve projectIds from active SensorInstallations ──────────
+            // Cached in Redis (1h TTL) so MongoDB is not hit on every reading.
+            // Fails silently — never blocks the operational telemetry path.
+            let mrvProjectIds = [];
+            let mrvOrgId      = null;
+            if (auid && SensorInstallation) {
+                try {
+                    const mrvCacheKey = `device:${auid}:mrv_projects`;
+                    const mrvCached   = await redisClient.get(mrvCacheKey);
+                    if (mrvCached) {
+                        const parsed  = JSON.parse(mrvCached);
+                        mrvProjectIds = parsed.projectIds    || [];
+                        mrvOrgId      = parsed.organizationId || null;
+                    } else {
+                        const installs = await SensorInstallation.find(
+                            { auid, status: { $in: ['ACTIVE', 'MAINTENANCE'] } },
+                            { projectId: 1, organizationId: 1, _id: 0 }
+                        ).lean();
+                        mrvProjectIds = installs.map(i => i.projectId).filter(Boolean);
+                        mrvOrgId      = installs[0]?.organizationId || null;
+                        // Cache for 1 hour — invalidated automatically on TTL expiry
+                        await redisClient.set(mrvCacheKey,
+                            JSON.stringify({ projectIds: mrvProjectIds, organizationId: mrvOrgId }),
+                            { EX: 3600 }
+                        );
+                        if (mrvProjectIds.length > 0) {
+                            logger.info(`[TelemetryWorker] Device ${auid} linked to MRV project(s): ${mrvProjectIds.join(', ')}`);
+                        }
+                    }
+                } catch (mrvInstErr) {
+                    logger.warn(`[TelemetryWorker] Could not resolve MRV project IDs for ${auid}: ${mrvInstErr.message}`);
+                }
+            }
+
             // 🔒 PRODUCTION HARDENING: Idempotency/Deduplication Check
             // FIX: Use 'event' UUID from Notecard/Hub if available to safely handle batches with same timestamp
             // Fallback to timestamp if event ID is missing
             const eventId = data.event || body.event;
-            const timestamp = body.ts || body.time || data.receivedAt || Date.now(); // Also check body.time
+            // MRV FIX: Keep null instead of fabricating Date.now() as measurement time
+            const observedAt = body.ts || body.time || null;
+            const timestamp = body.ts || body.time || data.receivedAt || Date.now();
 
             let dedupKey;
             if (eventId) {
@@ -104,6 +169,39 @@ function startTelemetryWorker() {
             } catch (dedupErr) {
                 logger.error(`⚠️ Deduplication check failed for ${devid}: %s`, dedupErr.message);
                 // Continue processing even if dedup check fails (fail-open)
+            }
+
+            // ============================================================
+            // MRV ENGINE: Build canonical envelope and enqueue evidence job
+            // This runs BEFORE operational normalization (preserves raw event)
+            // Only for devices that are registered (auid resolved)
+            // ============================================================
+            if (mrvEvidenceQueue && buildCanonicalEnvelope && auid) {
+                try {
+                    const envelope = buildCanonicalEnvelope({
+                        rawEvent: body,
+                        devid, auid, model: devmod,
+                        transport: data.transport || 'notehub-mqtt',
+                        sourceTopic: data.topic || null,
+                        sourceEventId: eventId || null,
+                        observedAt: observedAt ? (observedAt < 1e12 ? new Date(observedAt * 1000).toISOString() : new Date(observedAt).toISOString()) : null,
+                        sequenceNumber: body.seq || null,
+                        firmwareVersion: body.body?.version || body.version || null,
+                        // ── MRV project linkage (resolved above from active SensorInstallations)
+                        organizationId: mrvOrgId,
+                        projectIds:     mrvProjectIds
+                    });
+                    // Use sourceEventId as jobId for idempotency across restarts
+                    const mrvJobId = eventId ? `mrv-${eventId}` : `mrv-${envelope.ingestionId}`;
+                    await mrvEvidenceQueue.add('evidence', envelope, {
+                        jobId: mrvJobId,
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 2000 }
+                    });
+                } catch (mrvErr) {
+                    // MRV path failure must NOT block operational path
+                    logger.error(`[TelemetryWorker] MRV evidence queue error for ${devid}: ${mrvErr.message}`);
+                }
             }
 
             if (devmod === 'ENV') {

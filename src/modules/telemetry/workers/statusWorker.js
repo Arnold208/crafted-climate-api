@@ -6,6 +6,8 @@ const path = require('path');
 const { client: redisClient } = require('../../../config/redis/redis');
 // Read-only registration check
 const registerNewDevice = require('../../../models/devices/registerDevice');
+// Device event log (fire-and-forget)
+const eventLog = require('../../devices/eventLog/eventLog.service');
 
 function startStatusWorker() {
     let envFile;
@@ -151,6 +153,19 @@ function startStatusWorker() {
                 }
 
                 tx.publish('device:status-change', JSON.stringify({ auid, status: 'online' }));
+
+                // 📋 EVENT LOG — device came back online
+                const wasOffline = prevStatus === 'offline';
+                eventLog.online({
+                    auid,
+                    devid,
+                    userId: deviceDoc?.userid || deviceDoc?.userId,
+                    orgId:  deviceDoc?.organizationId,
+                    metadata: { prevStatus, recoveredAt: nowIso },
+                }).catch(() => {});
+
+                // Clear consecutive partials counter on recovery
+                redisClient.del(`device:${auid}:consecutive_partials`).catch(() => {});
             }
 
             // 4) CLEAR ALERT STATE & ESCALATION CONTEXT

@@ -278,123 +278,510 @@ class EmailTemplateService {
     }
 
     /**
-     * Initialize default templates
+     * Initialize default email templates.
+     *
+     * Behaviour:
+     * - If a template does NOT exist → create it.
+     * - If it DOES exist → force-update htmlBody and subject so design changes
+     *   are always applied (safe: template slugs are stable identifiers).
      */
     async initializeDefaults() {
-        // --- 1. Offline Alert: Warning (70 mins) ---
+        // ── 1. WARNING — device offline (first threshold) ─────────────────────
         const warningBody = `
-            <h2>Device Offline Notification</h2>
-            <div class="alert-box">
-                Your device <strong>{{nickname}}</strong> has been offline for over 70 minutes.
+            <p>Hi there,</p>
+            <p>
+                Your sensor <strong>{{nickname}}</strong> has not reported data for
+                <strong>{{durationFormatted}}</strong> and appears to be offline.
+                This may indicate a power disruption, connectivity issue, or hardware fault.
+            </p>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Device</span>
+                    <span class="info-value">{{nickname}} ({{devid}})</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Last Seen</span>
+                    <span class="info-value">{{lastSeen}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Location</span>
+                    <span class="info-value">{{location}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Duration Offline</span>
+                    <span class="info-value">{{durationFormatted}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Batch Health</span>
+                    <span class="info-value">{{batchHealth}}</span>
+                </div>
             </div>
-            <div class="info-row">
-                <span class="info-label">Last Seen</span>
-                <span class="info-value">{{lastSeen}}</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Device ID</span>
-                <span class="info-value">{{devid}}</span>
-            </div>
-            <p style="margin-top: 20px;">This may indicate a power disruption or network connectivity issue. Verification is recommended.</p>
+
+            <hr class="divider">
+            <p class="muted">
+                Please check the device's power source and network connection.
+                If the issue persists, visit your dashboard to review telemetry history.
+            </p>
         `;
 
-        // --- 2. Offline Alert: Critical (5 Hours) ---
+        // ── 2. CRITICAL — extended outage ─────────────────────────────────────
         const criticalBody = `
-            <h2 style="color: #35752D;">Urgent: Device Status Critical</h2>
-            <div class="alert-box">
-                Device <strong>{{nickname}}</strong> has been offline for more than 5 hours.
+            <p>
+                <strong>Action required.</strong> Your sensor <strong>{{nickname}}</strong>
+                has been offline for <strong>{{durationFormatted}}</strong>.
+                Extended downtime risks data gaps that may affect reporting integrity.
+            </p>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Device</span>
+                    <span class="info-value">{{nickname}} ({{devid}})</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Last Seen</span>
+                    <span class="info-value">{{lastSeen}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Location</span>
+                    <span class="info-value">{{location}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Duration Offline</span>
+                    <span class="info-value" style="color: #C0392B; font-weight: 700;">{{durationFormatted}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Batch Health</span>
+                    <span class="info-value">{{batchHealth}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Device Model</span>
+                    <span class="info-value">{{deviceModel}}</span>
+                </div>
             </div>
-            <div class="info-row">
-                <span class="info-label">Last Seen</span>
-                <span class="info-value">{{lastSeen}}</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Location</span>
-                <span class="info-value">{{location}}</span>
-            </div>
-            <p style="margin-top: 20px;">Extended downtime may impact data integrity. Immediate inspection of the device is advised.</p>
+
+            <hr class="divider">
+            <p>
+                Please inspect the device on-site and verify power supply, SIM connectivity,
+                and antenna condition. If you are unable to reach the device, contact our
+                support team for remote diagnostics.
+            </p>
+            <p class="muted">
+                This is escalation level 2 of 3. A severe outage alert will follow
+                if the device remains offline.
+            </p>
         `;
 
-        // --- 3. Offline Alert: Severe (24 Hours) ---
+        // ── 3. SEVERE — 20× threshold offline ────────────────────────────────
         const severeBody = `
-            <h2 style="color: #35752D;">Severe Outage Alert</h2>
-            <div class="alert-box" style="border-left-color: #D32F2F;">
-                Device <strong>{{nickname}}</strong> has been offline for 24 hours.
+            <p>
+                <strong style="color: #B71C1C;">Immediate action required.</strong>
+                Your sensor <strong>{{nickname}}</strong> has been completely offline for
+                <strong>{{durationFormatted}}</strong>.
+                This constitutes a severe data outage that may compromise
+                monitoring period completeness and MRV reporting.
+            </p>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Device</span>
+                    <span class="info-value">{{nickname}} ({{devid}})</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Last Seen</span>
+                    <span class="info-value">{{lastSeen}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Location</span>
+                    <span class="info-value">{{location}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Total Downtime</span>
+                    <span class="info-value" style="color: #B71C1C; font-weight: 700;">{{durationFormatted}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Batch Health</span>
+                    <span class="info-value">{{batchHealth}}</span>
+                </div>
             </div>
-            <div class="info-row">
-                <span class="info-label">Last Seen</span>
-                <span class="info-value">{{lastSeen}}</span>
+
+            <hr class="divider">
+            <p>
+                If the device cannot be restored remotely, physical intervention is required.
+                Please contact the CraftedClimate support team for escalated assistance:
+                <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>
+            </p>
+            <p class="muted">
+                This is escalation level 3 of 3 — the highest severity alert.
+                Further alerts for this device have been suppressed until it recovers.
+            </p>
+        `;
+
+        // ── 4. WELCOME EMAIL ─────────────────────────────────────────────────
+        const welcomeBody = `
+            <p>Hi <strong>{{userName}}</strong>,</p>
+            <p>
+                Welcome to <strong>CraftedClimate</strong> — the environmental intelligence
+                platform built for rigorous, transparent, and verifiable climate impact measurement.
+            </p>
+            <p>Here's what you can do right away:</p>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Register a Sensor</span>
+                    <span class="info-value">Connect your first IoT device</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Create a Project</span>
+                    <span class="info-value">Set up MRV monitoring projects</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">View Telemetry</span>
+                    <span class="info-value">Monitor real-time sensor data</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Generate Reports</span>
+                    <span class="info-value">Produce audit-ready MRV outputs</span>
+                </div>
             </div>
-            <div class="info-row">
-                <span class="info-label">Impact</span>
-                <span class="info-value">24 Hours Data Loss</span>
+
+            <hr class="divider">
+            <p>
+                If you have any questions, our team is ready to help at
+                <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.
+            </p>
+            <p class="muted">
+                You are receiving this because you created a CraftedClimate account.
+            </p>
+        `;
+
+        // ── 5. PASSWORD RESET (admin-forced) ─────────────────────────────────
+        const passwordResetBody = `
+            <p>Hi <strong>{{userName}}</strong>,</p>
+            <p>
+                An administrator has initiated a password reset for your CraftedClimate account.
+                Use the link below to set a new password. This link is valid for
+                <strong>{{expiryHours}} hours</strong>.
+            </p>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Account</span>
+                    <span class="info-value">{{userName}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Link Expires</span>
+                    <span class="info-value">In {{expiryHours}} hours</span>
+                </div>
             </div>
-            <p style="margin-top: 20px;">Infrastructure intervention is required to restore connectivity.</p>
+
+            <hr class="divider">
+            <p class="muted">
+                If you did not request this reset, contact support immediately at
+                <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.
+                Do not share this link with anyone.
+            </p>
+        `;
+
+        // ── 6. SUBSCRIPTION EXPIRY REMINDER ──────────────────────────────────
+        const expiryReminderBody = `
+            <p>Hi <strong>{{userName}}</strong>,</p>
+            <p>
+                Your <strong>{{planName}}</strong> subscription will expire in
+                <strong>{{daysUntilExpiry}} day{{dayPlural}}</strong>.
+                Renew now to avoid any interruption to your monitoring and MRV workflows.
+            </p>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Current Plan</span>
+                    <span class="info-value">{{planName}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Expires On</span>
+                    <span class="info-value">{{expiryDate}}</span>
+                </div>
+            </div>
+
+            <hr class="divider">
+            <p class="muted">
+                After expiry a 3-day grace period begins before your account is downgraded to freemium.
+            </p>
+        `;
+
+        // ── 7. GRACE PERIOD STARTED ───────────────────────────────────────────
+        const gracePeriodStartBody = `
+            <p>Hi <strong>{{userName}}</strong>,</p>
+            <p>
+                Your <strong>{{planName}}</strong> subscription has expired.
+                We've activated a <strong>3-day grace period</strong> so you can renew without
+                losing access to your sensors, MRV projects, and reports.
+            </p>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Grace Period Ends</span>
+                    <span class="info-value" style="color: #C0392B; font-weight: 700;">{{gracePeriodEnd}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Previous Plan</span>
+                    <span class="info-value">{{planName}}</span>
+                </div>
+            </div>
+
+            <hr class="divider">
+            <p class="muted">
+                If you do not renew before {{gracePeriodEnd}}, your account will be automatically
+                downgraded to the Freemium plan and excess devices will be disabled.
+            </p>
+        `;
+
+        // ── 8. GRACE PERIOD REMINDER ──────────────────────────────────────────
+        const gracePeriodReminderBody = `
+            <p>Hi <strong>{{userName}}</strong>,</p>
+            <p>
+                You have <strong>{{daysRemaining}} day{{dayPlural}} remaining</strong> in your grace period.
+                Renew your <strong>{{planName}}</strong> subscription now to keep full access.
+            </p>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Grace Period Ends</span>
+                    <span class="info-value" style="color: #B71C1C; font-weight: 700;">{{gracePeriodEnd}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Plan to Renew</span>
+                    <span class="info-value">{{planName}}</span>
+                </div>
+            </div>
+
+            <hr class="divider">
+            <p class="muted">
+                After the grace period ends your account will be downgraded to Freemium
+                and devices over the free-tier limit will be suspended.
+            </p>
+        `;
+
+        // ── 9. ACCOUNT DOWNGRADED TO FREEMIUM ────────────────────────────────
+        const downgradedBody = `
+            <p>Hi <strong>{{userName}}</strong>,</p>
+            <p>
+                Your grace period has ended and your account has been downgraded from
+                <strong>{{oldPlanName}}</strong> to the <strong>Freemium Plan</strong>.
+            </p>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Previous Plan</span>
+                    <span class="info-value">{{oldPlanName}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Current Plan</span>
+                    <span class="info-value">Freemium</span>
+                </div>
+            </div>
+
+            <hr class="divider">
+            <p>
+                You can still use CraftedClimate with free-tier features. Upgrade anytime
+                to restore full access to your sensors, MRV projects, and analytics.
+            </p>
+            <p class="muted">
+                If excess devices were active, they have been suspended to comply with
+                the Freemium device limit. Renewing will restore them automatically.
+            </p>
         `;
 
         const defaults = [
             {
-                name: 'Device Offline: Warning',
-                slug: 'device-offline-warning',
-                subject: 'CrowdSense Alert: {{nickname}} Offline',
+                name:     'Device Offline: Warning',
+                slug:     'device-offline-warning',
+                subject:  'Sensor Alert: {{nickname}} has been offline for {{durationFormatted}}',
                 category: 'alerts',
-                htmlBody: generateTemplateHtml('Status Notification', warningBody, { text: 'View Dashboard', url: '{{appUrl}}/dashboard' }),
+                htmlBody: generateTemplateHtml(
+                    'Sensor Offline — Warning',
+                    warningBody,
+                    'View Device Dashboard',
+                    '{{dashboardUrl}}'
+                ),
                 variables: [
-                    { name: 'nickname', required: true },
-                    { name: 'lastSeen', required: true },
-                    { name: 'devid', required: true }
+                    { name: 'nickname',          required: true  },
+                    { name: 'devid',             required: true  },
+                    { name: 'lastSeen',          required: true  },
+                    { name: 'location',          required: false },
+                    { name: 'durationFormatted', required: false },
+                    { name: 'minutesOffline',    required: false },
+                    { name: 'batchHealth',       required: false },
+                    { name: 'dashboardUrl',      required: false },
                 ]
             },
             {
-                name: 'Device Offline: Critical',
-                slug: 'device-offline-critical',
-                subject: 'Urgent: {{nickname}} Status Critical',
+                name:     'Device Offline: Critical',
+                slug:     'device-offline-critical',
+                subject:  'Critical: {{nickname}} offline for {{durationFormatted}} — action required',
                 category: 'alerts',
-                htmlBody: generateTemplateHtml('Critical Status', criticalBody, { text: 'Inspect Device', url: '{{appUrl}}/devices/{{devid}}' }),
+                htmlBody: generateTemplateHtml(
+                    'Sensor Offline — Critical',
+                    criticalBody,
+                    'Inspect Device Now',
+                    '{{dashboardUrl}}'
+                ),
                 variables: [
-                    { name: 'nickname', required: true },
-                    { name: 'lastSeen', required: true },
-                    { name: 'location', required: true }
+                    { name: 'nickname',          required: true  },
+                    { name: 'devid',             required: true  },
+                    { name: 'lastSeen',          required: true  },
+                    { name: 'location',          required: false },
+                    { name: 'durationFormatted', required: false },
+                    { name: 'batchHealth',       required: false },
+                    { name: 'deviceModel',       required: false },
+                    { name: 'dashboardUrl',      required: false },
                 ]
             },
             {
-                name: 'Device Offline: Severe',
-                slug: 'device-offline-severe',
-                subject: 'Severe Outage: {{nickname}} Offline 24h',
+                name:     'Device Offline: Severe',
+                slug:     'device-offline-severe',
+                subject:  'Severe Outage: {{nickname}} — {{durationFormatted}} without data. Immediate action required.',
                 category: 'alerts',
-                htmlBody: generateTemplateHtml('Severe Outage', severeBody, { text: 'Contact Support', url: 'mailto:{{supportEmail}}' }),
+                htmlBody: generateTemplateHtml(
+                    'Severe Sensor Outage',
+                    severeBody,
+                    'Contact Support',
+                    '{{supportUrl}}'
+                ),
                 variables: [
-                    { name: 'nickname', required: true },
-                    { name: 'lastSeen', required: true }
+                    { name: 'nickname',          required: true  },
+                    { name: 'devid',             required: true  },
+                    { name: 'lastSeen',          required: true  },
+                    { name: 'location',          required: false },
+                    { name: 'durationFormatted', required: false },
+                    { name: 'batchHealth',       required: false },
+                    { name: 'supportUrl',        required: false },
                 ]
             },
-            // ... (keep existing welcome/reset templates if you wish, or wrap them too)
             {
-                name: 'Welcome Email',
-                slug: 'welcome-email',
-                subject: 'Welcome to {{platformName}}',
+                name:     'Welcome Email',
+                slug:     'welcome-email',
+                subject:  'Welcome to CraftedClimate, {{userName}}',
                 category: 'auth',
-                htmlBody: generateTemplateHtml('Welcome', `
-                    <p>Hi {{userName}},</p>
-                    <p>Thank you for joining <strong>{{platformName}}</strong>. We are excited to have you on board.</p>
-                    <p>Please proceed to your dashboard to configure your first device.</p>
-                `, { text: 'Go to Dashboard', url: '{{appUrl}}/dashboard' }),
+                htmlBody: generateTemplateHtml(
+                    'Welcome to CraftedClimate',
+                    welcomeBody,
+                    'Go to Dashboard',
+                    '{{appUrl}}/dashboard'
+                ),
                 variables: [
                     { name: 'userName', required: true }
                 ]
-            }
+            },
+            // ── NEW: password-reset (admin-forced) ───────────────────────────
+            {
+                name:     'Password Reset (Admin-Forced)',
+                slug:     'password-reset',
+                subject:  'Your CraftedClimate password has been reset',
+                category: 'auth',
+                htmlBody: generateTemplateHtml(
+                    'Password Reset Request',
+                    passwordResetBody,
+                    'Set New Password',
+                    '{{resetLink}}'
+                ),
+                variables: [
+                    { name: 'userName',    required: true  },
+                    { name: 'resetLink',   required: true  },
+                    { name: 'expiryHours', required: false },
+                ]
+            },
+            // ── NEW: subscription-expiry-reminder ────────────────────────────
+            {
+                name:     'Subscription Expiry Reminder',
+                slug:     'subscription-expiry-reminder',
+                subject:  'Your {{planName}} subscription expires in {{daysUntilExpiry}} day{{dayPlural}}',
+                category: 'subscription',
+                htmlBody: generateTemplateHtml(
+                    'Subscription Expiring Soon',
+                    expiryReminderBody,
+                    'Renew Now',
+                    '{{renewUrl}}'
+                ),
+                variables: [
+                    { name: 'userName',        required: true  },
+                    { name: 'planName',        required: true  },
+                    { name: 'daysUntilExpiry', required: true  },
+                    { name: 'expiryDate',      required: true  },
+                    { name: 'dayPlural',       required: false },
+                    { name: 'renewUrl',        required: false },
+                ]
+            },
+            // ── NEW: subscription-grace-start ─────────────────────────────────
+            {
+                name:     'Subscription Grace Period Started',
+                slug:     'subscription-grace-start',
+                subject:  'Your {{planName}} subscription has expired — 3-day grace period started',
+                category: 'subscription',
+                htmlBody: generateTemplateHtml(
+                    'Grace Period Active',
+                    gracePeriodStartBody,
+                    'Renew Now',
+                    '{{renewUrl}}'
+                ),
+                variables: [
+                    { name: 'userName',       required: true  },
+                    { name: 'planName',       required: true  },
+                    { name: 'gracePeriodEnd', required: true  },
+                    { name: 'renewUrl',       required: false },
+                ]
+            },
+            // ── NEW: subscription-grace-reminder ──────────────────────────────
+            {
+                name:     'Subscription Grace Period Reminder',
+                slug:     'subscription-grace-reminder',
+                subject:  '{{daysRemaining}} day{{dayPlural}} left in your grace period — renew {{planName}} now',
+                category: 'subscription',
+                htmlBody: generateTemplateHtml(
+                    'Grace Period Ending Soon',
+                    gracePeriodReminderBody,
+                    'Renew Now',
+                    '{{renewUrl}}'
+                ),
+                variables: [
+                    { name: 'userName',       required: true  },
+                    { name: 'planName',       required: true  },
+                    { name: 'daysRemaining',  required: true  },
+                    { name: 'gracePeriodEnd', required: true  },
+                    { name: 'dayPlural',      required: false },
+                    { name: 'renewUrl',       required: false },
+                ]
+            },
+            // ── NEW: subscription-downgraded ──────────────────────────────────
+            {
+                name:     'Account Downgraded to Freemium',
+                slug:     'subscription-downgraded',
+                subject:  'Your account has been downgraded to the Freemium plan',
+                category: 'subscription',
+                htmlBody: generateTemplateHtml(
+                    'Account Downgraded',
+                    downgradedBody,
+                    'Upgrade Now',
+                    '{{renewUrl}}'
+                ),
+                variables: [
+                    { name: 'userName',     required: true  },
+                    { name: 'oldPlanName',  required: true  },
+                    { name: 'renewUrl',     required: false },
+                ]
+            },
         ];
 
         for (const template of defaults) {
-            // Update if exists to apply new styles, or create if missing
             const existing = await EmailTemplate.findOne({ slug: template.slug });
             if (!existing) {
                 await this.createTemplate(template, 'system');
                 console.log(`✅ Created default template: ${template.slug}`);
             } else {
-                // FORCE UPDATE for Design Changes
+                // Always force-update design changes
                 existing.htmlBody = template.htmlBody;
-                existing.subject = template.subject;
+                existing.subject  = template.subject;
+                if (template.variables) existing.variables = template.variables;
                 await existing.save();
                 console.log(`🔄 Updated template: ${template.slug}`);
             }
@@ -405,3 +792,4 @@ class EmailTemplateService {
 }
 
 module.exports = new EmailTemplateService();
+

@@ -376,8 +376,17 @@ class AdminUserService {
         const message = `Your password reset request has been approved. Please click the link below to securely set your new password:\n\n${resetLink}\n\nThis link will expire in 24 hours.`;
         
         try {
-            const { sendEmail } = require('../config/mail/nodemailer');
-            await sendEmail(targetUser.email, 'CraftedClimate - Backoffice Password Reset Approved', message);
+            const { sendCCEmail } = require('../services/email/craftedClimateMailer');
+            await sendCCEmail({
+                type: 'admin.passwordResetApproved',
+                to: targetUser.email,
+                vars: {
+                    userName:   targetUser.firstName || targetUser.username,
+                    resetUrl:   resetLink,
+                    expiresAt:  tokenExpiresAt.toISOString(),
+                    expiresIn:  '24 hours',
+                },
+            });
         } catch (err) {
             console.error('[AdminUserService] Send reset link email error:', err.message);
         }

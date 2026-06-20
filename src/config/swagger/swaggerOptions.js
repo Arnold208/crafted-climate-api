@@ -255,15 +255,45 @@ If a payment fails or the checkout window expires:
       { name: 'API Keys', description: 'Management of organization API keys' },
       { name: 'System Config', description: 'Platform-level system settings' },
       { name: 'Notecard', description: 'Blues Notecard integration and management' },
-      { name: 'Firmware', description: 'OTA updates and firmware management' }
+      { name: 'Firmware', description: 'OTA updates and firmware management' },
+      {
+        name: 'MRV Engine - Catalogue',
+        description: 'MRV standards, methodology versions, sensor capability mappings, and emission factors. Read-only catalogue data seeded on startup.'
+      },
+      {
+        name: 'MRV Engine - Projects',
+        description: 'MRV project lifecycle: create, update, add sites, partners, members, methodology assignments, applicability and readiness assessments.'
+      },
+      {
+        name: 'MRV Engine - Monitoring',
+        description: 'Monitoring period management: create, open (DRAFT → OPEN), close (OPEN → CLOSED). Lists observations within a period.'
+      },
+      {
+        name: 'MRV Engine - Evidence and Ingest',
+        description: 'All evidence collection: sensor installations (link, maintenance, replace), file uploads, manual meter readings, CSV bulk imports, calibration records, and HTTP telemetry ingest.'
+      },
+      {
+        name: 'MRV Engine - Data Quality',
+        description: 'Observation quality control: quarantine review dashboard, manual approve (QUARANTINED → MANUALLY_APPROVED), void (→ VOIDED), and summary statistics.'
+      },
+      {
+        name: 'MRV Engine - Assurance and Audit',
+        description: 'Third-party verification (VVB): verification cases, findings (CAR/FAR), verification opinion. Registry event logging (Verra, Ghana CMO). Structured MRV audit trail.'
+      },
+      {
+        name: 'MRV Engine - Webhooks',
+        description: 'Outbound webhooks: register partner endpoints, list deliveries, test fire, delete. All deliveries are HMAC-SHA256 signed (X-MRV-Signature header).'
+      }
     ]
   },
 
   apis: [
-    './src/modules/**/*.js',  // Use forward slashes relative to project root involves changing execution context, 
+    './src/modules/**/*.js',  // Use forward slashes relative to project root involves changing execution context,
     // better to use relative to __dirname but ensuring forward slashes
     path.join(__dirname, '../../modules/**/*.js').replace(/\\/g, '/'),
-    path.join(__dirname, '../../models/**/*.js').replace(/\\/g, '/')
+    path.join(__dirname, '../../models/**/*.js').replace(/\\/g, '/'),
+    // MRV Engine shared schema components (must be scanned before routes that reference them)
+    path.join(__dirname, './mrvSwaggerComponents.js').replace(/\\/g, '/')
   ]
 };
 

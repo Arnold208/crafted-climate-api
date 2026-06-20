@@ -3,6 +3,7 @@ const { client: redis } = require('../config/redis/redis');
 const RegisterDevice = require('../models/devices/registerDevice');
 const { alertQueue } = require('../config/queue/bullMQ/alertQueue');
 const logger = require('../utils/logger');
+const eventLog = require('../modules/devices/eventLog/eventLog.service');
 
 // ---------------------------------------------------------------------------
 // CONFIG
@@ -129,6 +130,16 @@ async function checkOfflineDevices() {
                         // 📣 Publish real-time status change event
                         await redis.publish('device:status-change', JSON.stringify({ auid, status: 'offline' }));
                         logger.info(`📣 Published offline status for device ${auid}`);
+
+                        // 📋 EVENT LOG — device went offline
+                        eventLog.offline({
+                            auid,
+                            devid:         device.devid,
+                            userId:        device.userid || device.userId,
+                            orgId:         device.organizationId,
+                            minutesOffline: Math.round(minutesOffline),
+                            lastSeen:      new Date(lastSeen).toISOString(),
+                        }).catch(() => {});
                     }
                 }
             } catch (e) { /* ignore */ }
@@ -156,11 +167,21 @@ async function checkOfflineDevices() {
 
                 // Decouple: Add alert job to background BullMQ queue
                 logger.info(`📥 Queuing offline alert job for device ${auid} (Level ${targetStage.level})`);
+
+                // Fetch degraded batch context for richer alert templates
+                let consecutivePartials = 0;
+                try {
+                    const cpRaw = await redis.get(`device:${auid}:consecutive_partials`);
+                    if (cpRaw) consecutivePartials = parseInt(cpRaw, 10) || 0;
+                } catch (_) { /* non-fatal */ }
+
                 await alertQueue.add(`offline-alert:${auid}:${targetStage.level}`, {
                     auid,
                     lastSeen,
                     targetStage,
-                    now
+                    now,
+                    consecutivePartials,
+                    minutesOffline: Math.round(minutesOffline),
                 });
 
                 // Optimistically update context to prevent queuing duplicate alert jobs

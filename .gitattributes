@@ -1,0 +1,15 @@
+# Enforce consistent line endings across OS
+* text=auto eol=lf
+
+# Force binary — never touch these
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.p12 binary
+*.pem binary
+*.key binary

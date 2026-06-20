@@ -322,7 +322,45 @@ const organizationSchema = new mongoose.Schema(
       type: Date,
       default: null,
       index: true
-    }
+    },
+
+    // ============================================================
+    // MRV ENGINE FIELDS (optional — additive, non-breaking)
+    // ============================================================
+
+    /**
+     * MRV feature flag for this organization.
+     * When true, MRV project creation and evidence management is enabled.
+     */
+    mrvEnabled: {
+      type: Boolean,
+      default: false
+    },
+
+    /**
+     * IDs of MRV projects owned by this organization.
+     * Kept as a reverse-index for fast lookup without cross-collection joins.
+     */
+    mrvProjectIds: {
+      type: [String],
+      default: []
+    },
+
+    /**
+     * External programme/registry account references.
+     * e.g. Verra registry account, Ghana CMO reference, etc.
+     */
+    programmeAccountReferences: [
+      new mongoose.Schema(
+        {
+          programme: { type: String },   // e.g. 'VERRA_VCS', 'GHANA_CMO'
+          accountId: { type: String },
+          accountType: { type: String }, // e.g. 'PROJECT_PROPONENT', 'VVB'
+          note: { type: String }
+        },
+        { _id: false }
+      )
+    ]
   },
 
   {

@@ -497,14 +497,24 @@ class NotecardService {
             return { skipped: true, reason: 'Device is in a deployment (inherits from Fleet)' };
         }
         try {
+            // CC_INBOUND / CC_OUTBOUND = full batch cycle time (how often Notecard syncs with Notehub)
+            // frequency (min) × batch (count) = total minutes per batch window
+            const cycleMinutes = (device.frequency || 10) * (device.batch || 2);
             const envVars = {
                 CC_FREQUENCY: device.frequency,
-                CC_BATCH: device.batch,
-                CC_NET_MODE: device.netMode || 'cellular'
+                CC_BATCH:     device.batch,
+                CC_NET_MODE:  device.netMode || 'cellular',
+                CC_INBOUND:   cycleMinutes,
+                CC_OUTBOUND:  cycleMinutes
             };
             const result = await _pushEnvToDevice(device, envVars);
             if (!result.skipped) {
-                logger.info(`[Notecard] Synced config (freq=${device.frequency}, batch=${device.batch}, netMode=${device.netMode || 'cellular'}) to Notehub for ${device.auid}`);
+                logger.info(
+                    `[Notecard] Synced config to Notehub for ${device.auid} — ` +
+                    `freq=${device.frequency}min, batch=${device.batch}, ` +
+                    `read_every=${(device.frequency / device.batch).toFixed(1)}min, ` +
+                    `cycle=${cycleMinutes}min (inbound/outbound)`
+                );
             }
             return result;
         } catch (err) {

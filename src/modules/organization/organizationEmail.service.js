@@ -1,255 +1,217 @@
+'use strict';
+
 /**
- * Email Notification Service for Organization Management
- * Sends emails for verification, partner applications, and type changes
- * 
- * Uses existing sendEmail service from config/mail/nodemailer
+ * Organization Email Service
+ *
+ * All emails now rendered by craftedClimateMailer (crafted_climate_email_templates.js):
+ * table-layout HTML, CID logo, severity themes, auto plain-text, and
+ * the Crafted Climate branded footer.
+ *
+ * Method signatures are unchanged so existing callers need no edits.
  */
 
-const { sendEmail } = require('../../config/mail/nodemailer');
+const { sendCCEmail } = require('../../services/email/craftedClimateMailer');
 
 class OrganizationEmailService {
 
-    /**
-     * Send verification submission confirmation
-     */
-    async sendVerificationSubmitted(organizationName, adminEmail) {
-        const subject = `Business Verification Submitted - ${organizationName}`;
-        const body = `
-            <h2>Business Verification Submitted</h2>
-            <p>Your business verification for <strong>${organizationName}</strong> has been submitted successfully.</p>
-            <p>Our team will review your documents and respond within 3-5 business days.</p>
-            <p>You will receive an email once the review is complete.</p>
-            <br>
-            <p>Thank you for choosing Crafted Climate!</p>
-        `;
+    /** Business verification submitted */
+    async sendVerificationSubmitted(organizationName, adminEmail, opts = {}) {
+        await sendCCEmail({
+            type: 'org.verificationSubmitted',
+            to: adminEmail,
+            vars: {
+                orgName:  organizationName,
+                userName: opts.userName,
+                actionUrl: opts.actionUrl,
+                referenceId: opts.referenceId,
+                submittedAt: opts.submittedAt || new Date().toISOString(),
+            },
+        });
+    }
 
-        await sendEmail(adminEmail, subject, body);
+    /** Business verification approved */
+    async sendVerificationApproved(organizationName, adminEmail, opts = {}) {
+        await sendCCEmail({
+            type: 'org.verificationApproved',
+            to: adminEmail,
+            vars: {
+                orgName:   organizationName,
+                userName:  opts.userName,
+                actionUrl: opts.actionUrl || process.env.APP_URL,
+                reviewedAt: opts.reviewedAt || new Date().toISOString(),
+            },
+        });
+    }
+
+    /** Business verification rejected */
+    async sendVerificationRejected(organizationName, adminEmail, reason, opts = {}) {
+        await sendCCEmail({
+            type: 'org.verificationRejected',
+            to: adminEmail,
+            vars: {
+                orgName:  organizationName,
+                userName: opts.userName,
+                reason,
+                actionUrl: opts.actionUrl,
+            },
+        });
+    }
+
+    /** Partner application submitted */
+    async sendPartnerApplicationSubmitted(organizationName, adminEmail, tier, opts = {}) {
+        await sendCCEmail({
+            type: 'org.partnerSubmitted',
+            to: adminEmail,
+            vars: {
+                orgName:       organizationName,
+                userName:      opts.userName,
+                requestedType: tier,
+                submittedAt:   opts.submittedAt || new Date().toISOString(),
+            },
+        });
+    }
+
+    /** Partner application approved */
+    async sendPartnerApplicationApproved(organizationName, adminEmail, tier, benefits, opts = {}) {
+        // Build a human-readable summary of benefits for the notice block
+        const benefitLines = [];
+        if (benefits) {
+            if (benefits.discountPercentage) benefitLines.push(`${benefits.discountPercentage}% discount on all subscriptions`);
+            if (benefits.freeDevices)        benefitLines.push(`${benefits.freeDevices} free devices`);
+            if (benefits.apiRateLimitMultiplier) benefitLines.push(`${benefits.apiRateLimitMultiplier}x API rate limit`);
+            if (benefits.prioritySupport)    benefitLines.push('Priority support');
+            if (benefits.dedicatedAccountManager) benefitLines.push('Dedicated account manager');
+            if (benefits.customBranding)     benefitLines.push('Custom branding');
+        }
+
+        await sendCCEmail({
+            type: 'org.partnerApproved',
+            to: adminEmail,
+            vars: {
+                orgName:   organizationName,
+                userName:  opts.userName,
+                newType:   tier,
+                actionUrl: opts.actionUrl || process.env.APP_URL,
+                // Pass benefits as a notice via generic metaRows
+                metaRows: benefitLines.length ? [{ label: 'Partner benefits', value: benefitLines.join(' · ') }] : [],
+            },
+        });
+    }
+
+    /** Partner application rejected */
+    async sendPartnerApplicationRejected(organizationName, adminEmail, reason, opts = {}) {
+        await sendCCEmail({
+            type: 'org.partnerRejected',
+            to: adminEmail,
+            vars: {
+                orgName:  organizationName,
+                userName: opts.userName,
+                reason,
+            },
+        });
+    }
+
+    /** Partner status revoked */
+    async sendPartnerStatusRevoked(organizationName, adminEmail, reason, opts = {}) {
+        await sendCCEmail({
+            type: 'org.partnerRevoked',
+            to: adminEmail,
+            vars: {
+                orgName:  organizationName,
+                userName: opts.userName,
+                reason,
+            },
+        });
+    }
+
+    /** Organization type change submitted */
+    async sendTypeChangeRequestSubmitted(organizationName, adminEmail, requestedType, opts = {}) {
+        await sendCCEmail({
+            type: 'org.typeChangeSubmitted',
+            to: adminEmail,
+            vars: {
+                orgName:       organizationName,
+                userName:      opts.userName,
+                requestedType,
+                submittedAt:   opts.submittedAt || new Date().toISOString(),
+            },
+        });
+    }
+
+    /** Organization type change approved */
+    async sendTypeChangeApproved(organizationName, adminEmail, newType, automaticBenefits, opts = {}) {
+        await sendCCEmail({
+            type: 'org.typeChangeApproved',
+            to: adminEmail,
+            vars: {
+                orgName:   organizationName,
+                userName:  opts.userName,
+                newType,
+                actionUrl: opts.actionUrl || process.env.APP_URL,
+            },
+        });
+    }
+
+    /** Organization type change rejected */
+    async sendTypeChangeRejected(organizationName, adminEmail, reason, opts = {}) {
+        await sendCCEmail({
+            type: 'org.typeChangeRejected',
+            to: adminEmail,
+            vars: {
+                orgName:  organizationName,
+                userName: opts.userName,
+                reason,
+            },
+        });
+    }
+
+    /** Organization creation approved */
+    async sendOrganizationApproved(userEmail, organizationName, opts = {}) {
+        await sendCCEmail({
+            type: 'org.creationApproved',
+            to: userEmail,
+            vars: {
+                orgName:   organizationName,
+                userName:  opts.userName,
+                actionUrl: opts.actionUrl || process.env.APP_URL,
+            },
+        });
+    }
+
+    /** Organization creation rejected */
+    async sendOrganizationRejected(userEmail, organizationName, reason, opts = {}) {
+        await sendCCEmail({
+            type: 'org.creationRejected',
+            to: userEmail,
+            vars: {
+                orgName:  organizationName,
+                userName: opts.userName,
+                reason,
+            },
+        });
     }
 
     /**
-     * Send verification approved notification
+     * Send member invitation email.
+     *
+     * Signature matches original: sendInvitation(email, orgName, acceptUrl, signupUrl, isNewUser)
      */
-    async sendVerificationApproved(organizationName, adminEmail) {
-        const subject = `Business Verification Approved - ${organizationName}`;
-        const body = `
-            <h2>Business Verification Approved</h2>
-            <p>Congratulations! Your business verification for <strong>${organizationName}</strong> has been approved.</p>
-            <p>Your organization now has access to verified business features.</p>
-            <br>
-            <p>Thank you for being a valued partner!</p>
-        `;
-
-        await sendEmail(adminEmail, subject, body);
-    }
-
-    /**
-     * Send verification rejected notification
-     */
-    async sendVerificationRejected(organizationName, adminEmail, reason) {
-        const subject = `Business Verification Update - ${organizationName}`;
-        const body = `
-            <h2>Business Verification Review Complete</h2>
-            <p>Thank you for submitting your business verification for <strong>${organizationName}</strong>.</p>
-            <p>Unfortunately, we were unable to approve your verification at this time.</p>
-            <p><strong>Reason:</strong> ${reason}</p>
-            <p>You may resubmit your verification with updated documents.</p>
-            <br>
-            <p>If you have questions, please contact our support team.</p>
-        `;
-
-        await sendEmail(adminEmail, subject, body);
-    }
-
-    /**
-     * Send partner application submitted confirmation
-     */
-    async sendPartnerApplicationSubmitted(organizationName, adminEmail, tier) {
-        const subject = `Partner Application Submitted - ${organizationName}`;
-        const body = `
-            <h2>Partner Application Submitted</h2>
-            <p>Your application for <strong>${tier}</strong> partner status has been submitted successfully.</p>
-            <p>Organization: <strong>${organizationName}</strong></p>
-            <p>Our team will review your application and respond within 5-7 business days.</p>
-            <br>
-            <p>Thank you for your interest in partnering with Crafted Climate!</p>
-        `;
-
-        await sendEmail(adminEmail, subject, body);
-    }
-
-    /**
-     * Send partner application approved notification
-     */
-    async sendPartnerApplicationApproved(organizationName, adminEmail, tier, benefits) {
-        const subject = `Partner Application Approved - ${organizationName}`;
-        const body = `
-            <h2>Welcome to the Crafted Climate Partner Program!</h2>
-            <p>Congratulations! Your application for <strong>${tier}</strong> partner status has been approved.</p>
-            <p>Organization: <strong>${organizationName}</strong></p>
-            <br>
-            <h3>Your Partner Benefits:</h3>
-            <ul>
-                <li><strong>${benefits.discountPercentage}% discount</strong> on all subscriptions</li>
-                <li><strong>${benefits.freeDevices} free devices</strong></li>
-                <li><strong>${benefits.apiRateLimitMultiplier}x API rate limit</strong></li>
-                ${benefits.prioritySupport ? '<li><strong>Priority support</strong></li>' : ''}
-                ${benefits.dedicatedAccountManager ? '<li><strong>Dedicated account manager</strong></li>' : ''}
-                ${benefits.customBranding ? '<li><strong>Custom branding</strong></li>' : ''}
-            </ul>
-            <br>
-            <p>Your benefits are now active and will be applied automatically.</p>
-            <p>Thank you for partnering with us!</p>
-        `;
-
-        await sendEmail(adminEmail, subject, body);
-    }
-
-    /**
-     * Send partner application rejected notification
-     */
-    async sendPartnerApplicationRejected(organizationName, adminEmail, reason) {
-        const subject = `Partner Application Update - ${organizationName}`;
-        const body = `
-            <h2>Partner Application Review Complete</h2>
-            <p>Thank you for your interest in the Crafted Climate Partner Program.</p>
-            <p>Organization: <strong>${organizationName}</strong></p>
-            <p>After careful review, we are unable to approve your partner application at this time.</p>
-            <p><strong>Reason:</strong> ${reason}</p>
-            <p>You may reapply in the future as your organization grows.</p>
-            <br>
-            <p>If you have questions, please contact our partnerships team.</p>
-        `;
-
-        await sendEmail(adminEmail, subject, body);
-    }
-
-    /**
-     * Send type change request submitted confirmation
-     */
-    async sendTypeChangeRequestSubmitted(organizationName, adminEmail, requestedType) {
-        const subject = `Organization Type Change Request - ${organizationName}`;
-        const body = `
-            <h2>Type Change Request Submitted</h2>
-            <p>Your request to change the organization type to <strong>${requestedType}</strong> has been submitted.</p>
-            <p>Organization: <strong>${organizationName}</strong></p>
-            <p>Our team will review your request and supporting documents within 3-5 business days.</p>
-            <br>
-            <p>You will receive an email once the review is complete.</p>
-        `;
-
-        await sendEmail(adminEmail, subject, body);
-    }
-
-    /**
-     * Send type change approved notification
-     */
-    async sendTypeChangeApproved(organizationName, adminEmail, newType, automaticBenefits) {
-        const subject = `Type Change Approved - ${organizationName}`;
-        const body = `
-            <h2>Organization Type Change Approved</h2>
-            <p>Your request to change the organization type has been approved.</p>
-            <p>Organization: <strong>${organizationName}</strong></p>
-            <p>New Type: <strong>${newType}</strong></p>
-            ${automaticBenefits ? '<p><strong>Automatic 15% non-profit discount applied!</strong></p>' : ''}
-            <br>
-            <p>Your organization type has been updated successfully.</p>
-        `;
-
-        await sendEmail(adminEmail, subject, body);
-    }
-
-    /**
-     * Send type change rejected notification
-     */
-    async sendTypeChangeRejected(organizationName, adminEmail, reason) {
-        const subject = `Type Change Request Update - ${organizationName}`;
-        const body = `
-            <h2>Type Change Request Review Complete</h2>
-            <p>Thank you for submitting your organization type change request.</p>
-            <p>Organization: <strong>${organizationName}</strong></p>
-            <p>After reviewing your request and supporting documents, we are unable to approve the change at this time.</p>
-            <p><strong>Reason:</strong> ${reason}</p>
-            <p>You may submit a new request with additional documentation if needed.</p>
-            <br>
-            <p>If you have questions, please contact our support team.</p>
-        `;
-
-        await sendEmail(adminEmail, subject, body);
-    }
-
-    /**
-     * Send partner status revoked notification
-     */
-    async sendPartnerStatusRevoked(organizationName, adminEmail, reason) {
-        const subject = `Partner Status Update - ${organizationName}`;
-        const body = `
-            <h2>Partner Status Update</h2>
-            <p>This is to inform you that your partner status for <strong>${organizationName}</strong> has been revoked.</p>
-            <p><strong>Reason:</strong> ${reason}</p>
-            <p>Your organization will continue to operate normally, but partner benefits will no longer apply.</p>
-            <br>
-            <p>If you believe this was done in error or have questions, please contact our partnerships team.</p>
-        `;
-
-        await sendEmail(adminEmail, subject, body);
-    }
-
-    /**
-     * Send organization creation request approved notification
-     */
-    async sendOrganizationApproved(userEmail, organizationName) {
-        const subject = `Organization Created - ${organizationName}`;
-        const body = `
-            <h2>Organization Creation Approved</h2>
-            <p>Congratulations! Your request to create <strong>${organizationName}</strong> has been approved.</p>
-            <p>Your organization has been created and verified successfully.</p>
-            <p>You can now access your organization dashboard and start adding team members.</p>
-            <br>
-            <p>Thank you for choosing Crafted Climate!</p>
-        `;
-
-        await sendEmail(userEmail, subject, body);
-    }
-
-    /**
-     * Send organization creation request rejected notification
-     */
-    async sendOrganizationRejected(userEmail, organizationName, reason) {
-        const subject = `Organization Creation Update - ${organizationName}`;
-        const body = `
-            <h2>Organization Creation Request Update</h2>
-            <p>Thank you for your interest in creating an organization on Crafted Climate.</p>
-            <p>After reviewing your request for <strong>${organizationName}</strong>, we are unable to approve it at this time.</p>
-            <p><strong>Reason:</strong> ${reason}</p>
-            <p>You may submit a new request with updated details or documentation.</p>
-            <br>
-            <p>If you have questions, please contact our support team.</p>
-        `;
-
-        await sendEmail(userEmail, subject, body);
-    }
-
-    /**
-     * Send member invitation email
-     */
-    async sendInvitation(email, organizationName, acceptUrl, signupUrl, isNewUser) {
-        const subject = `Invitation to join ${organizationName} on Crafted Climate`;
-        const body = `
-            <h2>You've been invited!</h2>
-            <p>You have been invited to join the organization <strong>${organizationName}</strong> on Crafted Climate.</p>
-            ${isNewUser ? `
-                <p>To accept this invitation, please sign up by clicking the link below:</p>
-                <p><a href="${signupUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Sign Up & Accept Invite</a></p>
-            ` : `
-                <p>To accept this invitation, please click the link below:</p>
-                <p><a href="${acceptUrl}" style="background-color: #008CBA; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Accept Invitation</a></p>
-            `}
-            <p>This link will expire in 48 hours.</p>
-            <br>
-            <p>Best regards,<br>The Crafted Climate Team</p>
-        `;
-
-        await sendEmail(email, subject, body);
+    async sendInvitation(email, organizationName, acceptUrl, signupUrl, isNewUser, opts = {}) {
+        await sendCCEmail({
+            type: 'org.invitation',
+            to: email,
+            vars: {
+                orgName:        organizationName,
+                inviteeName:    opts.inviteeName,
+                inviterName:    opts.inviterName,
+                role:           opts.role,
+                acceptUrl,
+                signupUrl,
+                isNewUser:      !!isNewUser,
+                invitationMode: isNewUser ? 'new_user' : 'existing_user',
+                expiresAt:      opts.expiresAt,
+            },
+        });
     }
 }
 

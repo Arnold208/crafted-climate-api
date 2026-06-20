@@ -1,5 +1,7 @@
 const organizationService = require('./organization.service');
 const analyticsService = require('../analytics/analytics.service');
+// MRV field visibility: strip MRV fields from org responses for non-MRV users
+const { applyOrgMRVVisibility } = require('../../services/mrv/mrvFieldVisibility');
 
 class OrganizationController {
 
@@ -109,7 +111,9 @@ class OrganizationController {
     async getMyOrganizations(req, res) {
         try {
             const orgs = await organizationService.getUserOrganizations(req.user.userid);
-            return res.status(200).json(orgs);
+            // Strip MRV fields for users without MRV project access
+            const sanitized = applyOrgMRVVisibility(orgs, req.user, null, req);
+            return res.status(200).json(sanitized);
         } catch (error) {
             return res.status(500).json({ message: error.message });
         }
@@ -119,7 +123,12 @@ class OrganizationController {
         try {
             const { orgId } = req.params;
             const org = await organizationService.getOrganizationInfo(orgId);
-            return res.status(200).json(org);
+            // Strip MRV fields for users without MRV project access
+            const sanitized = applyOrgMRVVisibility(
+                org?.toObject ? org.toObject() : org,
+                req.user, orgId, req
+            );
+            return res.status(200).json(sanitized);
         } catch (error) {
             if (error.message.includes("not found")) return res.status(404).json({ message: error.message });
             return res.status(500).json({ message: error.message });

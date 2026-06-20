@@ -175,6 +175,54 @@ const registerNewDeviceSchema = new mongoose.Schema({
     last_calibration_update: { type: Date, default: null }
   },
 
+  // ============================================================
+  // MRV ENGINE FIELDS (optional — additive, non-breaking)
+  // ============================================================
+
+  /**
+   * Whether this device participates in the MRV evidence path.
+   * When false (default), the device only follows the operational path.
+   */
+  mrvEnabled: { type: Boolean, default: false },
+
+  /**
+   * Active MRV project assignments for this device.
+   * Each entry links the device to a specific project + site + installation record.
+   */
+  mrvProjectAssignments: [
+    new mongoose.Schema(
+      {
+        projectId: { type: String, required: true },
+        siteId: { type: String },
+        installationId: { type: String },
+        assignedAt: { type: Date, default: Date.now }
+      },
+      { _id: false }
+    )
+  ],
+
+  /**
+   * MRV retention class. 'MRV' means hard-delete is blocked for this device's telemetry.
+   * Set to 'MRV' when mrvEnabled = true.
+   */
+  retentionClass: {
+    type: String,
+    enum: ['OPERATIONAL', 'MRV'],
+    default: 'OPERATIONAL'
+  },
+
+  /**
+   * Expected reporting frequency in seconds (for completeness tracking).
+   * Set per device based on methodology requirements.
+   */
+  expectedFrequencySeconds: { type: Number, default: null },
+
+  /**
+   * Firmware versions approved for MRV use on this device.
+   * Telemetry from unapproved firmware versions is flagged during QA/QC.
+   */
+  approvedFirmwareVersions: { type: [String], default: [] },
+
   deletedAt: { type: Date, default: null, index: true }
 }, { versionKey: false });
 

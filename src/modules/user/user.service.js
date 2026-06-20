@@ -464,16 +464,26 @@ class UserService {
      * Helper: Send OTP via both Email and SMS
      */
     async _sendDualChannelOtp(user, context = "Account Verification") {
-        const message = `Your CraftedClimate OTP for ${context} is ${user.otp}. Expires in 15m.`;
+        const { sendCCEmail } = require('../../services/email/craftedClimateMailer');
+        const smsMessage = `Your CraftedClimate OTP for ${context} is ${user.otp}. Expires in 15 minutes.`;
 
         const tasks = [];
 
-        // 1. Email Channel
+        // 1. Email Channel — branded auth.otp template
         tasks.push((async () => {
             try {
-                await sendEmail(user.email, `CraftedClimate - ${context}`, message);
+                await sendCCEmail({
+                    type: 'auth.otp',
+                    to: user.email,
+                    vars: {
+                        userName:  user.firstName || user.username,
+                        otp:       String(user.otp),
+                        expiresIn: '15 minutes',
+                        context,
+                    },
+                });
             } catch (err) {
-                console.error('[UserService] Email Send Error:', err.message);
+                console.error('[UserService] OTP Email Error:', err.message);
             }
         })());
 
@@ -481,49 +491,43 @@ class UserService {
         if (user.contact) {
             tasks.push((async () => {
                 try {
-                    await sendSMS(user.contact, message);
+                    await sendSMS(user.contact, smsMessage);
                 } catch (err) {
                     console.error('[UserService] SMS Send Error:', err.message);
                 }
             })());
         }
 
-        // Run in parallel - failure in one won't block the other or the caller
         await Promise.allSettled(tasks);
     }
 
     /**
      * Helper: Send Professional Welcome Message
+     * Uses auth.welcomeGoogle / auth.welcomeDb from craftedClimateMailer.
      */
     async _sendWelcomeMessage(user) {
-        const welcomeText = `Welcome to CraftedClimate, ${user.firstName || user.username}! 🌍\n\nWe're thrilled to have you join our mission for a sustainable future. Your account is now active and verified via Google.\n\nExplore your dashboard: ${process.env.APP_URL || 'https://app.craftedclimate.com'}`;
-
-        const emailBody = `
-            <div style="font-family: 'Inter', sans-serif; color: #111827; line-height: 1.6;">
-                <h1 style="color: #059669; font-size: 24px; margin-bottom: 20px;">Welcome to CraftedClimate! 🌍</h1>
-                <p>Hello <strong>${user.firstName || user.username}</strong>,</p>
-                <p>We are delighted to welcome you to the CraftedClimate platform. Your account has been successfully created and verified via Google.</p>
-                <p>At CraftedClimate, we are committed to providing you with the best-in-class tools for environmental monitoring and climate action. You can now access your Command Center to manage your devices and analyze real-time data.</p>
-                <div style="text-align: center; margin: 30px 0;">
-                    <a href="${process.env.APP_URL || 'https://app.craftedclimate.com'}" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Explore Your Dashboard</a>
-                </div>
-                <p>If you have any questions, our support team is always here to help.</p>
-                <p>Best Regards,<br><strong>The CraftedClimate Team</strong></p>
-            </div>
-        `;
+        const { sendCCEmail } = require('../../services/email/craftedClimateMailer');
+        const userName = user.firstName || user.username || 'there';
 
         const tasks = [];
 
-        // 1. Send Email
+        // 1. Branded welcome email — auth.welcomeGoogle covers Google SSO + DB users
         tasks.push((async () => {
             try {
-                await sendEmail(user.email, "Welcome to CraftedClimate", emailBody);
+                await sendCCEmail({
+                    type: 'auth.welcomeGoogle',
+                    to: user.email,
+                    vars: {
+                        userName,
+                        dashboardUrl: process.env.APP_URL || 'https://app.craftedclimate.org',
+                    },
+                });
             } catch (err) {
                 console.error('[UserService] Welcome Email Error:', err.message);
             }
         })());
 
-        // 2. Send SMS Welcome
+        // 2. SMS Welcome
         if (user.contact) {
             tasks.push((async () => {
                 try {
@@ -986,9 +990,18 @@ class UserService {
             console.error('[UserService] Backoffice SMS OTP Send Error:', err.message);
         }
 
-        // Also mock email for debugging/local testing if needed
+        // Also send email MFA code for debugging/local testing
         try {
-            await sendEmail(user.email, 'CraftedClimate - Backoffice OTP', message);
+            const { sendCCEmail } = require('../../services/email/craftedClimateMailer');
+            await sendCCEmail({
+                type: 'auth.backofficeMfa',
+                to: user.email,
+                vars: {
+                    userName:  user.firstName || user.username,
+                    otp:       String(otpCode),
+                    expiresIn: '5 minutes',
+                },
+            });
         } catch (err) { /* ignore */ }
 
         return {
@@ -1143,8 +1156,20 @@ class UserService {
         
         for (const admin of otherAdmins) {
             try {
-                await sendEmail(admin.email, 'CraftedClimate - Admin Password Reset Approval Required', notificationText);
-            } catch (err) { /* ignore */ }
+                const { sendCCEmail } = require('../../services/email/craftedClimateMailer');
+                await sendCCEmail({
+                    type: 'admin.passwordResetRequest',
+                    to: admin.email,
+                    vars: {
+                        adminName:             admin.firstName || admin.username,
+                        requestingAdminName:   user.firstName || user.username || user.email,
+                        requestingAdminEmail:  user.email,
+                        requestedAt:           new Date().toISOString(),
+                        requestId,
+                        reviewUrl: `${process.env.BACKOFFICE_URL || process.env.APP_URL}/admin/password-resets`,
+                    },
+                });
+            } catch (err) { /* ignore — non-blocking */ }
         }
 
         // Audit Log

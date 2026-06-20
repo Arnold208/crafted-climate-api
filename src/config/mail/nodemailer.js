@@ -5,7 +5,6 @@ const dotenv = require('dotenv');
 
 let envFile;
 
-
 if (process.env.NODE_ENV === 'development') {
     envFile = '.env.development';
 } else {
@@ -30,6 +29,27 @@ const transporter = nodemailer.createTransport({
     debug: false
 });
 
+/**
+ * Send a pre-built Nodemailer payload.
+ * Used by craftedClimateMailer — accepts the full object returned by
+ * createEmailPayload() from crafted_climate_email_templates.js (including
+ * CID logo attachment and all headers).
+ */
+async function sendPayload(payload) {
+    try {
+        const info = await transporter.sendMail(payload);
+        // console.log('✅ Email sent:', info.messageId);
+        return info;
+    } catch (error) {
+        console.error('❌ Error sending email payload:', error);
+        throw error;
+    }
+}
+
+/**
+ * Legacy helper — kept for backward compatibility.
+ * Prefer sendPayload() / craftedClimateMailer for new code.
+ */
 async function sendEmail(to, subject, htmlBody, attachments = []) {
     try {
         const mailOptions = {
@@ -41,7 +61,6 @@ async function sendEmail(to, subject, htmlBody, attachments = []) {
         };
 
         const info = await transporter.sendMail(mailOptions);
-
         // console.log('✅ Email sent:', info.messageId);
     } catch (error) {
         console.error('❌ Error sending email:', error);
@@ -49,4 +68,5 @@ async function sendEmail(to, subject, htmlBody, attachments = []) {
     }
 }
 
-module.exports = { sendEmail };
+module.exports = { sendEmail, sendPayload, transporter };
+

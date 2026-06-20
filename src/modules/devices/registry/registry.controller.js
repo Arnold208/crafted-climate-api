@@ -3,6 +3,9 @@ const enforceDeviceLimit = require('../../../middleware/subscriptions/enforceDev
 const { checkDeviceAccessCompatibility } = require('../../../middleware/devices/checkDeviceAccessCompatibility');
 // checkDeviceAccessCompatibility signature: (req, resource, action) -> boolean
 
+// MRV field visibility: strip MRV fields from device responses for non-MRV users
+const { applyDeviceMRVVisibility } = require('../../../services/mrv/mrvFieldVisibility');
+
 class RegistryController {
     async registerDevice(req, res) {
         try {
@@ -81,7 +84,9 @@ class RegistryController {
                     accessible.push(d);
                 }
             }
-            res.json(accessible);
+            // Strip MRV fields for users without MRV project access
+            const orgId = req.currentOrgId || req.headers['x-org-id'] || req.query.orgId;
+            res.json(applyDeviceMRVVisibility(accessible, req.user, orgId, req));
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
@@ -95,7 +100,10 @@ class RegistryController {
             if (!await checkDeviceAccessCompatibility(req, device, 'view')) {
                 return res.status(403).json({ message: 'Forbidden' });
             }
-            res.status(200).json(device);
+            // Strip MRV fields for users without MRV project access
+            const orgId = req.currentOrgId || req.headers['x-org-id'] || req.query.orgId;
+            const sanitized = applyDeviceMRVVisibility(device?.toObject ? device.toObject() : device, req.user, orgId, req);
+            res.status(200).json(sanitized);
         } catch (error) {
             res.status(500).json({ error: error.message });
         }

@@ -212,6 +212,28 @@ class TelemetryService {
             throw new Error('Unauthorized access'); // 403
         }
 
+        // ============================================================
+        // MRV ENGINE: Hard-delete guard
+        // Block deletion of telemetry for devices with MRV retention
+        // VCS requires immutable evidence chain — cannot hard-delete
+        // ============================================================
+        try {
+            const TelemetryReceipt = require('../../models/mrv/evidence/TelemetryReceipt.model');
+            const mrvReceiptCount = await TelemetryReceipt.countDocuments({ auid, retentionClass: 'MRV' });
+            if (mrvReceiptCount > 0) {
+                const err = new Error(
+                    `Cannot hard-delete telemetry for device ${auid}: ${mrvReceiptCount} MRV-retained evidence records exist. ` +
+                    `MRV data deletion requires a formal retraction process under VCS programme rules.`
+                );
+                err.statusCode = 409;
+                err.code = 'MRV_RETENTION_BLOCK';
+                throw err;
+            }
+        } catch (mrvErr) {
+            if (mrvErr.code === 'MRV_RETENTION_BLOCK') throw mrvErr;
+            // If MRV model not loaded yet, allow operational delete (non-MRV devices)
+        }
+
         // 2. Delete from Redis
         await redisClient.del(auid);
 

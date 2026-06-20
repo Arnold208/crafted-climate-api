@@ -19,6 +19,19 @@ const emailWorker = require('./workers/emailWorker');
 const alertWorker = require('./workers/alertWorker');
 const webhookWorker = require('./workers/webhookWorker');
 
+// ============================================================
+// MRV ENGINE — Workers (parallel path, non-blocking)
+// ============================================================
+const { startMRVEvidenceWorker }       = require('./workers/mrv/mrvEvidenceWorker');
+const { startMRVObservationWorker }    = require('./workers/mrv/mrvObservationWorker');
+const { startMRVValidationWorker }     = require('./workers/mrv/mrvValidationWorker');
+const { startMRVQualificationWorker }  = require('./workers/mrv/mrvQualificationWorker');
+const { startMRVCalculationWorker }    = require('./workers/mrv/mrvCalculationWorker');
+const { startMRVReportWorker }         = require('./workers/mrv/mrvReportWorker');
+const { startMRVNotificationWorker }   = require('./workers/mrv/mrvNotificationWorker');
+const { startMRVCompletenessWorker }   = require('./workers/mrv/mrvCompletenessWorker');
+const { startMRVWebhookWorker }        = require('./workers/mrv/mrvWebhookWorker');
+
 // 🔥 PRODUCTION HARDENING: Queue monitoring for error visibility
 const { QueueEvents } = require('bullmq');
 
@@ -69,9 +82,54 @@ connectRedis()
         alertWorker.start().then(() => console.log('✅ Alert worker started'));
         webhookWorker.start().then(() => console.log('✅ Webhook worker started'));
 
+        // ============================================================
+        // MRV ENGINE — Start all workers (non-blocking try/catch)
+        // MRV worker failures must never crash the operational server
+        // ============================================================
+        try {
+            console.log('📊 Starting MRV Engine workers...');
+            startMRVEvidenceWorker();
+            startMRVObservationWorker();
+            startMRVValidationWorker();
+            startMRVQualificationWorker();
+            startMRVCalculationWorker();
+            startMRVReportWorker();
+            startMRVNotificationWorker();
+            startMRVCompletenessWorker();
+            startMRVWebhookWorker();
+            console.log('✅ All MRV Engine workers started');
+        } catch (mrvWorkerErr) {
+            console.error('❌ MRV Engine workers failed to start (operational path unaffected):', mrvWorkerErr.message);
+        }
+
         // 🔥 Initialize Email Templates (Seeds DB)
         const emailTemplateService = require('./services/emailTemplate.service');
         emailTemplateService.initializeDefaults().catch(err => console.error('❌ Failed to init templates:', err.message));
+
+        // ============================================================
+        // MRV ENGINE — Seed Catalogue (standards, methodologies, sensor capabilities)
+        // Runs AFTER MongoDB connection is confirmed ready (avoids Cosmos DB timeout race)
+        // All entries are upserted (idempotent — safe to run on every restart)
+        // ============================================================
+        const mongoose = require('mongoose');
+        const runMRVSeedWhenReady = () => {
+            try {
+                const { seedMRVCatalogue } = require('./services/mrv/mrvSeedService');
+                const { ensureContainers } = require('./services/mrv/mrvBlobService');
+                ensureContainers().catch(e => console.warn('[MRVBlob] Container ensure skipped:', e.message));
+                seedMRVCatalogue();
+            } catch (mrvSeedErr) {
+                console.error('❌ MRV catalogue seed failed (non-fatal):', mrvSeedErr.message);
+            }
+        };
+
+        if (mongoose.connection.readyState === 1) {
+            // Already connected (e.g. hot reload) — run immediately
+            runMRVSeedWhenReady();
+        } else {
+            // Wait for connection to be established before seeding
+            mongoose.connection.once('connected', runMRVSeedWhenReady);
+        }
 
         // 🔥 PRODUCTION HARDENING: Monitor queue for failed/stalled jobs
         const queueEvents = new QueueEvents('telemetry', {

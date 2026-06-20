@@ -13,6 +13,8 @@ const { createAuditLog } = require('../../../utils/auditLogger');
 const { client: redisClient } = require('../../../config/redis/redis');
 // Notecard auto-sync (non-fatal if Notehub is unreachable)
 const notecardService = require('../notecard/notecard.service');
+// Device event log (fire-and-forget)
+const eventLog = require('../eventLog/eventLog.service');
 
 // Telemetry Models for Fallback
 const EnvTelemetry = require('../../../models/telemetry/envModel');
@@ -193,8 +195,25 @@ class RegistryService {
 
         const { nickname, location, frequency, batch, netMode } = reqBody;
 
+        // ── Validate frequency / batch minimums (frequency is in MINUTES) ──────
+        if (frequency !== undefined) {
+            const freqNum = Number(frequency);
+            if (isNaN(freqNum) || freqNum < 10) {
+                throw new Error('Minimum transmission frequency is 10 minutes.');
+            }
+        }
+        if (batch !== undefined) {
+            const batchNum = Number(batch);
+            if (isNaN(batchNum) || batchNum < 2) {
+                throw new Error('Minimum batch size is 2 readings per batch.');
+            }
+        }
+
+        // Capture before-state for CONFIG_CHANGED event log
+        const configBefore = { frequency: device.frequency, batch: device.batch, netMode: device.netMode };
+
         // Track config changes before mutation (for Notecard sync decision)
-        const freqChanged = frequency !== undefined && frequency !== device.frequency;
+        const freqChanged  = frequency !== undefined && frequency !== device.frequency;
         const batchChanged = batch !== undefined && batch !== device.batch;
         
         let netModeChanged = false;
@@ -311,12 +330,38 @@ class RegistryService {
         await device.save();
         await CacheService.invalidate(`device:${auid}:meta`);
 
+        // ── Proactive cache warm-up (eliminates stale window after invalidation) ──
+        CacheService.warmUp(
+            `device:${auid}:meta`,
+            () => registerNewDevice.findOne({ auid }).lean(),
+            86400
+        ).catch(() => {});
+
         // 📡 AUTO-PUSH to Notecard if frequency, batch, or netMode changed
         if (freqChanged || batchChanged || netModeChanged) {
             notecardService.syncConfigToNotecard(device).catch(() => {}); // Non-blocking, non-fatal
         }
 
-        return device;
+        // 📋 EVENT LOG — config change
+        if (freqChanged || batchChanged || netModeChanged) {
+            const configAfter = { frequency: device.frequency, batch: device.batch, netMode: device.netMode };
+            eventLog.configChanged({
+                auid,
+                devid:  device.devid,
+                userId: userid,
+                orgId:  device.organizationId,
+                before: configBefore,
+                after:  configAfter,
+            }).catch(() => {});
+        }
+
+        // Attach derived read_interval for informational display
+        const plainDevice = device.toObject ? device.toObject() : { ...device };
+        plainDevice.read_interval_minutes = parseFloat(
+            ((plainDevice.frequency || 10) / (plainDevice.batch || 2)).toFixed(2)
+        );
+
+        return plainDevice;
     }
 
     async deleteDevice(auid) {
@@ -619,14 +664,22 @@ class RegistryService {
         return device;
     }
 
-    async sendCollaboratorEmail(email, role, devName, permissions) {
-        const emailContent = `
-          <p>Hi there,</p>
-          <p>You’ve been added as a <strong>${role}</strong> on the device <strong>${devName}</strong>.</p>
-          <p>Permissions: ${permissions.join(', ')}.</p>
-          <p>CraftedClimate Team</p>
-        `;
-        await sendEmail(email, `Added as collaborator on ${devName}`, emailContent);
+    async sendCollaboratorEmail(email, role, devName, permissions, opts = {}) {
+        const { sendCCEmail } = require('../../../services/email/craftedClimateMailer');
+        await sendCCEmail({
+            type: 'collaboration.deviceAdded',
+            to: email,
+            vars: {
+                collaboratorName: opts.collaboratorName,
+                devName,
+                devid:    opts.devid,
+                role,
+                location: opts.location,
+                addedBy:  opts.addedBy,
+                permissions: Array.isArray(permissions) ? permissions : [],
+                deviceUrl: opts.deviceUrl || process.env.APP_URL,
+            },
+        });
     }
 
     /**

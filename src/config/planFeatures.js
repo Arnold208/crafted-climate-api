@@ -142,6 +142,9 @@ const PLAN_FEATURES = {
     webhooks: true,
     alerts: 'automated',
     supportLevel: 'dedicated_247',
+
+    // MRV Engine — only enterprise and maas_enterprise
+    mrvEngine: true,
   },
 
   // ------------------------------------
@@ -205,6 +208,9 @@ const PLAN_FEATURES = {
     webhooks: true,
     alerts: 'automated',
     supportLevel: 'dedicated_247',
+
+    // MRV Engine — only enterprise and maas_enterprise
+    mrvEngine: true,
   }
 };
 

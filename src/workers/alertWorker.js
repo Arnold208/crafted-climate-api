@@ -8,6 +8,7 @@ const Deployment = require('../models/deployment/deploymentModel');
 const { sendSMS } = require('../config/sms/sms');
 const emailTemplateService = require('../services/emailTemplate.service');
 const logger = require('../utils/logger');
+const eventLog = require('../modules/devices/eventLog/eventLog.service');
 
 const connection = {
     host: process.env.REDIS_HOST || '127.0.0.1',
@@ -28,19 +29,28 @@ function formatDuration(minutes) {
     return `${parseFloat(hours.toFixed(1))} hours`;
 }
 
-function getStageConfig(stage, device, lastSeen) {
+function getStageConfig(stage, device, lastSeen, extras = {}) {
     const timeStr = new Date(lastSeen).toLocaleString();
     const nickname = device.nickname || device.devid;
     const location = device.metadata?.location || device.location || 'Unknown';
+    const appUrl   = process.env.APP_URL || 'https://app.craftedclimate.com';
 
     let sms = '';
     let templateSlug = '';
 
     const variables = {
         nickname,
-        devid: device.devid,
-        lastSeen: timeStr,
-        location: typeof location === 'string' ? location : JSON.stringify(location)
+        devid:               device.devid,
+        lastSeen:            timeStr,
+        location:            typeof location === 'string' ? location : JSON.stringify(location),
+        minutesOffline:      extras.minutesOffline || '',
+        durationFormatted:   extras.minutesOffline ? formatDuration(extras.minutesOffline) : '',
+        consecutivePartials: extras.consecutivePartials || 0,
+        batchHealth:         extras.consecutivePartials > 0 ? `⚠️ ${extras.consecutivePartials} partial batch(es) detected before going offline` : 'No batch issues detected',
+        deviceModel:         device.devmod || device.model || 'Unknown',
+        orgName:             device.organizationName || '',
+        dashboardUrl:        `${appUrl}/devices/${device.auid}`,
+        supportUrl:          `${appUrl}/support`,
     };
 
     switch (stage.level) {
@@ -63,8 +73,8 @@ function getStageConfig(stage, device, lastSeen) {
     return { sms, templateSlug, variables };
 }
 
-async function sendStageAlert(device, recipients, smsRecipients, stage, lastSeen) {
-    const config = getStageConfig(stage, device, lastSeen);
+async function sendStageAlert(device, recipients, smsRecipients, stage, lastSeen, extras = {}) {
+    const config = getStageConfig(stage, device, lastSeen, extras);
     if (!config) return;
 
     logger.info(`📢 Sending [${stage.tag}] Alert for ${device.devid} to ${recipients.length} emails, ${smsRecipients.length} SMS`);
@@ -114,7 +124,7 @@ class AlertWorker {
     }
 
     async processJob(job) {
-        const { auid, lastSeen, targetStage, now } = job.data;
+        const { auid, lastSeen, targetStage, now, consecutivePartials = 0, minutesOffline = 0 } = job.data;
 
         try {
             const device = await RegisterDevice.findOne({ auid });
@@ -205,7 +215,23 @@ class AlertWorker {
 
             // E. Send Alert
             if (emails.size > 0 || phones.size > 0) {
-                await sendStageAlert(device, Array.from(emails), Array.from(phones), targetStage, lastSeen);
+                await sendStageAlert(device, Array.from(emails), Array.from(phones), targetStage, lastSeen, {
+                    minutesOffline,
+                    consecutivePartials,
+                });
+
+                // 📋 EVENT LOG — alert dispatched
+                eventLog.alertFired({
+                    auid,
+                    devid:          device.devid,
+                    userId:         device.userid || device.userId,
+                    orgId:          device.organizationId,
+                    alertLevel:     targetStage.level,
+                    alertTag:       targetStage.tag,
+                    recipientCount: emails.size + phones.size,
+                    emailCount:     emails.size,
+                    smsCount:       phones.size,
+                }).catch(() => {});
             }
 
             // F. Update Context in Redis
