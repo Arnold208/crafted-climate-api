@@ -79,6 +79,13 @@ const googleRoutes = require('./modules/auth/google.routes');
 const authenticateToken = require('./middleware/bearermiddleware');
 const { getCsrfToken } = require('./middleware/csrfProtection');
 
+// ============================================
+// SESSION
+// ============================================
+const buildSessionMiddleware = require('./config/session');
+const { populateUserFromSession } = require('./middleware/sessionMiddleware');
+const sessionRoutes = require('./modules/auth/session.routes');
+
 const app = express();
 
 // Trust proxy for rate limiting behind load balancers/proxies
@@ -138,6 +145,16 @@ app.use(express.json({
         req.rawBody = buf;
     }
 }));
+
+// ── Session middleware ────────────────────────────────────────────────────────
+// Must come AFTER express.json but BEFORE routes.
+// Sets req.session on every request.
+// populateUserFromSession then reads req.session.user → req.user for convenience.
+// Neither middleware rejects unauthenticated requests — that is the job of route guards.
+app.use(buildSessionMiddleware());
+app.use(populateUserFromSession);
+// ─────────────────────────────────────────────────────────────────────────────
+
 app.use(auditLogger);
 
 // Docs JSON (Protected)
@@ -183,6 +200,13 @@ if (process.env.NODE_ENV === 'development') {
 
 // GOOGLE AUTH
 app.use('/auth/google', googleRoutes);
+
+// SESSION AUTH (browser dashboard + partner portals)
+// POST   /api/auth/session/login   — credential login → sets cc.sid cookie
+// DELETE /api/auth/session/logout  — destroys session + clears cookie
+// GET    /api/auth/session/me      — returns current session user
+// PATCH  /api/auth/session/org     — switch active org within session
+app.use('/api/auth/session', sessionRoutes);
 
 // PLATFORM ADMIN - CORS MANAGEMENT
 app.use('/api/admin/cors', corsAdminRoutes);

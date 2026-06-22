@@ -1,6 +1,7 @@
-﻿'use strict';
+'use strict';
 const router = require('express').Router();
 const authenticateToken = require('../../middleware/bearermiddleware');
+const { requirePermission } = require('../../middleware/authenticateApiKey');
 const { verifyMRVProjectAccess } = require('../../middleware/mrv/verifyMRVProjectAccess');
 const { mrvAuditEvent } = require('../../middleware/mrv/mrvAuditEvent');
 const MRVObservation = require('../../models/mrv/evidence/MRVObservation.model');
@@ -45,7 +46,7 @@ const TelemetryReceipt = require('../../models/mrv/evidence/TelemetryReceipt.mod
  *                     usable: { type: integer, example: 1412 }
  *                     completenessRatio: { type: number, format: float, example: 0.9806 }
  */
-router.get('/:projectId/data-quality/summary', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/data-quality/summary', authenticateToken, requirePermission('mrv:data-quality:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const filter = { projectId: req.params.projectId };
     if (req.query.monitoringPeriodId) filter.monitoringPeriodId = req.query.monitoringPeriodId;
@@ -92,7 +93,7 @@ router.get('/:projectId/data-quality/summary', authenticateToken, verifyMRVProje
  *           application/json:
  *             schema: { $ref: '#/components/schemas/MRVListResponse' }
  */
-router.get('/:projectId/data-quality/quarantined', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/data-quality/quarantined', authenticateToken, requirePermission('mrv:data-quality:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const { page = 1, limit = 50, monitoringPeriodId } = req.query;
     const filter = { projectId: req.params.projectId, qualityStatus: 'QUARANTINED' };
@@ -147,6 +148,7 @@ router.get('/:projectId/data-quality/quarantined', authenticateToken, verifyMRVP
  *       403: { description: Requires mrv-data-reviewer or above }
  */
 router.post('/:projectId/data-quality/observations/:observationId/approve', authenticateToken,
+  requirePermission('mrv:data-quality:write'),
   verifyMRVProjectAccess(['mrv-data-reviewer', 'mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'OBSERVATION_APPROVED', entityType: 'MRVObservation', getEntityId: (req) => req.params.observationId }),
   async (req, res) => {
@@ -205,6 +207,7 @@ router.post('/:projectId/data-quality/observations/:observationId/approve', auth
  *       404: { description: Observation not found }
  */
 router.post('/:projectId/data-quality/observations/:observationId/void', authenticateToken,
+  requirePermission('mrv:data-quality:write'),
   verifyMRVProjectAccess(['mrv-data-reviewer', 'mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'OBSERVATION_VOIDED', entityType: 'MRVObservation', getEntityId: (req) => req.params.observationId }),
   async (req, res) => {
@@ -247,7 +250,7 @@ router.post('/:projectId/data-quality/observations/:observationId/void', authent
  *                   type: array
  *                   items: { $ref: '#/components/schemas/TelemetryReceipt' }
  */
-router.get('/:projectId/data-quality/unresolved-receipts', authenticateToken, verifyMRVProjectAccess(['mrv-data-reviewer', 'mrv-project-manager', 'mrv-programme-admin']), async (req, res) => {
+router.get('/:projectId/data-quality/unresolved-receipts', authenticateToken, requirePermission('mrv:data-quality:read'), verifyMRVProjectAccess(['mrv-data-reviewer', 'mrv-project-manager', 'mrv-programme-admin']), async (req, res) => {
   try {
     const receipts = await TelemetryReceipt.find({ projectIds: req.params.projectId, status: { $in: ['UNRESOLVED', 'QUARANTINED', 'FAILED'] } }).sort({ receivedAt: -1 }).limit(200).lean();
     res.json({ success: true, data: receipts });

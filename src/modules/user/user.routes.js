@@ -96,6 +96,23 @@ router.post('/login', userController.login);
 
 /**
  * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Log out the current user
+ *     description: |
+ *       Destroys the active browser session and clears the `cc.sid` cookie.
+ *       Safe to call from both browser (cookie) and token-based (JWT/API key) clients.
+ *       Token-based clients should also discard their stored tokens client-side.
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ */
+router.post('/logout', userController.logout);
+
+
+/**
+ * @swagger
  * /api/auth/verify-otp:
  *   post:
  *     tags: [Authentication]

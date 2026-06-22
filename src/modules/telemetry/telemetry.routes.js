@@ -9,6 +9,7 @@ const enforceTelemetryFeature = require('../../middleware/subscriptions/enforceT
 const authenticateToken = require('../../middleware/bearermiddleware');
 const checkOrgAccess = require("../../middleware/organization/checkOrgAccess");
 const checkTelemetryReadAccess = require("../../middleware/organization/checkTelemetryReadAccess");
+const { requirePermission } = require('../../middleware/authenticateApiKey');
 
 const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeature');
 
@@ -50,7 +51,7 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  *       500:
  *         description: Server Error
  */
-router.post('/:model', ingestRouteLimiter, enforceTelemetryIngestion, telemetryController.ingest);
+router.post('/:model', ingestRouteLimiter, requirePermission('telemetry:write'), enforceTelemetryIngestion, telemetryController.ingest);
 
 /**
  * @swagger
@@ -100,6 +101,7 @@ router.post('/:model', ingestRouteLimiter, enforceTelemetryIngestion, telemetryC
  */
 router.get('/:userid/device/:auid',
     authenticateToken,
+    requirePermission('telemetry:read'),
     checkOrgAccess("org.devices.view"),
     checkTelemetryReadAccess,
     telemetryController.getDeviceTelemetry
@@ -135,6 +137,7 @@ router.get('/:userid/device/:auid',
  */
 router.delete('/:userid/device/:auid',
     authenticateToken,
+    requirePermission('telemetry:write'),
     checkOrgAccess("org.devices.edit"),
     telemetryController.deleteDeviceTelemetry
 );
@@ -266,6 +269,7 @@ router.get('/public/telemetry', publicTelemetryLimiter, telemetryController.getP
  */
 router.get('/db/:model/:auid',
     authenticateToken,
+    requirePermission('telemetry:read'),
     checkOrgAccess("org.devices.view"),
     checkTelemetryReadAccess,
     checkPlanFeature('device_read'),
@@ -322,6 +326,7 @@ router.get('/db/:model/:auid',
  */
 router.get('/db/:model/:auid/csv',
     authenticateToken,
+    requirePermission('telemetry:read'),
     checkOrgAccess("org.telemetry.export"),
     checkTelemetryReadAccess,
     csvRouteLimiter,
@@ -358,6 +363,7 @@ router.get('/db/:model/:auid/csv',
  */
 router.get('/db/:model/:auid/raw',
     authenticateToken,
+    requirePermission('telemetry:read'),
     checkOrgAccess("org.devices.view"),
     checkTelemetryReadAccess,
     checkPlanFeature('apiAccess', 'full'), // Only Enterprise (full API access)
@@ -405,6 +411,7 @@ router.get('/db/:model/:auid/raw',
 
 router.get('/graph/:model/:auid',
     authenticateToken,
+    requirePermission('telemetry:read'),
     checkOrgAccess("org.devices.view"),
     checkTelemetryReadAccess,
     dbRouteLimiter,

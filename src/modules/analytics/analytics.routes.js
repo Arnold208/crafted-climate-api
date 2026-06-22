@@ -3,6 +3,7 @@ const router = express.Router();
 const analyticsController = require('./analytics.controller');
 const checkOrgAccess = require('../../middleware/organization/checkOrgAccess');
 const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeature');
+const { requirePermission } = require('../../middleware/authenticateApiKey');
 
 /**
  * @swagger
@@ -35,8 +36,9 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
 router.get(
     '/org/:orgId/insights',
     checkOrgAccess('read_analytics'),      // 1. RBAC Check (Must be Org Member)
-    checkPlanFeature('analytics'),         // 2. Plan Switch (Must have Analytics feature)
-    analyticsController.getOrgInsights    // 3. Controller
+    requirePermission('analytics:read'),   // 2. API key scope check
+    checkPlanFeature('analytics'),         // 3. Plan Switch (Must have Analytics feature)
+    analyticsController.getOrgInsights    // 4. Controller
 );
 
 module.exports = router;

@@ -1,4 +1,6 @@
 const adminOrgService = require('../../services/adminOrganization.service');
+const Organization = require('../../models/organization/organizationModel');
+const { validateScopes, getDefaultScopesForTier } = require('../../config/scopes');
 
 class AdminOrganizationController {
 
@@ -122,6 +124,56 @@ class AdminOrganizationController {
         } catch (error) {
             console.error('[AdminOrgController] Transfer ownership error:', error);
             res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
+     * Set or update the allowed scope ceiling for a partner org.
+     * Body: { scopes: string[] }
+     * Only admin can call this. Org must be an approved partner.
+     */
+    async setPartnerScopes(req, res) {
+        try {
+            const { orgId } = req.params;
+            const { scopes } = req.body;
+            const adminId = req.user.userid;
+
+            if (!scopes || !Array.isArray(scopes)) {
+                return res.status(400).json({ success: false, message: 'scopes must be an array of scope strings' });
+            }
+
+            // Validate all scopes
+            const scopeCheck = validateScopes(scopes);
+            if (!scopeCheck.valid) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid scopes provided',
+                    invalid: scopeCheck.invalid,
+                    adminOnly: scopeCheck.adminOnly
+                });
+            }
+
+            const org = await Organization.findOne({ organizationId: orgId, deletedAt: null });
+            if (!org) return res.status(404).json({ success: false, message: 'Organization not found' });
+            if (!org.partnerStatus || !org.partnerStatus.isPartner) {
+                return res.status(400).json({ success: false, message: 'Organization is not an approved partner' });
+            }
+
+            org.partnerStatus.allowedScopes = scopes;
+            await org.save();
+
+            return res.status(200).json({
+                success: true,
+                message: 'Partner scopes updated',
+                data: {
+                    organizationId: orgId,
+                    allowedScopes: scopes,
+                    updatedBy: adminId
+                }
+            });
+        } catch (error) {
+            console.error('[AdminOrgController] setPartnerScopes error:', error);
+            res.status(500).json({ success: false, message: error.message });
         }
     }
 }

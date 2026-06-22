@@ -217,4 +217,41 @@ router.get('/:orgId/members', authenticateToken, authorizeRoles('admin', 'superv
  */
 router.post('/:orgId/transfer-owner', authenticateToken, authorizeRoles('admin', 'supervisor'), adminOrgController.transferOwnership);
 
+/**
+ * @swagger
+ * /api/admin/organizations/{orgId}/partner-scopes:
+ *   patch:
+ *     tags: [Organizations]
+ *     summary: Set allowed API scopes for a partner organization
+ *     description: Admin-only. Sets the ceiling of what API key scopes this partner org is allowed to have. Must be an approved partner first.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orgId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - scopes
+ *             properties:
+ *               scopes:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example: ["mrv:projects:read", "mrv:reports:download", "mrv:analytics:read"]
+ *     responses:
+ *       200:
+ *         description: Scopes updated
+ *       400:
+ *         description: Invalid scopes or org not a partner
+ */
+router.patch('/:orgId/partner-scopes', authenticateToken, authorizeRoles('admin'), adminOrgController.setPartnerScopes);
+
 module.exports = router;

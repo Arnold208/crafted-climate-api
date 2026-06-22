@@ -63,6 +63,21 @@ async function authenticateApiKey(req, res, next) {
         req.currentOrgId = validKey.organizationId; // for verifyOrgMembership compatibility
         req.authType = 'api_key';
 
+        // For partner keys: apply the org's apiRateLimitMultiplier benefit
+        if (validKey.keyType === 'partner') {
+            try {
+                const Organization = require('../models/organization/organizationModel');
+                const org = await Organization.findOne({ organizationId: validKey.organizationId }).lean();
+                const multiplier = org?.partnerStatus?.benefits?.apiRateLimitMultiplier || 1;
+                if (multiplier > 1) {
+                    // Attach multiplier so apiKeyRateLimiter can use it
+                    req.apiKeyRateLimitMultiplier = multiplier;
+                }
+                // Also attach partner tier for downstream use
+                req.partnerTier = org?.partnerStatus?.tier || 'standard';
+            } catch (_) { /* non-fatal — multiplier defaults to 1 */ }
+        }
+
         // Mock req.user for downstream tenant check & collaborator middlewares compatibility
         req.user = {
             userid: validKey.createdBy,
@@ -128,17 +143,22 @@ function authenticateApiKeyOrToken(req, res, next) {
  */
 function requirePermission(permission) {
     return (req, res, next) => {
+        // JWT users (req.user set by bearermiddleware) bypass scope checks — internal users have full access
+        if (!req.apiKey && req.user && req.authType !== 'api_key') return next();
+
         if (!req.apiKey) {
             return res.status(401).json({
                 success: false,
-                message: 'API key authentication required'
+                message: 'API key authentication required. Provide key in X-API-Key header.'
             });
         }
 
         if (!req.apiKey.permissions.includes(permission)) {
             return res.status(403).json({
                 success: false,
-                message: `Permission denied. Required: ${permission}`
+                message: `Scope denied. This API key requires the '${permission}' scope to access this resource.`,
+                requiredScope: permission,
+                grantedScopes: req.apiKey.permissions
             });
         }
 

@@ -39,6 +39,76 @@ const authorizeRoles = require('../../middleware/rbacMiddleware');
  *       403:
  *         description: Forbidden
  */
+/**
+ * @swagger
+ * /api/admin/api-keys:
+ *   post:
+ *     tags: [API Keys]
+ *     summary: Create a partner API key
+ *     description: Admin creates a scoped API key for a partner organization. Key is shown once.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - organizationId
+ *               - name
+ *               - permissions
+ *             properties:
+ *               organizationId:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               keyType:
+ *                 type: string
+ *                 enum: [org, partner]
+ *                 default: partner
+ *               permissions:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example: ["mrv:projects:read", "mrv:reports:download"]
+ *               expiresAt:
+ *                 type: string
+ *                 format: date-time
+ *               rateLimit:
+ *                 type: object
+ *                 properties:
+ *                   requests:
+ *                     type: integer
+ *                   windowMs:
+ *                     type: integer
+ *               allowedIPs:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       201:
+ *         description: API key created — key shown once
+ *       400:
+ *         description: Validation error
+ */
+router.post('/', authenticateToken, authorizeRoles('admin'), adminApiKeyController.createApiKey);
+
+/**
+ * @swagger
+ * /api/admin/api-keys/scopes:
+ *   get:
+ *     tags: [API Keys]
+ *     summary: List all available permission scopes
+ *     description: Returns all platform scopes grouped by resource, for use when assigning permissions to keys.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All available scopes
+ */
+router.get('/scopes', authenticateToken, authorizeRoles('admin', 'supervisor'), adminApiKeyController.listScopes);
+
 router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor'), adminApiKeyController.listAllApiKeys);
 
 /**

@@ -6,6 +6,7 @@ const registryController = require('./registry.controller');
 const authenticateToken = require('../../../middleware/bearermiddleware');
 const checkDeviceAccessCompatibility = require('../../../middleware/devices/checkDeviceAccessCompatibility');
 const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess');
+const { requirePermission } = require('../../../middleware/authenticateApiKey');
 
 // Rate limiter for public endpoints
 const publicMapLimiter = rateLimit({
@@ -155,6 +156,7 @@ router.get('/public-map/models', publicMapLimiter, registryController.getPublicS
  */
 router.get('/permissions/catalog',
     authenticateToken,
+    requirePermission('devices:read'),
     registryController.getPermissionsCatalog
 );
 
@@ -198,6 +200,7 @@ router.get('/permissions/catalog',
  */
 router.post('/register-device',
     authenticateToken,
+    requirePermission('devices:write'),
     checkOrgAccess("org.devices.add"),
     registryController.registerDevice
 );
@@ -226,6 +229,7 @@ router.post('/register-device',
  */
 router.get('/user/:userid/registered-devices',
     authenticateToken,
+    requirePermission('devices:read'),
     registryController.getUserDevices
 );
 
@@ -249,6 +253,7 @@ router.get('/user/:userid/registered-devices',
  */
 router.get('/find-registered-device/:auid',
     authenticateToken,
+    requirePermission('devices:read'),
     registryController.getDeviceByAuid
 );
 
@@ -276,6 +281,7 @@ router.get('/find-registered-device/:auid',
  */
 router.delete('/delete-device/:userid/:auid',
     authenticateToken,
+    requirePermission('devices:write'),
     registryController.deleteDevice
 );
 
@@ -298,6 +304,7 @@ router.delete('/delete-device/:userid/:auid',
  */
 router.get('/user/:userid/device-locations',
     authenticateToken,
+    requirePermission('devices:read'),
     registryController.getLocation
 );
 
@@ -325,6 +332,7 @@ router.get('/user/:userid/device-locations',
  */
 router.get('/user/:userid/device/:auid/location',
     authenticateToken,
+    requirePermission('devices:read'),
     checkFeatureAccess("location_access"),
     registryController.getSpecificLocation
 );
@@ -371,6 +379,7 @@ router.get('/user/:userid/device/:auid/location',
  */
 router.put('/user/:userid/device/:auid/update',
     authenticateToken,
+    requirePermission('devices:write'),
     checkFeatureAccess("device_update"),
     registryController.updateDevice
 );
@@ -404,6 +413,7 @@ router.put('/user/:userid/device/:auid/update',
  */
 router.post('/device/:auid/transfer',
     authenticateToken,
+    requirePermission('devices:write'),
     registryController.transferDevice
 );
 
@@ -451,6 +461,7 @@ router.post('/device/:auid/transfer',
  */
 router.post('/:userid/device/:auid/collaborators',
     authenticateToken,
+    requirePermission('devices:write'),
     checkFeatureAccess("collaboration"),
     registryController.addCollaborator
 );
@@ -475,6 +486,7 @@ router.post('/:userid/device/:auid/collaborators',
  */
 router.delete('/:userid/device/:auid/collaborators',
     authenticateToken,
+    requirePermission('devices:write'),
     registryController.removeCollaborator
 );
 
@@ -521,6 +533,7 @@ router.delete('/:userid/device/:auid/collaborators',
  */
 router.get('/:userid/device/:auid/collaborators',
     authenticateToken,
+    requirePermission('devices:read'),
     registryController.listCollaborators
 );
 
@@ -558,6 +571,7 @@ router.get('/:userid/device/:auid/collaborators',
  */
 router.post('/:userid/device/:auid/collaborators/permissions',
     authenticateToken,
+    requirePermission('devices:read'),
     registryController.getCollaboratorPermissions
 );
 
@@ -597,6 +611,7 @@ router.post('/:userid/device/:auid/collaborators/permissions',
  */
 router.put('/user/:userid/device/:auid/availability',
     authenticateToken,
+    requirePermission('devices:write'),
     checkFeatureAccess("public_listing"),
     registryController.setAvailability
 );
@@ -669,6 +684,7 @@ const stateChangeLimiter = rateLimit({
  */
 router.put('/device/:auid/state',
     authenticateToken,
+    requirePermission('devices:write'),
     stateChangeLimiter,
     registryController.setDeviceState
 );

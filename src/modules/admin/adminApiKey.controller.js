@@ -1,5 +1,6 @@
 const apiKeyService = require('../../services/apiKey.service');
 const ApiKey = require('../../models/apikey/ApiKey');
+const { getScopesByGroup, PARTNER_SCOPES } = require('../../config/scopes');
 
 /**
  * Admin API Key Controller
@@ -179,6 +180,60 @@ class AdminApiKeyController {
             });
         } catch (error) {
             console.error('[AdminApiKeyController] Usage stats error:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
+     * Create a partner API key (admin only)
+     * Body: { organizationId, name, permissions[], keyType, expiresAt?, rateLimit?, allowedIPs?, rotationSchedule? }
+     */
+    async createApiKey(req, res) {
+        try {
+            const adminId = req.user.userid;
+            const { organizationId, name, permissions, keyType = 'partner', expiresAt, rateLimit, allowedIPs, rotationSchedule } = req.body;
+
+            if (!organizationId || !name) {
+                return res.status(400).json({ success: false, message: 'organizationId and name are required' });
+            }
+            if (!permissions || !Array.isArray(permissions) || permissions.length === 0) {
+                return res.status(400).json({ success: false, message: 'permissions array is required and must not be empty' });
+            }
+
+            const result = await apiKeyService.generateApiKey(
+                organizationId,
+                { name, permissions, keyType, expiresAt, rateLimit, allowedIPs, rotationSchedule },
+                adminId
+            );
+
+            res.status(201).json({
+                success: true,
+                data: result,
+                warning: 'Store this key now. It will not be shown again.'
+            });
+        } catch (error) {
+            console.error('[AdminApiKeyController] Create error:', error);
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
+     * Get all available scopes (admin reference endpoint)
+     */
+    async listScopes(req, res) {
+        try {
+            const grouped = getScopesByGroup();
+            const flat = PARTNER_SCOPES;
+            res.status(200).json({
+                success: true,
+                data: {
+                    grouped,
+                    flat,
+                    total: flat.length
+                }
+            });
+        } catch (error) {
+            console.error('[AdminApiKeyController] List scopes error:', error);
             res.status(500).json({ success: false, message: error.message });
         }
     }

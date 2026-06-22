@@ -1,10 +1,12 @@
 const ApiKey = require('../models/apikey/ApiKey');
 const User = require('../models/user/userModel');
+const Organization = require('../models/organization/organizationModel');
 const ApiKeyUsage = require('../models/apikey/ApiKeyUsage');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { createAuditLog } = require('../utils/auditLogger');
+const { validateScopes, isAdminScope, PARTNER_SCOPES } = require('../config/scopes');
 
 /**
  * API Key Service
@@ -13,7 +15,9 @@ const { createAuditLog } = require('../utils/auditLogger');
 class ApiKeyService {
 
     /**
-     * Generate new API key
+     * Generate new API key.
+     * For partner keys (keyType='partner'): validates permissions against org.partnerStatus.allowedScopes ceiling.
+     * For org keys (keyType='org'): defaults to legacy telemetry/devices scopes.
      */
     async generateApiKey(organizationId, data, createdBy) {
         // Enforce Suspension Check
@@ -22,23 +26,64 @@ class ApiKeyService {
             throw new Error('Account Suspended: Cannot generate API keys.');
         }
 
-        const { name, permissions, rateLimit, expiresAt, rotationSchedule, allowedIPs } = data;
+        const { name, permissions, rateLimit, expiresAt, rotationSchedule, allowedIPs, keyType = 'org' } = data;
 
-        // Generate secure random key
-        const rawKey = crypto.randomBytes(32).toString('hex'); // 64 characters
+        // ── Scope validation for partner keys ───────────────────────────────
+        if (keyType === 'partner') {
+            const requestedPerms = permissions || [];
+
+            // 1. Validate all requested scopes exist and are not admin-only
+            const scopeCheck = validateScopes(requestedPerms);
+            if (!scopeCheck.valid) {
+                if (scopeCheck.adminOnly && scopeCheck.adminOnly.length) {
+                    throw new Error(`Admin-only scopes cannot be issued to partner keys: ${scopeCheck.adminOnly.join(', ')}`);
+                }
+                throw new Error(`Invalid scopes: ${(scopeCheck.invalid || []).join(', ')}`);
+            }
+
+            // 2. Check against the org's allowed scope ceiling
+            const org = await Organization.findOne({ organizationId, deletedAt: null }).lean();
+            if (!org) throw new Error('Organization not found');
+            if (!org.partnerStatus || !org.partnerStatus.isPartner) {
+                throw new Error('Organization is not an approved partner. Set isPartner=true and allowedScopes before issuing partner keys.');
+            }
+
+            const ceiling = org.partnerStatus.allowedScopes || [];
+            if (ceiling.length === 0) {
+                throw new Error('This partner org has no allowedScopes configured. Set allowedScopes via PATCH /api/admin/organizations/:orgId/partner-scopes first.');
+            }
+
+            const outsideCeiling = requestedPerms.filter(p => !ceiling.includes(p));
+            if (outsideCeiling.length) {
+                throw new Error(`Requested permissions exceed this org's allowed partner scopes: ${outsideCeiling.join(', ')}`);
+            }
+        } else {
+            // Org key — keep backward-compatible defaults
+            const orgDefaultPerms = ['telemetry:read', 'devices:read'];
+            const safePerms = (permissions || orgDefaultPerms).filter(p => !isAdminScope(p));
+            if (safePerms.length !== (permissions || orgDefaultPerms).length) {
+                throw new Error('Admin-only scopes cannot be assigned to org keys.');
+            }
+        }
+
+        // ── Generate secure random key ───────────────────────────────────────
+        const rawKey = crypto.randomBytes(32).toString('hex'); // 64 chars
         const keyPrefix = ApiKey.generatePrefix('live');
         const fullKey = `${keyPrefix}_${rawKey}`;
 
-        // Hash the key for storage
+        // Hash for storage — never store plain text
         const keyHash = await bcrypt.hash(fullKey, 12);
+
+        const defaultPerms = keyType === 'partner' ? (permissions || []) : ['telemetry:read', 'devices:read'];
 
         const apiKey = new ApiKey({
             keyId: uuidv4(),
             organizationId,
             name,
+            keyType,
             keyHash,
             keyPrefix,
-            permissions: permissions || ['telemetry:read', 'devices:read'],
+            permissions: defaultPerms,
             rateLimit: rateLimit || { requests: 1000, windowMs: 3600000 },
             expiresAt,
             rotationSchedule: rotationSchedule || 'none',
@@ -54,15 +99,16 @@ class ApiKeyService {
             action: 'API_KEY_GENERATED',
             userid: createdBy,
             organizationId,
-            details: { keyId: apiKey.keyId, name, permissions },
+            details: { keyId: apiKey.keyId, name, keyType, permissions: defaultPerms },
             ipAddress: null
         });
 
-        // Return the full key ONLY ONCE (never stored)
+        // Return the full key ONLY ONCE — never stored in plain text
         return {
             keyId: apiKey.keyId,
-            key: fullKey, // ONLY TIME this is visible
+            key: fullKey,
             keyPrefix: apiKey.keyPrefix,
+            keyType: apiKey.keyType,
             name: apiKey.name,
             permissions: apiKey.permissions,
             expiresAt: apiKey.expiresAt,

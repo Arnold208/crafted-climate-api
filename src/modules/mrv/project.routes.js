@@ -1,7 +1,8 @@
-﻿'use strict';
+'use strict';
 const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
 const authenticateToken = require('../../middleware/bearermiddleware');
+const { requirePermission } = require('../../middleware/authenticateApiKey');
 const { verifyMRVProjectAccess, requireMRVFeatureEnabled } = require('../../middleware/mrv/verifyMRVProjectAccess');
 const { mrvAuditEvent } = require('../../middleware/mrv/mrvAuditEvent');
 const MRVProject = require('../../models/mrv/project/MRVProject.model');
@@ -55,7 +56,7 @@ const { runReadinessAssessment }     = require('../../services/mrv/mrvReadinessS
  *       401:
  *         description: Unauthorized
  */
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, requirePermission('mrv:projects:read'), async (req, res) => {
   try {
     const user = req.user;
     const orgId = req.query.organizationId;
@@ -136,7 +137,7 @@ router.get('/', authenticateToken, async (req, res) => {
  *           application/json:
  *             schema: { $ref: '#/components/schemas/MRVError403' }
  */
-router.post('/', authenticateToken, requireMRVFeatureEnabled,
+router.post('/', authenticateToken, requirePermission('mrv:projects:write'), requireMRVFeatureEnabled,
   mrvAuditEvent({ action: 'PROJECT_CREATED', entityType: 'MRVProject', getEntityId: (req, body) => body?.data?.projectId }),
   async (req, res) => {
     try {
@@ -192,7 +193,7 @@ router.post('/', authenticateToken, requireMRVFeatureEnabled,
  *           application/json:
  *             schema: { $ref: '#/components/schemas/MRVError404' }
  */
-router.get('/:projectId', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId', authenticateToken, requirePermission('mrv:projects:read'), verifyMRVProjectAccess(), async (req, res) => {
   try { res.json({ success: true, data: req.mrvProject }); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -245,7 +246,7 @@ router.get('/:projectId', authenticateToken, verifyMRVProjectAccess(), async (re
  *           application/json:
  *             schema: { $ref: '#/components/schemas/MRVError403' }
  */
-router.patch('/:projectId', authenticateToken, verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
+router.patch('/:projectId', authenticateToken, requirePermission('mrv:projects:write'), verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'PROJECT_UPDATED', entityType: 'MRVProject' }),
   async (req, res) => {
     try {
@@ -286,7 +287,7 @@ router.patch('/:projectId', authenticateToken, verifyMRVProjectAccess(['mrv-proj
  *                   type: array
  *                   items: { $ref: '#/components/schemas/MRVSite' }
  */
-router.get('/:projectId/sites', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/sites', authenticateToken, requirePermission('mrv:projects:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const sites = await MRVSite.find({ projectId: req.params.projectId, deletedAt: null }).lean();
     res.json({ success: true, data: sites });
@@ -324,6 +325,7 @@ router.get('/:projectId/sites', authenticateToken, verifyMRVProjectAccess(), asy
  *         description: Insufficient role — requires mrv-project-manager or mrv-programme-admin
  */
 router.post('/:projectId/sites', authenticateToken,
+  requirePermission('mrv:projects:write'),
   verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'SITE_CREATED', entityType: 'MRVSite', getEntityId: (req, body) => body?.data?.siteId }),
   async (req, res) => {
@@ -359,7 +361,7 @@ router.post('/:projectId/sites', authenticateToken,
  *                 success: { type: boolean }
  *                 data: { type: array, items: { $ref: '#/components/schemas/MRVProjectPartner' } }
  */
-router.get('/:projectId/partners', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/partners', authenticateToken, requirePermission('mrv:projects:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const partners = await MRVProjectPartner.find({ projectId: req.params.projectId }).lean();
     res.json({ success: true, data: partners });
@@ -408,6 +410,7 @@ router.get('/:projectId/partners', authenticateToken, verifyMRVProjectAccess(), 
  *                 data: { $ref: '#/components/schemas/MRVProjectPartner' }
  */
 router.post('/:projectId/partners', authenticateToken,
+  requirePermission('mrv:projects:write'),
   verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'PARTNER_ADDED', entityType: 'MRVProjectPartner', getEntityId: (req, body) => body?.data?.partnerId }),
   async (req, res) => {
@@ -442,7 +445,7 @@ router.post('/:projectId/partners', authenticateToken,
  *                 success: { type: boolean }
  *                 data: { type: array, items: { type: object } }
  */
-router.get('/:projectId/methodology-assignments', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/methodology-assignments', authenticateToken, requirePermission('mrv:projects:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const assignments = await ProjectMethodologyAssignment.find({ projectId: req.params.projectId }).lean();
     res.json({ success: true, data: assignments });
@@ -488,6 +491,7 @@ router.get('/:projectId/methodology-assignments', authenticateToken, verifyMRVPr
  *                 data: { type: object }
  */
 router.post('/:projectId/methodology-assignments', authenticateToken,
+  requirePermission('mrv:projects:write'),
   verifyMRVProjectAccess(['mrv-methodology-manager', 'mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'METHODOLOGY_ASSIGNED', entityType: 'ProjectMethodologyAssignment', getEntityId: (req, body) => body?.data?.assignmentId }),
   async (req, res) => {
@@ -550,6 +554,7 @@ router.post('/:projectId/methodology-assignments', authenticateToken,
  *         description: Requires mrv-project-manager or mrv-programme-admin
  */
 router.post('/:projectId/members', authenticateToken,
+  requirePermission('mrv:projects:write'),
   verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'MEMBER_ADDED', entityType: 'MRVProject', getEntityId: (req) => req.params.projectId }),
   async (req, res) => {
@@ -595,7 +600,7 @@ router.post('/:projectId/members', authenticateToken,
  *                     blockers: { type: array, items: { type: string } }
  *                     runAt: { type: string, format: date-time }
  */
-router.get('/:projectId/readiness', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/readiness', authenticateToken, requirePermission('mrv:projects:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const result = await runReadinessAssessment(req.params.projectId);
     res.json({ success: true, data: result });
@@ -651,6 +656,7 @@ router.get('/:projectId/readiness', authenticateToken, verifyMRVProjectAccess(),
  *                         warnings: { type: array, items: { type: string } }
  */
 router.post('/:projectId/applicability', authenticateToken,
+  requirePermission('mrv:projects:write'),
   verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'APPLICABILITY_ASSESSED', entityType: 'MRVProject', getEntityId: (req) => req.params.projectId }),
   async (req, res) => {
@@ -676,7 +682,7 @@ router.post('/:projectId/applicability', authenticateToken,
  *       200:
  *         description: Latest applicability assessment result from the project record
  */
-router.get('/:projectId/applicability', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/applicability', authenticateToken, requirePermission('mrv:projects:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const project = await MRVProject.findOne(
       { projectId: req.params.projectId },
@@ -737,6 +743,7 @@ router.get('/:projectId/applicability', authenticateToken, verifyMRVProjectAcces
  *                         warnings: { type: array, items: { type: string } }
  */
 router.post('/:projectId/readiness', authenticateToken,
+  requirePermission('mrv:projects:write'),
   verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'READINESS_ASSESSED', entityType: 'MRVProject', getEntityId: (req) => req.params.projectId }),
   async (req, res) => {

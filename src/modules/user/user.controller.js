@@ -1,4 +1,5 @@
 const userService = require('./user.service');
+const { createUserSession, destroyUserSession } = require('../../middleware/sessionMiddleware');
 
 class UserController {
     async signup(req, res) {
@@ -36,6 +37,17 @@ class UserController {
             }
 
             const result = await userService.login({ email: email.toLowerCase(), password });
+
+            // Create a session alongside the JWT so browser clients (dashboard, partner portals)
+            // are authenticated via cookie without needing to manage tokens manually.
+            // Non-browser clients (mobile, API) simply ignore the Set-Cookie header.
+            try {
+                await createUserSession(req, result.user);
+            } catch (sessionErr) {
+                // Session failure must never block login — JWT is still returned.
+                console.error('[UserController] Session creation failed (non-fatal):', sessionErr.message);
+            }
+
             return res.status(200).send(result);
         } catch (error) {
             console.error('[UserController] Login Error:', error.message);
@@ -273,6 +285,16 @@ class UserController {
         try {
             const { tempSessionId, otp } = req.body;
             const result = await userService.verifyBackofficeOtp({ tempSessionId, otp });
+
+            // Create session for the backoffice admin on successful MFA verification.
+            if (result && result.user) {
+                try {
+                    await createUserSession(req, result.user);
+                } catch (sessionErr) {
+                    console.error('[UserController] Backoffice session creation failed (non-fatal):', sessionErr.message);
+                }
+            }
+
             res.status(200).json(result);
         } catch (error) {
             console.error('[UserController] Backoffice Verify OTP Error:', error.message);
@@ -314,6 +336,25 @@ class UserController {
                 return res.status(404).json({ message: error.message });
             }
             res.status(500).json({ message: error.message });
+        }
+    }
+
+    /**
+     * Logout — destroys the session and clears the session cookie.
+     * Works for both browser (session) and token-based clients.
+     * Token-based clients handle their own JWT invalidation client-side.
+     */
+    async logout(req, res) {
+        try {
+            if (req.session && req.session.user) {
+                await destroyUserSession(req);
+            }
+            // Clear cookie regardless — removes stale cookies from browser clients
+            res.clearCookie('cc.sid', { path: '/' });
+            return res.status(200).json({ success: true, message: 'Logged out successfully' });
+        } catch (error) {
+            console.error('[UserController] Logout Error:', error.message);
+            return res.status(500).json({ message: 'Logout failed' });
         }
     }
 }

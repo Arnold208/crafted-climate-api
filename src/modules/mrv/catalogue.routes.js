@@ -1,6 +1,7 @@
 'use strict';
 const router = require('express').Router();
 const authenticateToken = require('../../middleware/bearermiddleware');
+const { requirePermission } = require('../../middleware/authenticateApiKey');
 const MRVStandard = require('../../models/mrv/catalogue/MRVStandard.model');
 const MRVStandardVersion = require('../../models/mrv/catalogue/MRVStandardVersion.model');
 const MRVMethodology = require('../../models/mrv/catalogue/MRVMethodology.model');
@@ -36,7 +37,7 @@ const MRVFactorVersion = require('../../models/mrv/catalogue/MRVFactorVersion.mo
  *           application/json:
  *             schema: { $ref: '#/components/schemas/MRVError401' }
  */
-router.get('/standards', authenticateToken, async (req, res) => {
+router.get('/standards', authenticateToken, requirePermission('mrv:catalogue:read'), async (req, res) => {
   try {
     const standards = await MRVStandard.find({ status: { $ne: 'ARCHIVED' } }).lean();
     res.json({ success: true, data: standards });
@@ -72,7 +73,7 @@ router.get('/standards', authenticateToken, async (req, res) => {
  *       401:
  *         description: Unauthorized
  */
-router.get('/standards/:standardId/versions', authenticateToken, async (req, res) => {
+router.get('/standards/:standardId/versions', authenticateToken, requirePermission('mrv:catalogue:read'), async (req, res) => {
   try {
     const versions = await MRVStandardVersion.find({ standardId: req.params.standardId }).lean();
     res.json({ success: true, data: versions });
@@ -115,7 +116,7 @@ router.get('/standards/:standardId/versions', authenticateToken, async (req, res
  *                   type: array
  *                   items: { $ref: '#/components/schemas/MRVMethodology' }
  */
-router.get('/methodologies', authenticateToken, async (req, res) => {
+router.get('/methodologies', authenticateToken, requirePermission('mrv:catalogue:read'), async (req, res) => {
   try {
     const filter = {};
     if (req.query.standardId) filter.standardId = req.query.standardId;
@@ -149,7 +150,7 @@ router.get('/methodologies', authenticateToken, async (req, res) => {
  *                 success: { type: boolean }
  *                 data: { type: array, items: { type: object } }
  */
-router.get('/methodologies/:methodologyId/versions', authenticateToken, async (req, res) => {
+router.get('/methodologies/:methodologyId/versions', authenticateToken, requirePermission('mrv:catalogue:read'), async (req, res) => {
   try {
     const versions = await MRVMethodologyVersion.find({ methodologyId: req.params.methodologyId }).lean();
     res.json({ success: true, data: versions });
@@ -190,7 +191,7 @@ router.get('/methodologies/:methodologyId/versions', authenticateToken, async (r
  *                   type: array
  *                   items: { $ref: '#/components/schemas/MRVMethodologyImplementation' }
  */
-router.get('/implementations', authenticateToken, async (req, res) => {
+router.get('/implementations', authenticateToken, requirePermission('mrv:catalogue:read'), async (req, res) => {
   try {
     const filter = {};
     if (req.query.methodologyId) filter.methodologyId = req.query.methodologyId;
@@ -230,7 +231,7 @@ router.get('/implementations', authenticateToken, async (req, res) => {
  *                   type: array
  *                   items: { $ref: '#/components/schemas/MRVSensorCapability' }
  */
-router.get('/sensor-capabilities', authenticateToken, async (req, res) => {
+router.get('/sensor-capabilities', authenticateToken, requirePermission('mrv:catalogue:read'), async (req, res) => {
   try {
     const filter = {};
     if (req.query.model) filter.model = req.query.model;
@@ -264,7 +265,7 @@ router.get('/sensor-capabilities', authenticateToken, async (req, res) => {
  *                 success: { type: boolean }
  *                 data: { type: array, items: { type: object } }
  */
-router.get('/factors', authenticateToken, async (req, res) => {
+router.get('/factors', authenticateToken, requirePermission('mrv:catalogue:read'), async (req, res) => {
   try {
     const filter = {};
     if (req.query.factorType) filter.factorType = req.query.factorType;
@@ -297,7 +298,7 @@ router.get('/factors', authenticateToken, async (req, res) => {
  *                 success: { type: boolean }
  *                 data: { type: array, items: { type: object } }
  */
-router.get('/factors/:factorId/versions', authenticateToken, async (req, res) => {
+router.get('/factors/:factorId/versions', authenticateToken, requirePermission('mrv:catalogue:read'), async (req, res) => {
   try {
     const versions = await MRVFactorVersion.find({ factorId: req.params.factorId }).sort({ effectiveFrom: -1 }).lean();
     res.json({ success: true, data: versions });

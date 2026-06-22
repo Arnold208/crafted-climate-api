@@ -1,10 +1,11 @@
-﻿'use strict';
+'use strict';
 const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const authenticateToken = require('../../middleware/bearermiddleware');
 const { verifyMRVProjectAccess } = require('../../middleware/mrv/verifyMRVProjectAccess');
 const { mrvAuditEvent } = require('../../middleware/mrv/mrvAuditEvent');
+const { requirePermission } = require('../../middleware/authenticateApiKey');
 const { hashBuffer } = require('../../services/mrv/mrvHashService');
 const { uploadEvidence, generateUploadToken } = require('../../services/mrv/mrvBlobService');
 const installationSvc = require('../../services/mrv/mrvInstallationService');
@@ -53,7 +54,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 
  *                 success: { type: boolean }
  *                 data: { type: array, items: { type: object } }
  */
-router.get('/:projectId/evidence', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/evidence', authenticateToken, requirePermission('mrv:evidence:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const filter = { projectId: req.params.projectId };
     if (req.query.evidenceType) filter.evidenceType = req.query.evidenceType;
@@ -121,6 +122,7 @@ router.get('/:projectId/evidence', authenticateToken, verifyMRVProjectAccess(), 
  *       403: { description: Insufficient role }
  */
 router.post('/:projectId/evidence/upload', authenticateToken,
+  requirePermission('mrv:evidence:write'),
   verifyMRVProjectAccess(['mrv-project-manager', 'mrv-field-officer', 'mrv-data-reviewer', 'mrv-programme-admin']),
   upload.single('file'),
   mrvAuditEvent({ action: 'EVIDENCE_UPLOADED', entityType: 'ExternalEvidenceRecord', getEntityId: (req, body) => body?.data?.evidenceId }),
@@ -187,6 +189,7 @@ router.post('/:projectId/evidence/upload', authenticateToken,
  *                     expiresAt: { type: string, format: date-time }
  */
 router.post('/:projectId/evidence/upload-token', authenticateToken,
+  requirePermission('mrv:evidence:write'),
   verifyMRVProjectAccess(['mrv-project-manager', 'mrv-field-officer', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'EVIDENCE_UPLOAD_TOKEN_GENERATED', entityType: 'ExternalEvidenceRecord', getEntityId: (req, body) => body?.data?.evidenceId }),
   async (req, res) => {
@@ -234,7 +237,7 @@ router.post('/:projectId/evidence/upload-token', authenticateToken,
  *                 success: { type: boolean }
  *                 data: { type: array, items: { type: object } }
  */
-router.get('/:projectId/manual-observations', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/manual-observations', authenticateToken, requirePermission('mrv:evidence:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const filter = { projectId: req.params.projectId };
     if (req.query.monitoringPeriodId) filter.monitoringPeriodId = req.query.monitoringPeriodId;
@@ -299,6 +302,7 @@ router.get('/:projectId/manual-observations', authenticateToken, verifyMRVProjec
  *       403: { description: Requires mrv-field-officer, mrv-project-manager, or mrv-programme-admin }
  */
 router.post('/:projectId/manual-observations', authenticateToken,
+  requirePermission('mrv:evidence:write'),
   verifyMRVProjectAccess(['mrv-field-officer', 'mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'MANUAL_OBSERVATION_SUBMITTED', entityType: 'ManualObservation', getEntityId: (req, body) => body?.data?.manualObservationId }),
   async (req, res) => {
@@ -347,6 +351,7 @@ router.post('/:projectId/manual-observations', authenticateToken,
  *       404: { description: Observation not found or not in PENDING_REVIEW status }
  */
 router.post('/:projectId/manual-observations/:observationId/approve', authenticateToken,
+  requirePermission('mrv:evidence:write'),
   verifyMRVProjectAccess(['mrv-data-reviewer', 'mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'MANUAL_OBSERVATION_APPROVED', entityType: 'ManualObservation', getEntityId: (req) => req.params.observationId }),
   async (req, res) => {
@@ -405,7 +410,7 @@ router.post('/:projectId/manual-observations/:observationId/approve', authentica
  *                 count: { type: integer }
  *                 data: { type: array, items: { type: object } }
  */
-router.get('/:projectId/installations', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/installations', authenticateToken, requirePermission('mrv:evidence:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const { status, siteId, auid } = req.query;
     const filter = { projectId: req.params.projectId };
@@ -511,6 +516,7 @@ router.get('/:projectId/installations', authenticateToken, verifyMRVProjectAcces
  *       409: { description: Device already has an active installation on this project OR project is closed }
  */
 router.post('/:projectId/installations', authenticateToken,
+  requirePermission('mrv:evidence:write'),
   verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin', 'mrv-field-officer']),
   mrvAuditEvent({ action: 'DEVICE_LINKED', entityType: 'SensorInstallation', getEntityId: (req, body) => body?.data?.installationId || body?.installationId }),
   async (req, res) => {
@@ -551,7 +557,7 @@ router.post('/:projectId/installations', authenticateToken,
  *         description: Installation record
  *       404: { description: Installation not found }
  */
-router.get('/:projectId/installations/:installationId', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/installations/:installationId', authenticateToken, requirePermission('mrv:evidence:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const inst = await installationSvc.getInstallation(req.params.installationId);
     if (inst.projectId !== req.params.projectId) return res.status(404).json({ error: 'Installation not found on this project' });
@@ -610,6 +616,7 @@ router.get('/:projectId/installations/:installationId', authenticateToken, verif
  *       404: { description: Installation not found }
  */
 router.patch('/:projectId/installations/:installationId/maintenance', authenticateToken,
+  requirePermission('mrv:evidence:write'),
   verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin', 'mrv-field-officer']),
   mrvAuditEvent({ action: 'DEVICE_MAINTENANCE_START', entityType: 'SensorInstallation', getEntityId: (req) => req.params.installationId }),
   async (req, res) => {
@@ -656,6 +663,7 @@ router.patch('/:projectId/installations/:installationId/maintenance', authentica
  *       409: { description: Installation is not in MAINTENANCE }
  */
 router.patch('/:projectId/installations/:installationId/maintenance/return', authenticateToken,
+  requirePermission('mrv:evidence:write'),
   verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin', 'mrv-field-officer']),
   mrvAuditEvent({ action: 'DEVICE_MAINTENANCE_RETURN', entityType: 'SensorInstallation', getEntityId: (req) => req.params.installationId }),
   async (req, res) => {
@@ -737,6 +745,7 @@ router.patch('/:projectId/installations/:installationId/maintenance/return', aut
  *       409: { description: Cannot replace a REPLACED or DECOMMISSIONED installation }
  */
 router.post('/:projectId/installations/:installationId/replace', authenticateToken,
+  requirePermission('mrv:evidence:write'),
   verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'DEVICE_REPLACED', entityType: 'SensorInstallation', getEntityId: (req) => req.params.installationId }),
   async (req, res) => {
@@ -785,7 +794,7 @@ router.post('/:projectId/installations/:installationId/replace', authenticateTok
  *                 success: { type: boolean }
  *                 data: { type: array, items: { type: object } }
  */
-router.get('/:projectId/calibrations', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/calibrations', authenticateToken, requirePermission('mrv:evidence:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const cals = await CalibrationRecord.find({ projectId: req.params.projectId }).lean();
     res.json({ success: true, data: cals });
@@ -822,6 +831,7 @@ router.get('/:projectId/calibrations', authenticateToken, verifyMRVProjectAccess
  *                 data: { type: object }
  */
 router.post('/:projectId/calibrations', authenticateToken,
+  requirePermission('mrv:evidence:write'),
   verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'CALIBRATION_RECORDED', entityType: 'CalibrationRecord', getEntityId: (req, body) => body?.data?.calibrationId }),
   async (req, res) => {
@@ -856,7 +866,7 @@ router.post('/:projectId/calibrations', authenticateToken,
  *                 success: { type: boolean }
  *                 data: { type: array, items: { type: object } }
  */
-router.get('/:projectId/csv-imports', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/csv-imports', authenticateToken, requirePermission('mrv:evidence:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const imports = await CSVImport.find({ projectId: req.params.projectId }).sort({ uploadedAt: -1 }).lean();
     res.json({ success: true, data: imports });
@@ -902,6 +912,7 @@ router.get('/:projectId/csv-imports', authenticateToken, verifyMRVProjectAccess(
  *                 message: { type: string, example: "CSV uploaded. Use /commit endpoint after reviewing preview." }
  */
 router.post('/:projectId/csv-imports', authenticateToken,
+  requirePermission('mrv:evidence:write'),
   verifyMRVProjectAccess(['mrv-field-officer', 'mrv-project-manager', 'mrv-programme-admin']),
   upload.single('file'),
   mrvAuditEvent({ action: 'CSV_IMPORT_SUBMITTED', entityType: 'CSVImport', getEntityId: (req, body) => body?.data?.importId || body?.importId }),
@@ -987,6 +998,7 @@ router.post('/:projectId/csv-imports', authenticateToken,
  *       409: { description: Import already committed }
  */
 router.post('/:projectId/csv-imports/:importId/commit', authenticateToken,
+  requirePermission('mrv:evidence:write'),
   verifyMRVProjectAccess(['mrv-field-officer', 'mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'CSV_IMPORT_COMMITTED', entityType: 'CSVImport', getEntityId: (req) => req.params.importId }),
   async (req, res) => {
@@ -1043,7 +1055,7 @@ router.post('/:projectId/csv-imports/:importId/commit', authenticateToken,
  *           application/json:
  *             schema: { $ref: '#/components/schemas/MRVListResponse' }
  */
-router.get('/:projectId/receipts', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/receipts', authenticateToken, requirePermission('mrv:evidence:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const { page = 1, limit = 50, status, auid } = req.query;
     const filter = { projectIds: req.params.projectId };

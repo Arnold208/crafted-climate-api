@@ -1,7 +1,8 @@
-﻿'use strict';
+'use strict';
 const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
 const authenticateToken = require('../../middleware/bearermiddleware');
+const { requirePermission } = require('../../middleware/authenticateApiKey');
 const { verifyMRVProjectAccess } = require('../../middleware/mrv/verifyMRVProjectAccess');
 const { mrvAuditEvent } = require('../../middleware/mrv/mrvAuditEvent');
 const MonitoringPeriod = require('../../models/mrv/monitoring/MonitoringPeriod.model');
@@ -35,7 +36,7 @@ const { mrvCompletenessQueue } = require('../../workers/mrv/queues');
  *       403: { description: Not a project member }
  *       404: { description: Project not found }
  */
-router.get('/:projectId/monitoring-periods', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/monitoring-periods', authenticateToken, requirePermission('mrv:monitoring:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const periods = await MonitoringPeriod.find({ projectId: req.params.projectId }).sort({ _id: -1 }).lean();
     res.json({ success: true, data: periods });
@@ -83,7 +84,7 @@ router.get('/:projectId/monitoring-periods', authenticateToken, verifyMRVProject
  *       400: { description: startDate and endDate are required }
  *       403: { description: Requires mrv-project-manager or mrv-programme-admin }
  */
-router.post('/:projectId/monitoring-periods', authenticateToken, verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
+router.post('/:projectId/monitoring-periods', authenticateToken, requirePermission('mrv:monitoring:write'), verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'MONITORING_PERIOD_CREATED', entityType: 'MonitoringPeriod', getEntityId: (req, body) => body?.data?.monitoringPeriodId }),
   async (req, res) => {
   try {
@@ -137,7 +138,7 @@ router.post('/:projectId/monitoring-periods', authenticateToken, verifyMRVProjec
  *               properties:
  *                 error: { type: string, example: "Cannot open period in status: OPEN" }
  */
-router.post('/:projectId/monitoring-periods/:monitoringPeriodId/open', authenticateToken, verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
+router.post('/:projectId/monitoring-periods/:monitoringPeriodId/open', authenticateToken, requirePermission('mrv:monitoring:write'), verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'MONITORING_PERIOD_OPENED', entityType: 'MonitoringPeriod', getEntityId: (req) => req.params.monitoringPeriodId }),
   async (req, res) => {
   try {
@@ -182,7 +183,7 @@ router.post('/:projectId/monitoring-periods/:monitoringPeriodId/open', authentic
  *       409:
  *         description: Cannot close — period is not OPEN
  */
-router.post('/:projectId/monitoring-periods/:monitoringPeriodId/close', authenticateToken, verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
+router.post('/:projectId/monitoring-periods/:monitoringPeriodId/close', authenticateToken, requirePermission('mrv:monitoring:write'), verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
   mrvAuditEvent({ action: 'MONITORING_PERIOD_CLOSED', entityType: 'MonitoringPeriod', getEntityId: (req) => req.params.monitoringPeriodId }),
   async (req, res) => {
   try {
@@ -231,7 +232,7 @@ router.post('/:projectId/monitoring-periods/:monitoringPeriodId/close', authenti
  *           application/json:
  *             schema: { $ref: '#/components/schemas/MRVListResponse' }
  */
-router.get('/:projectId/monitoring-periods/:monitoringPeriodId/observations', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+router.get('/:projectId/monitoring-periods/:monitoringPeriodId/observations', authenticateToken, requirePermission('mrv:evidence:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
     const { page = 1, limit = 100, qualityStatus } = req.query;
     const filter = { projectId: req.params.projectId, monitoringPeriodId: req.params.monitoringPeriodId };

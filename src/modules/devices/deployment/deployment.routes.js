@@ -4,6 +4,7 @@ const deploymentController = require('./deployment.controller');
 
 const authenticateToken = require('../../../middleware/bearermiddleware');
 const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess');
+const { requirePermission } = require('../../../middleware/authenticateApiKey');
 
 /**
  * @swagger
@@ -35,6 +36,7 @@ const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess'
  */
 router.post('/deployments',
     authenticateToken,
+    requirePermission('devices:write'),
     checkOrgAccess('org.deployments.create'),
     deploymentController.createDeployment
 );
@@ -56,6 +58,7 @@ router.post('/deployments',
  */
 router.get('/deployments/:deploymentId',
     authenticateToken,
+    requirePermission('devices:read'),
     checkOrgAccess('org.deployments.view'),
     deploymentController.getDeployment
 );
@@ -76,6 +79,7 @@ router.get('/deployments/:deploymentId',
  */
 router.get('/deployments/:deploymentId/devices',
     authenticateToken,
+    requirePermission('devices:read'),
     checkOrgAccess('org.deployments.view'),
     deploymentController.listDevicesInDeployment
 );
@@ -97,6 +101,7 @@ router.get('/deployments/:deploymentId/devices',
  */
 router.patch('/deployments/:deploymentId',
     authenticateToken,
+    requirePermission('devices:write'),
     checkOrgAccess('org.deployments.edit'),
     deploymentController.updateDeployment
 );
@@ -118,6 +123,7 @@ router.patch('/deployments/:deploymentId',
  */
 router.delete('/deployments/:deploymentId',
     authenticateToken,
+    requirePermission('devices:write'),
     checkOrgAccess('org.deployments.delete'),
     deploymentController.deleteDeployment
 );
@@ -151,6 +157,7 @@ router.delete('/deployments/:deploymentId',
  */
 router.post('/deployments/:deploymentId/collaborators',
     authenticateToken,
+    requirePermission('devices:write'),
     checkOrgAccess('org.deployments.edit'),
     deploymentController.addCollaborator
 );
@@ -183,6 +190,7 @@ router.post('/deployments/:deploymentId/collaborators',
  */
 router.delete('/deployments/:deploymentId/collaborators',
     authenticateToken,
+    requirePermission('devices:write'),
     checkOrgAccess('org.deployments.edit'),
     deploymentController.removeCollaborator
 );
@@ -203,6 +211,7 @@ router.delete('/deployments/:deploymentId/collaborators',
  */
 router.post('/deployments/:deploymentId/devices',
     authenticateToken,
+    requirePermission('devices:write'),
     checkOrgAccess('org.deployments.edit'),
     deploymentController.addDeviceToDeployment
 );
@@ -227,6 +236,7 @@ router.post('/deployments/:deploymentId/devices',
  */
 router.delete('/deployments/:deploymentId/devices/:auid',
     authenticateToken,
+    requirePermission('devices:write'),
     checkOrgAccess('org.deployments.edit'),
     deploymentController.removeDeviceFromDeployment
 );
@@ -242,6 +252,7 @@ router.delete('/deployments/:deploymentId/devices/:auid',
  */
 router.get('/deployments',
     authenticateToken,
+    requirePermission('devices:read'),
     checkOrgAccess('org.deployments.view'),
     deploymentController.listDeployments
 );

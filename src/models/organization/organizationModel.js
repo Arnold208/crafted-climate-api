@@ -161,6 +161,17 @@ const organizationSchema = new mongoose.Schema(
       approvedBy: { type: String, default: null },  // Platform admin userid
       expiresAt: { type: Date, default: null },     // Optional: annual renewal
 
+      /**
+       * Admin-controlled scope ceiling.
+       * Every API key for this partner org must be a strict subset of these scopes.
+       * Set by: PATCH /api/admin/organizations/:orgId/partner-scopes
+       * Validated against: src/config/scopes.js PARTNER_SCOPES
+       */
+      allowedScopes: {
+        type: [String],
+        default: []
+      },
+
       // Partner benefits
       benefits: {
         discountPercentage: { type: Number, default: 0, min: 0, max: 100 },

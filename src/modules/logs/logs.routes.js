@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 
 const authenticateToken = require('../../middleware/bearermiddleware');
 const checkOrgAccess = require('../../middleware/organization/checkOrgAccess');
+const { requirePermission } = require('../../middleware/authenticateApiKey');
 
 const logQueryLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -53,6 +54,7 @@ const logQueryLimiter = rateLimit({
 router.get('/org/:orgId/logs',
     authenticateToken,
     logQueryLimiter,
+    requirePermission('logs:read'),
     checkOrgAccess('org.logs.view'),
     logsController.getOrgLogs
 );
@@ -79,6 +81,7 @@ router.get('/org/:orgId/logs',
 router.get('/platform/logs',
     authenticateToken,
     logQueryLimiter,
+    requirePermission('logs:read'),
     logsController.getPlatformLogs
 );
 

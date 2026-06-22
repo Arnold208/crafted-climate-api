@@ -2,6 +2,7 @@
 const router = require('express').Router({ mergeParams: true });
 const analyticsService = require('../../services/mrv/mrvAnalyticsService');
 const { createAuditLog } = require('../../utils/auditLogger');
+const { requirePermission } = require('../../middleware/authenticateApiKey');
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 const ok  = (res, data) => res.json({ success: true, ...data });
@@ -23,7 +24,7 @@ const err = (res, e, code = 500) => res.status(code).json({ success: false, erro
  *       200:
  *         description: Project summary statistics
  */
-router.get('/:projectId/analytics/summary', async (req, res) => {
+router.get('/:projectId/analytics/summary', requirePermission('mrv:analytics:read'), async (req, res) => {
   try {
     const data = await analyticsService.getProjectSummary(req.params.projectId);
     ok(res, { summary: data });
@@ -60,7 +61,7 @@ router.get('/:projectId/analytics/summary', async (req, res) => {
  *       200:
  *         description: Time-series data
  */
-router.get('/:projectId/analytics/timeseries', async (req, res) => {
+router.get('/:projectId/analytics/timeseries', requirePermission('mrv:analytics:read'), async (req, res) => {
   try {
     const { from, to, granularity, metric, auid } = req.query;
     const data = await analyticsService.getTimeSeries({
@@ -90,7 +91,7 @@ router.get('/:projectId/analytics/timeseries', async (req, res) => {
  *       200:
  *         description: Device performance breakdown
  */
-router.get('/:projectId/analytics/device-performance', async (req, res) => {
+router.get('/:projectId/analytics/device-performance', requirePermission('mrv:analytics:read'), async (req, res) => {
   try {
     const data = await analyticsService.getDevicePerformance({
       projectId: req.params.projectId,

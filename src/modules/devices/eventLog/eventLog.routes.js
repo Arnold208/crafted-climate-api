@@ -3,6 +3,7 @@ const express    = require('express');
 const router     = express.Router();
 const controller = require('./eventLog.controller');
 const authenticateToken = require('../../../middleware/bearermiddleware');
+const { requirePermission } = require('../../../middleware/authenticateApiKey');
 
 /**
  * Device Event Log Routes
@@ -19,12 +20,14 @@ const authenticateToken = require('../../../middleware/bearermiddleware');
 router.get(
     '/:auid/logs/latest',
     authenticateToken,
+    requirePermission('devices:read'),
     controller.getLatest.bind(controller)
 );
 
 router.get(
     '/:auid/logs',
     authenticateToken,
+    requirePermission('devices:read'),
     controller.getDeviceLogs.bind(controller)
 );
 
@@ -32,6 +35,7 @@ router.get(
 router.get(
     '/logs/my',
     authenticateToken,
+    requirePermission('devices:read'),
     controller.getMyLogs.bind(controller)
 );
 

@@ -10,6 +10,8 @@ const ExternalEvidenceRecord = require('../../models/mrv/evidence/ExternalEviden
 const SensorInstallation     = require('../../models/mrv/evidence/SensorInstallation.model');
 const CalibrationRecord      = require('../../models/mrv/evidence/CalibrationRecord.model');
 const CalculationRun         = require('../../models/mrv/accounting/CalculationRun.model');
+const RegistryEvent          = require('../../models/mrv/assurance/RegistryEvent.model');
+const VerificationCase       = require('../../models/mrv/assurance/VerificationCase.model');
 const { createAuditLog }     = require('../../utils/auditLogger');
 
 // Statuses that count as "accepted" for calculation purposes
@@ -294,6 +296,272 @@ class MRVReportService {
     });
 
     return report.toObject ? report.toObject() : report;
+  }
+  /**
+   * Build the full export package for a monitoring period.
+   * Returns a structured manifest with the report, PDF blob URL, evidence files
+   * (with SHA-256 hashes), VVB opinion, calculation run, and a submission checklist.
+   * This is everything needed to upload to Verra, Gold Standard, or Ghana CMO.
+   *
+   * @param {string} projectId
+   * @param {string} monitoringPeriodId
+   * @returns {Object} Export package
+   */
+  async buildExportPackage(projectId, monitoringPeriodId) {
+    const [report, vvbCase] = await Promise.all([
+      MRVReport
+        .findOne({ monitoringPeriodId, projectId })
+        .sort({ reportVersion: -1 })
+        .lean(),
+      VerificationCase
+        .findOne({ projectId, status: 'OPINION_RECORDED', scope: { $in: ['VERIFICATION', 'COMBINED'] } })
+        .sort({ openedAt: -1 })
+        .lean(),
+    ]);
+
+    if (!report) {
+      throw new Error(`No report found for monitoring period ${monitoringPeriodId}. Generate one first via GET /report.`);
+    }
+
+    const sections    = report.sections || {};
+    const calc        = sections.calculationResults || {};
+    const attachments = sections.attachmentsManifest || [];
+
+    const vvbOpinion = vvbCase?.verificationOpinion?.opinion;
+    const isPositiveOpinion = vvbOpinion === 'POSITIVE' || vvbOpinion === 'POSITIVE_WITH_QUALIFICATIONS';
+
+    return {
+      packageVersion: '1.0',
+      generatedAt:    new Date().toISOString(),
+      report: {
+        reportId:      report.reportId,
+        reportVersion: report.reportVersion,
+        status:        report.status,
+        sha256:        report.sha256,
+        generatedAt:   report.generatedAt,
+        blobUrl:       report.blobUrl || null,
+      },
+      calculationRun: {
+        runId:               calc.calculationRunId || null,
+        netReduction_tco2e:  calc.netEmissionReduction_er_tco2e || null,
+        methodologyVersion:  calc.methodology || 'VM0050',
+        inputDatasetHash:    calc.inputDatasetHash || null,
+        approvedBy:          calc.approvedBy || null,
+        approvedAt:          calc.approvedAt || null,
+      },
+      evidence: attachments.map(a => ({
+        evidenceId: a.evidenceId,
+        title:      a.title,
+        filename:   a.filename,
+        sha256:     a.sha256,
+        blobPath:   a.blobPath,
+        status:     a.status,
+      })),
+      vvbOpinion: vvbCase ? {
+        caseId:     vvbCase.caseId,
+        vvbName:    vvbCase.vvbOrganizationName,
+        opinion:    vvbOpinion,
+        notes:      vvbCase.verificationOpinion?.notes,
+        recordedAt: vvbCase.verificationOpinion?.recordedAt,
+      } : null,
+      submissionChecklist: {
+        reportFinal:         report.status === 'FINAL' || report.status === 'SUBMITTED',
+        vvbOpinionPositive:  isPositiveOpinion,
+        calculationApproved: !!calc.approvedBy,
+        evidenceUploaded:    attachments.length > 0,
+        alreadySubmitted:    report.status === 'SUBMITTED',
+        pendingCountersign:  report.submissionRequest?.status === 'PENDING_COUNTERSIGN',
+      },
+    };
+  }
+
+  /**
+   * Step 1 of 2 — Initiate a submission request (Admin A).
+   *
+   * Validates the report and VVB opinion, then creates a PENDING_COUNTERSIGN
+   * request on the report. A second mrv-programme-admin (Admin B, different
+   * person) must call countersignSubmission() within 48 hours to complete.
+   *
+   * Per VCS Standard §4.1.4 and ISO 14064-3, monitoring report submissions
+   * require segregation of duties between preparer and authorising signatory.
+   *
+   * @param {string} projectId
+   * @param {string} monitoringPeriodId
+   * @param {{ registry: string, notes?: string, requestedBy: string }} opts
+   */
+  async initiateSubmission(projectId, monitoringPeriodId, { registry, notes, requestedBy }) {
+    const report = await MRVReport
+      .findOne({ monitoringPeriodId, projectId })
+      .sort({ reportVersion: -1 });
+
+    if (!report) throw new Error('No report found for this monitoring period');
+    if (report.status === 'SUBMITTED') throw new Error('This report has already been submitted');
+    if (report.status !== 'FINAL') {
+      throw new Error(`Report must be FINAL before submission (current: ${report.status})`);
+    }
+    if (report.submissionRequest?.status === 'PENDING_COUNTERSIGN') {
+      const exp = new Date(report.submissionRequest.expiresAt);
+      throw new Error(
+        `A countersign request is already pending (expires ${exp.toISOString()}). ` +
+        `Ask a second mrv-programme-admin to call POST /report/submit/countersign.`
+      );
+    }
+
+    // VCS §4.1.4 / Gold Standard: POSITIVE VVB opinion required before submission
+    if (['VERRA_VCS', 'GOLD_STANDARD'].includes(registry)) {
+      const vvbCase = await VerificationCase
+        .findOne({ projectId, status: 'OPINION_RECORDED', scope: { $in: ['VERIFICATION', 'COMBINED'] } })
+        .sort({ openedAt: -1 })
+        .lean();
+      const opinion    = vvbCase?.verificationOpinion?.opinion;
+      const isPositive = opinion === 'POSITIVE' || opinion === 'POSITIVE_WITH_QUALIFICATIONS';
+      if (!isPositive) {
+        throw new Error(
+          `A POSITIVE VVB verification opinion is required before submitting to ${registry}. ` +
+          `Current opinion: ${opinion || 'none recorded'}. ` +
+          `Record one via POST /verification-cases/:id/opinion.`
+        );
+      }
+    }
+
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+    report.submissionRequest = {
+      requestedBy,
+      requestedAt: new Date(),
+      expiresAt,
+      registry,
+      notes: notes || '',
+      status: 'PENDING_COUNTERSIGN',
+    };
+    await report.save();
+
+    await createAuditLog({
+      action:  'MRV_SUBMISSION_INITIATED',
+      userid:  requestedBy,
+      details: { reportId: report.reportId, monitoringPeriodId, projectId, registry, expiresAt },
+    });
+
+    return {
+      reportId:     report.reportId,
+      status:       'PENDING_COUNTERSIGN',
+      requestedBy,
+      requestedAt:  report.submissionRequest.requestedAt,
+      expiresAt,
+      registry,
+      message:      'Submission initiated. A second mrv-programme-admin must countersign within 48 hours via POST /report/submit/countersign.',
+    };
+  }
+
+  /**
+   * Step 2 of 2 — Countersign and complete the submission (Admin B).
+   *
+   * Admin B must be a different user from Admin A (enforced server-side).
+   * Transitions MRVReport → SUBMITTED, advances MRVProject status,
+   * updates Ghana CMO pathway if applicable, auto-logs a RegistryEvent,
+   * and fires the mrv.report.submitted webhook.
+   *
+   * @param {string} projectId
+   * @param {string} monitoringPeriodId
+   * @param {{ countersignedBy: string }} opts
+   */
+  async countersignSubmission(projectId, monitoringPeriodId, { countersignedBy }) {
+    const report = await MRVReport
+      .findOne({ monitoringPeriodId, projectId })
+      .sort({ reportVersion: -1 });
+
+    if (!report) throw new Error('No report found for this monitoring period');
+    if (report.status === 'SUBMITTED') throw new Error('This report has already been submitted');
+
+    const req = report.submissionRequest;
+    if (!req || req.status !== 'PENDING_COUNTERSIGN') {
+      throw new Error('No pending countersign request found. Admin A must initiate submission first via POST /report/submit.');
+    }
+    if (new Date() > new Date(req.expiresAt)) {
+      report.submissionRequest.status = 'EXPIRED';
+      await report.save();
+      throw new Error('The countersign request has expired (48-hour window passed). Admin A must re-initiate submission.');
+    }
+    if (req.requestedBy === countersignedBy) {
+      throw new Error(
+        'The countersigning admin must be a different person from the one who initiated the submission. ' +
+        'This enforces segregation of duties per VCS Standard §4.1.4.'
+      );
+    }
+
+    const registry = req.registry;
+
+    // Transition report → SUBMITTED
+    report.status              = 'SUBMITTED';
+    report.submittedAt         = new Date();
+    report.submittedBy         = countersignedBy;
+    report.submittedTo         = registry;
+    report.submissionNotes     = req.notes || '';
+    report.submissionRequest.status = 'CONFIRMED';
+    await report.save();
+
+    // Advance project status + handle Ghana CMO pathway
+    const projectUpdate = {};
+    if (registry === 'VERRA_VCS' || registry === 'GOLD_STANDARD') {
+      projectUpdate.status = 'VERRA_REVIEW';
+    }
+    if (registry === 'GHANA_CMO') {
+      // Article 6 compliance: track CMO engagement status on the Ghana pathway
+      projectUpdate['ghanaPathway.cmoEngagementStatus'] = 'SUBMITTED';
+    }
+
+    const project = await MRVProject.findOneAndUpdate(
+      { projectId },
+      { $set: projectUpdate },
+      { new: true }
+    ).lean();
+
+    // Auto-log RegistryEvent (immutable audit record)
+    await RegistryEvent.create({
+      eventId:        `EVT-${uuidv4()}`,
+      projectId,
+      organizationId: project?.organizationId,
+      registry,
+      eventType:      'MONITORING_REPORT_SUBMITTED',
+      eventDate:      new Date(),
+      description:    `Monitoring report ${report.reportId} submitted via Crafted Climate MRV platform. Initiated by ${req.requestedBy}, countersigned by ${countersignedBy}.`,
+      externalRef:    report.reportId,
+      recordedBy:     countersignedBy,
+      notes:          req.notes || '',
+    });
+
+    // Audit log
+    await createAuditLog({
+      action:  'MRV_REPORT_SUBMITTED',
+      userid:  countersignedBy,
+      details: {
+        reportId: report.reportId, monitoringPeriodId, projectId, registry,
+        sha256: report.sha256, initiatedBy: req.requestedBy
+      },
+    });
+
+    // Fire webhook (non-blocking, non-fatal)
+    const webhookService = require('../webhook.service');
+    webhookService.dispatch(project?.organizationId, 'mrv.report.submitted', {
+      event:              'mrv.report.submitted',
+      reportId:           report.reportId,
+      projectId,
+      registry,
+      submittedAt:        report.submittedAt,
+      initiatedBy:        req.requestedBy,
+      countersignedBy,
+    }).catch(e => console.error('[MRVReport] Webhook dispatch failed (non-fatal):', e.message));
+
+    // Build and return the final export package
+    const exportPackage = await this.buildExportPackage(projectId, monitoringPeriodId);
+    return {
+      reportId:        report.reportId,
+      status:          'SUBMITTED',
+      submittedAt:     report.submittedAt,
+      submittedTo:     registry,
+      initiatedBy:     req.requestedBy,
+      countersignedBy,
+      exportPackage,
+    };
   }
 }
 

@@ -1,6 +1,7 @@
 'use strict';
 const router = require('express').Router();
 const analyticsService = require('../../services/mrv/mrvAnalyticsService');
+const { requirePermission } = require('../../middleware/authenticateApiKey');
 
 const ok  = (res, data) => res.json({ success: true, ...data });
 const err = (res, e, code = 500) => res.status(code).json({ success: false, error: e.message });
@@ -16,7 +17,7 @@ const err = (res, e, code = 500) => res.status(code).json({ success: false, erro
  *       200:
  *         description: Portfolio summary
  */
-router.get('/portfolio', async (req, res) => {
+router.get('/portfolio', requirePermission('mrv:analytics:read'), async (req, res) => {
   try {
     const orgId = req.user?.organizationId
       || req.user?.currentOrganizationId
