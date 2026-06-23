@@ -31,6 +31,6 @@ const flowConfigSchema = new mongoose.Schema({
     lastUpdated: { type: Date, default: Date.now }
 }, { timestamps: true });
 
-flowConfigSchema.index({ auid: 1 });
+// Note: auid index is already created by unique:true on the field definition above
 
 module.exports = mongoose.model('FlowConfig', flowConfigSchema);

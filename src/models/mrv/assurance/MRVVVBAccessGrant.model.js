@@ -12,7 +12,8 @@ const schema = new mongoose.Schema({
   vvbEmail:       { type: String },
   issuedBy:       { type: String, required: true },
   issuedAt:       { type: Date, default: Date.now },
-  expiresAt:      { type: Date, required: true, index: true },
+  expiresAt:      { type: Date, required: true }, // indexed via TTL schema.index below
+
   revokedAt:      { type: Date, default: null },
   revokedBy:      { type: String, default: null },
   lastUsedAt:     { type: Date, default: null },

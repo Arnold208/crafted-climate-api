@@ -3,6 +3,12 @@ const NotificationPreference = require('../models/notification/NotificationPrefe
 const User = require('../models/user/userModel');
 const { v4: uuidv4 } = require('uuid');
 const { createAuditLog } = require('../utils/auditLogger');
+// Lazy-required to avoid circular dependency — push.service requires User model too
+let _pushService;
+function getPushService() {
+    if (!_pushService) _pushService = require('./push.service');
+    return _pushService;
+}
 
 /**
  * Notification Service
@@ -345,24 +351,50 @@ class NotificationService {
     }
 
     /**
-     * Send push notification
+     * Send push notification via FCM (firebase_messaging).
+     * Delegates to push.service.sendToUser() which:
+     *  - checks User.notificationSettings.pushAlerts
+     *  - resolves valid FCM tokens from the fcm_tokens collection
+     *  - sends via Firebase Admin SDK sendEach()
+     *  - auto-invalidates dead tokens
      */
     async _sendPush(notification) {
         const logger = require('../utils/logger');
-        // Fetch user to check for push token
-        const user = await User.findOne({ userid: notification.userid }).select('pushToken').lean();
+        try {
+            const pushService = getPushService();
 
-        if (!user || !user.pushToken) {
-            logger.debug(`[Notification] No push token for user ${notification.userid}, skipping push delivery`);
-            return;
+            // Map notification category → FCM type for channel routing
+            // alert categories → alerts_channel (Max priority)
+            // system/admin     → general_channel
+            // billing/updates  → promotions_channel
+            const alertCategories = ['security', 'support', 'admin'];
+            const promoCategories = ['billing', 'updates'];
+            let fcmType = 'general';
+            if (alertCategories.includes(notification.category)) fcmType = 'alert';
+            if (promoCategories.includes(notification.category))  fcmType = 'promotion';
+
+            const result = await pushService.sendToUser(notification.userid, {
+                title:   notification.title,
+                body:    notification.message,
+                type:    fcmType,
+                data: {
+                    notificationId: String(notification._id || ''),
+                    category:       notification.category || '',
+                    actionUrl:      notification.actionUrl || '',
+                },
+            });
+
+            if (result.skipped) {
+                logger.debug(`[Notification] Push skipped for ${notification.userid}: ${result.skipped}`);
+            } else {
+                logger.info(`[Notification] Push sent=${result.sent} failed=${result.failed} for ${notification.userid}`);
+                if (result.sent > 0) notification.markDelivered('push');
+            }
+        } catch (err) {
+            logger.error(`[Notification] Push delivery error for ${notification.userid}:`, err.message);
         }
-
-        // External Push Service Integration point
-        // Supported: Firebase (FCM), OneSignal, etc.
-        logger.warn(`[Notification] Push delivery requested but NOT YET LINKED to provider for token ${user.pushToken.substring(0, 5)}...: ${notification.title}`);
-
-        notification.markDelivered('push');
     }
+
 
     /**
      * Get notification statistics

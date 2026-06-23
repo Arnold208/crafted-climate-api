@@ -39,6 +39,9 @@ const schema = new mongoose.Schema({
   rejectionReason: { type: String },
   auditEventId: { type: String },
   errors: [{ row: Number, message: String, _id: false }]
-}, { versionKey: false });
+  // Note: 'errors' is a Mongoose reserved key. suppressReservedKeysWarning silences the startup warning.
+  // It is intentionally used here to store row-level CSV import validation errors.
+}, { versionKey: false, suppressReservedKeysWarning: true });
+
 schema.index({ projectId: 1, uploadedAt: -1 });
 module.exports = mongoose.model('CSVImport', schema, 'csvImports');
