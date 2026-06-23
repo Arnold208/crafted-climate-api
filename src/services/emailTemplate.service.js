@@ -5,6 +5,7 @@ const { createAuditLog } = require('../utils/auditLogger');
 const { generateTemplateHtml } = require('../config/mail/templates/templateGenerator');
 const path = require('path');
 const fs = require('fs');
+const { typeFromDbSlug, renderByCategory, formatLocation } = require('../../crafted_climate_email_templates');
 
 /**
  * Email Template Service
@@ -135,6 +136,39 @@ class EmailTemplateService {
      * Render template with variables
      */
     async renderTemplate(slug, variables = {}) {
+        const formattedVars = { ...variables };
+        if (formattedVars.location) {
+            formattedVars.location = formatLocation(formattedVars.location);
+        }
+
+        const type = typeFromDbSlug(slug);
+        if (type) {
+            const allVariables = {
+                platformName: 'CraftedClimate',
+                supportEmail: process.env.SUPPORT_EMAIL || 'support@craftedclimate.org',
+                currentYear: new Date().getFullYear(),
+                appUrl: process.env.APP_URL || 'https://console.craftedclimate.co',
+                ...formattedVars
+            };
+
+            const rendered = renderByCategory(type, allVariables);
+
+            try {
+                const template = await EmailTemplate.findOne({ slug });
+                if (template) {
+                    template.lastUsedAt = new Date();
+                    template.usageCount += 1;
+                    await template.save();
+                }
+            } catch (_) {}
+
+            return {
+                subject: rendered.subject,
+                htmlBody: rendered.html,
+                textBody: this._htmlToText(rendered.html)
+            };
+        }
+
         const template = await this.getTemplate(slug);
 
         // Add default variables
@@ -143,7 +177,7 @@ class EmailTemplateService {
             supportEmail: process.env.SUPPORT_EMAIL || 'support@craftedclimate.org',
             currentYear: new Date().getFullYear(),
             appUrl: process.env.APP_URL || 'https://console.craftedclimate.co',
-            ...variables
+            ...formattedVars
         };
 
         // Render subject
@@ -183,7 +217,27 @@ class EmailTemplateService {
      * Send email using template
      */
     async sendFromTemplate(slug, to, variables = {}) {
-        const rendered = await this.renderTemplate(slug, variables);
+        const formattedVars = { ...variables };
+        if (formattedVars.location) {
+            formattedVars.location = formatLocation(formattedVars.location);
+        }
+
+        const type = typeFromDbSlug(slug);
+        if (type) {
+            const { sendCCEmail } = require('./email/craftedClimateMailer');
+            await sendCCEmail({
+                type,
+                to,
+                vars: formattedVars
+            });
+            return {
+                success: true,
+                to,
+                template: slug
+            };
+        }
+
+        const rendered = await this.renderTemplate(slug, formattedVars);
 
         // Use existing Nodemailer sendEmail function
         // Need to pass attachments manually if sendEmail supports it, or modify sendEmail to support it.
@@ -221,7 +275,25 @@ class EmailTemplateService {
      * Send test email
      */
     async sendTestEmail(slug, to, variables = {}) {
-        const rendered = await this.renderTemplate(slug, variables);
+        const formattedVars = { ...variables };
+        if (formattedVars.location) {
+            formattedVars.location = formatLocation(formattedVars.location);
+        }
+
+        const type = typeFromDbSlug(slug);
+        if (type) {
+            const { createEmailPayload } = require('../../crafted_climate_email_templates');
+            const { sendPayload } = require('../config/mail/nodemailer');
+            const payload = createEmailPayload({ type, to, vars: formattedVars });
+            payload.subject = `[TEST] ${payload.subject}`;
+            await sendPayload(payload);
+            return {
+                success: true,
+                message: `Test email sent to ${to}`
+            };
+        }
+
+        const rendered = await this.renderTemplate(slug, formattedVars);
 
         // Add test prefix to subject
         const testSubject = `[TEST] ${rendered.subject}`;

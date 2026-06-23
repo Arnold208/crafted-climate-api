@@ -286,4 +286,78 @@ router.get('/stats/summary', authenticateToken, authorizeRoles('admin', 'supervi
  */
 router.post('/initialize/defaults', authenticateToken, authorizeRoles('admin'), emailTemplateController.initializeDefaults);
 
+/**
+ * @swagger
+ * /api/admin/email-templates/test-platform-email:
+ *   post:
+ *     tags: [Email Templates]
+ *     summary: Send platform test email
+ *     description: Send a test email of any unified platform email type with default/mock values. (Platform Admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - to
+ *               - type
+ *             properties:
+ *               to:
+ *                 type: string
+ *                 format: email
+ *                 example: "sylviankimkpe@yahoo.com"
+ *               type:
+ *                 type: string
+ *                 enum:
+ *                   - auth.otp
+ *                   - auth.welcomeGoogle
+ *                   - auth.welcomeDb
+ *                   - auth.backofficeMfa
+ *                   - admin.passwordResetRequest
+ *                   - admin.passwordResetApproved
+ *                   - admin.forceUserPasswordReset
+ *                   - alert.deviceOfflineWarning
+ *                   - alert.deviceOfflineCritical
+ *                   - alert.deviceOfflineSevere
+ *                   - notification.generic
+ *                   - notification.digest
+ *                   - org.verificationSubmitted
+ *                   - org.verificationApproved
+ *                   - org.verificationRejected
+ *                   - org.partnerSubmitted
+ *                   - org.partnerApproved
+ *                   - org.partnerRejected
+ *                   - org.partnerRevoked
+ *                   - org.typeChangeSubmitted
+ *                   - org.typeChangeApproved
+ *                   - org.typeChangeRejected
+ *                   - org.creationApproved
+ *                   - org.creationRejected
+ *                   - org.invitation
+ *                   - collaboration.deviceAdded
+ *                   - subscription.expiry3
+ *                   - subscription.expiry2
+ *                   - subscription.expiry1
+ *                   - subscription.graceStarted
+ *                   - subscription.grace2
+ *                   - subscription.grace1
+ *                   - subscription.downgraded
+ *                   - mrv.dataGap
+ *                   - mrv.completeness
+ *                   - mrv.quarantine
+ *                   - mrv.verificationDeadline
+ *               vars:
+ *                 type: object
+ *                 description: Optional override variables. If not provided, rich default mock values are used.
+ *     responses:
+ *       200:
+ *         description: Test email sent successfully
+ *       400:
+ *         description: Invalid input or failure sending email
+ */
+router.post('/test-platform-email', authenticateToken, authorizeRoles('admin'), emailTemplateController.sendPlatformTestEmail);
+
 module.exports = router;

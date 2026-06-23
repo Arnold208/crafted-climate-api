@@ -206,6 +206,12 @@ const CATEGORY_EMAIL_TYPES = Object.freeze({
     "subscription.grace1",
     "subscription.downgraded",
   ]),
+  mrv: Object.freeze([
+    "mrv.dataGap",
+    "mrv.completeness",
+    "mrv.quarantine",
+    "mrv.verificationDeadline",
+  ]),
 });
 
 const SUPPORTED_EMAIL_TYPES = Object.freeze(
@@ -287,15 +293,32 @@ function formatLocation(location) {
   }
   if (typeof loc !== "object" || loc === null) return String(location);
 
-  // Build from most-specific to least-specific — street optional (can be very long)
-  const parts = [
-    loc.street,
-    loc.city || loc.municipality || loc.municipalitySubdivision,
-    loc.region,
-    loc.country,
-  ].filter(Boolean);
+  // Build parts, preserving specificity (support potential spelling variations)
+  const parts = [];
+  const street = loc.street;
+  const municipalitySub = loc.municipalitySubdivision || loc.municipaltySubdivision;
+  const municipality = loc.municipality || loc.municipalty;
+  const city = loc.city;
+  const region = loc.region;
+  const country = loc.country;
 
-  return parts.length ? parts.join(", ") : "Not provided";
+  if (street) parts.push(street);
+  if (municipalitySub) parts.push(municipalitySub);
+  if (municipality) parts.push(municipality);
+  if (city) parts.push(city);
+  if (region) parts.push(region);
+  if (country) parts.push(country);
+
+  // Deduplicate identical or trimmed parts
+  const uniqueParts = [];
+  for (const part of parts) {
+    const trimmedPart = String(part).trim();
+    if (trimmedPart && !uniqueParts.includes(trimmedPart)) {
+      uniqueParts.push(trimmedPart);
+    }
+  }
+
+  return uniqueParts.length ? uniqueParts.join(", ") : "Not provided";
 }
 
 function resolveLogoSrc(vars = {}) {
@@ -488,6 +511,11 @@ function renderLayout({
     table, td { border-collapse:collapse; mso-table-lspace:0pt; mso-table-rspace:0pt; }
     img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; }
     a { text-decoration:none; }
+    .info-box { background:#F5FBF6; border:1px solid #D6E4DA; border-radius:8px; padding:8px 0; margin:20px 0; }
+    .info-row { display:flex; justify-content:space-between; align-items:center; padding:10px 20px; border-bottom:1px solid #EBF3ED; }
+    .info-row:last-child { border-bottom:none; }
+    .info-label { font-size:12px; font-weight:600; color:#667085; text-transform:uppercase; letter-spacing:0.6px; }
+    .info-value { font-weight:600; color:#1F2937; font-size:14px; }
     @media screen and (max-width: 640px) {
       .email-shell { width:100% !important; max-width:100% !important; }
       .mobile-pad { padding-left:20px !important; padding-right:20px !important; }
@@ -787,7 +815,8 @@ function renderNotificationEmail(type, vars) {
       preheader: vars.preheader || vars.message || vars.title,
       eyebrow: vars.category || "Notification",
       heading: vars.title || "You have a new notification",
-      intro: vars.message || "There is a new update in your Crafted Climate account.",
+      intro: vars.message,
+      bodyHtml: vars.bodyHtml || "",
       notice: vars.notice,
       action: vars.actionUrl
         ? { label: vars.actionLabel || "View update", url: vars.actionUrl }
@@ -984,7 +1013,7 @@ function renderCollaborationEmail(type, vars) {
         { label: "Device", value: deviceName },
         { label: "Device ID", value: vars.devid },
         { label: "Role", value: vars.role },
-        { label: "Location", value: vars.location },
+        { label: "Location", value: formatLocation(vars.location) },
       ],
       bodyHtml: vars.permissions?.length
         ? `<p style="margin:18px 0 8px 0;color:#101828;font-family:Poppins,Arial,sans-serif;font-size:14px;font-weight:600;line-height:21px;">Your permissions</p>${renderList(vars.permissions, THEMES.info)}`
@@ -1103,6 +1132,116 @@ function renderSubscriptionEmail(type, vars) {
   };
 }
 
+function renderMrvEmail(type, vars) {
+  const common = {
+    recipientName: vars.userName,
+    recipientEmail: vars.recipientEmail,
+    logoSrc: resolveLogoSrc(vars),
+    transactional: true,
+  };
+
+  if (type === "mrv.dataGap") {
+    return {
+      subject: vars.subject || `Critical: Sensor ${vars.auid} offline — data gap forming`,
+      html: renderLayout({
+        ...common,
+        theme: THEMES.critical,
+        preheader: `Data gap warning for sensor ${vars.auid}.`,
+        eyebrow: "MRV Data Gap Alert",
+        heading: `Sensor Data Gap — ${vars.tag || 'CRITICAL'}`,
+        bodyHtml: vars.bodyHtml || `
+          <p>Sensor <strong>${escapeHtml(vars.auid)}</strong> has been offline for <strong>${escapeHtml(vars.durationFormatted || vars.label)}</strong> during active monitoring period <strong>${escapeHtml(vars.periodName)}</strong>.</p>
+          <div class="info-box">
+            <div class="info-row"><span class="info-label">Device</span><span class="info-value">${escapeHtml(vars.auid)}</span></div>
+            <div class="info-row"><span class="info-label">Monitoring Period</span><span class="info-value">${escapeHtml(vars.periodName)}</span></div>
+            <div class="info-row"><span class="info-label">Duration Offline</span><span class="info-value">${escapeHtml(vars.durationFormatted || vars.label)}</span></div>
+            <div class="info-row"><span class="info-label">Severity</span><span class="info-value">${escapeHtml(vars.tag || 'CRITICAL')}</span></div>
+          </div>
+          <p>Data gaps during an active monitoring period may reduce completeness and affect carbon credit calculations. Please restore the device as soon as possible.</p>
+        `,
+        action: { label: "View Project", url: vars.ctaUrl || `${BRAND.appUrl}/mrv/projects/${vars.projectId}` }
+      })
+    };
+  }
+
+  if (type === "mrv.completeness") {
+    const completenessPercent = Number(vars.completenessPercent || 0);
+    const theme = completenessPercent < 70 ? THEMES.critical : THEMES.warning;
+    return {
+      subject: vars.subject || `MRV Notice: Period completeness at ${completenessPercent.toFixed(1)}%`,
+      html: renderLayout({
+        ...common,
+        theme,
+        preheader: `Monitoring period completeness update.`,
+        eyebrow: "MRV Completeness Alert",
+        heading: "Monitoring Period Completeness",
+        bodyHtml: vars.bodyHtml || `
+          <p>The completeness of monitoring period <strong>${escapeHtml(vars.periodName)}</strong> has dropped to <strong>${completenessPercent.toFixed(1)}%</strong>.</p>
+          <div class="info-box">
+            <div class="info-row"><span class="info-label">Monitoring Period</span><span class="info-value">${escapeHtml(vars.periodName)}</span></div>
+            <div class="info-row"><span class="info-label">Current Completeness</span><span class="info-value">${completenessPercent.toFixed(1)}%</span></div>
+            <div class="info-row"><span class="info-label">Target</span><span class="info-value">90%</span></div>
+            <div class="info-row"><span class="info-label">Status</span><span class="info-value">${escapeHtml(vars.alertLevel)}</span></div>
+          </div>
+          ${completenessPercent < 70 ? '<p><strong>At this level, carbon credit calculation may be blocked.</strong> Immediate attention is required.</p>' : '<p>Please review sensor connectivity and data gaps to improve coverage before the period closes.</p>'}
+        `,
+        action: { label: "View Period", url: vars.ctaUrl || `${BRAND.appUrl}/mrv/projects/${vars.projectId}/periods/${vars.monitoringPeriodId}` }
+      })
+    };
+  }
+
+  if (type === "mrv.quarantine") {
+    const observations = Array.isArray(vars.observations) ? vars.observations : [];
+    const rows = observations.map(o =>
+      `<div class="info-row"><span class="info-label">${escapeHtml(o.observationId)}</span><span class="info-value">${escapeHtml(o.reason || 'See data quality dashboard')}</span></div>`
+    ).join('');
+
+    return {
+      subject: vars.subject || `${observations.length} observation(s) quarantined — review required`,
+      html: renderLayout({
+        ...common,
+        theme: THEMES.warning,
+        preheader: `${observations.length} observations quarantined.`,
+        eyebrow: "MRV Quarantine Alert",
+        heading: "Quarantined Observations",
+        bodyHtml: vars.bodyHtml || `
+          <p><strong>${observations.length}</strong> observation(s) were quarantined in period <strong>${escapeHtml(vars.periodName)}</strong> and require review.</p>
+          <div class="info-box">${rows}</div>
+          <p>Please review and either approve or void each observation in the data quality dashboard.</p>
+        `,
+        action: { label: "Open Data Quality Dashboard", url: vars.ctaUrl || `${BRAND.appUrl}/mrv/projects/${vars.projectId}/data-quality` }
+      })
+    };
+  }
+
+  if (type === "mrv.verificationDeadline") {
+    const deadlineStr = vars.deadlineDate ? formatDate(vars.deadlineDate) : "Not provided";
+    return {
+      subject: vars.subject || `Verification deadline in ${vars.daysLeft} day(s) — ${vars.projectName}`,
+      html: renderLayout({
+        ...common,
+        theme: THEMES.warning,
+        preheader: `Verification deadline reminder for project ${vars.projectName}.`,
+        eyebrow: "MRV Verification Alert",
+        heading: "Verification Deadline Reminder",
+        bodyHtml: vars.bodyHtml || `
+          <p>The verification deadline for project <strong>${escapeHtml(vars.projectName)}</strong> is <strong>${escapeHtml(deadlineStr)}</strong> — <strong>${escapeHtml(vars.daysLeft)} day(s)</strong> remaining.</p>
+          <div class="info-box">
+            <div class="info-row"><span class="info-label">Project</span><span class="info-value">${escapeHtml(vars.projectName)}</span></div>
+            <div class="info-row"><span class="info-label">Verification Case</span><span class="info-value">${escapeHtml(vars.verificationCaseId)}</span></div>
+            <div class="info-row"><span class="info-label">Deadline</span><span class="info-value">${escapeHtml(deadlineStr)}</span></div>
+            <div class="info-row"><span class="info-label">Days Remaining</span><span class="info-value">${escapeHtml(vars.daysLeft)}</span></div>
+          </div>
+          <p>Please ensure all documentation, evidence files, and calculation results are finalised before the deadline.</p>
+        `,
+        action: { label: "View Verification Case", url: vars.ctaUrl || `${BRAND.appUrl}/mrv/projects/${vars.projectId}/verification/${vars.verificationCaseId}` }
+      })
+    };
+  }
+
+  throw new Error(`Unsupported MRV email type: ${type}`);
+}
+
 function normalizeType(type) {
   return EMAIL_ALIASES[type] || type;
 }
@@ -1126,6 +1265,8 @@ function renderByCategory(type, vars = {}) {
       return renderCollaborationEmail(normalized, vars);
     case "subscription":
       return renderSubscriptionEmail(normalized, vars);
+    case "mrv":
+      return renderMrvEmail(normalized, vars);
     default:
       throw new Error(`Unsupported email category for type: ${type}`);
   }
@@ -1224,4 +1365,5 @@ module.exports = {
   typeFromDbSlug,
   escapeHtml,
   safeUrl,
+  formatLocation,
 };

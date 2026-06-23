@@ -3,25 +3,41 @@ const { mrvNotificationQueue } = require('../../config/queue/bullMQ/mrvNotificat
 const MRVProject = require('../../models/mrv/project/MRVProject.model');
 const MonitoringPeriod = require('../../models/mrv/monitoring/MonitoringPeriod.model');
 const User = require('../../models/user/userModel');
-const { generateTemplateHtml } = require('../../config/mail/templates/templateGenerator');
-const { sendEmail } = require('../../config/mail/nodemailer');
 const path = require('path');
 const logger = require('../../utils/logger');
-
-// Logo attachment for all MRV emails
-const logoAttachment = [{
-  filename: 'cc_logo_raw.png',
-  path: path.join(__dirname, '../../config/storage/image/cc_logo_raw.png'),
-  cid: 'cc_logo'
-}];
+const { sendCCEmail } = require('../email/craftedClimateMailer');
 
 /**
- * Send a branded MRV notification email directly (not via template DB).
- * Used for dynamic one-off notifications with inline HTML.
+ * Send a branded MRV notification email using sendCCEmail.
  */
 async function sendMRVEmail({ to, subject, heading, bodyHtml, ctaText, ctaUrl }) {
-  const html = generateTemplateHtml(heading, bodyHtml, ctaText, ctaUrl);
-  await sendEmail(to, subject, html, logoAttachment);
+  let type = 'notification.generic';
+  if (heading.includes('Gap')) type = 'mrv.dataGap';
+  else if (heading.includes('Completeness')) type = 'mrv.completeness';
+  else if (heading.includes('Quarantine')) type = 'mrv.quarantine';
+  else if (heading.includes('Deadline') || heading.includes('Verification')) type = 'mrv.verificationDeadline';
+
+  let theme = 'info';
+  if (subject.toLowerCase().includes('critical') || heading.toLowerCase().includes('critical') || heading.toLowerCase().includes('severe')) {
+    theme = 'critical';
+  } else if (subject.toLowerCase().includes('warning') || heading.toLowerCase().includes('quarantine') || heading.toLowerCase().includes('deadline')) {
+    theme = 'warning';
+  }
+
+  await sendCCEmail({
+    type,
+    to,
+    vars: {
+      subject,
+      title: heading,
+      bodyHtml,
+      theme,
+      category: 'MRV',
+      actionUrl: ctaUrl,
+      actionLabel: ctaText,
+      transactional: true
+    }
+  });
 }
 
 /**

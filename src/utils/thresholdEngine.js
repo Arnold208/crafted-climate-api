@@ -4,7 +4,7 @@ const NotificationPreference = require('../models/notification/NotificationPrefe
 const registerNewDevice = require('../models/devices/registerDevice');
 
 const { sendSMS } = require("../config/sms/sms");
-const { sendEmail } = require("../config/mail/nodemailer");
+const { sendCCEmail } = require("../services/email/craftedClimateMailer");
 
 // ======================================================
 // 0️⃣ Resolve device owner & details (nickname + model)
@@ -442,7 +442,19 @@ async function sendAlerts(owner, device, rule, smsMessage, emailMessage) {
     if (recipients.size > 0) {
       console.log(`Sending email alert for ${device.auid} to ${recipients.size} recipients...`);
       for (const email of recipients) {
-        sendEmail(email, `CraftedClimate ALERT: ${device.nickname || device.auid}`, emailMessage).catch(e => console.error(e.message));
+        sendCCEmail({
+          type: 'notification.generic',
+          to: email,
+          vars: {
+            title: `Sensor Alert: ${device.nickname || device.auid}`,
+            bodyHtml: emailMessage,
+            theme: 'warning',
+            category: 'Device Alert',
+            actionUrl: `${process.env.APP_URL || 'https://console.craftedclimate.co'}/devices/${device.auid}`,
+            actionLabel: 'View Device',
+            transactional: true
+          }
+        }).catch(e => console.error('[ThresholdEngine] Email failed:', e.message));
       }
     }
 
