@@ -355,7 +355,10 @@ router.get('/db/:model/:auid/csv',
  *   get:
  *     tags: [Telemetry]
  *     summary: Get raw telemetry data (Enterprise Only)
- *     description: Returns raw JSON sensor data for auditing. Requires Enterprise plan (`apiAccess: full`). Accepts **JWT Bearer** or **org API key** (`telemetry:read`).
+ *     description: |
+ *       Returns raw JSON sensor data for auditing. Requires Enterprise plan (apiAccess full).
+ *       Accepts JWT Bearer or org API key with telemetry:read permission.
+
  *     security:
  *       - bearerAuth: []
  *       - apiKeyAuth: []

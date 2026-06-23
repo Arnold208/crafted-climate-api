@@ -38,7 +38,7 @@ This API provides tenant-isolated, multi-organizational access for climate senso
 - Multi-Tenant (Organization-Based)
 - Role-Based Access Control (RBAC)
 - JWT Authentication
-- Org API Keys (`cc_live_...`) for programmatic access — generate, rotate, revoke, restrict by IP/Origin
+- Org API Keys (\`cc_live_...\`) for programmatic access — generate, rotate, revoke, restrict by IP/Origin
 - WebSocket Real-Time Telemetry & Status Bridge
 - Plan-based feature gating (freemium → starter → premium → enterprise)
 
