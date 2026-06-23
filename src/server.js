@@ -15,9 +15,10 @@ const secureMqtt = require('./modules/telemetry/mqtt.service');
 const { startTelemetryWorker } = require('./modules/telemetry/workers/telemetryWorker');
 const { startStatusWorker } = require('./modules/telemetry/workers/statusWorker');
 const { startSubscriptionWorker } = require('./modules/subscription/workers/subscriptionWorker');
-const emailWorker = require('./workers/emailWorker');
-const alertWorker = require('./workers/alertWorker');
+const emailWorker   = require('./workers/emailWorker');
+const alertWorker   = require('./workers/alertWorker');
 const webhookWorker = require('./workers/webhookWorker');
+const pushWorker    = require('./workers/pushWorker');
 
 // ============================================================
 // MRV ENGINE — Workers (parallel path, non-blocking)
@@ -80,9 +81,10 @@ connectRedis()
         startSLABreachCron();
         startAutoDisableCron(); // 🔄 Auto-disable devices inactive > 30 days
         startResetApiQuotaCron(); // 🔄 Reset monthly API call counters on 1st of month
-        emailWorker.start().then(() => console.log('✅ Email worker started'));
-        alertWorker.start().then(() => console.log('✅ Alert worker started'));
+        emailWorker.start().then(() =>   console.log('✅ Email worker started'));
+        alertWorker.start().then(() =>   console.log('✅ Alert worker started'));
         webhookWorker.start().then(() => console.log('✅ Webhook worker started'));
+        pushWorker.start().then(() =>    console.log('✅ Push notification worker started'));
 
         // ============================================================
         // MRV ENGINE — Start all workers (non-blocking try/catch)
@@ -105,16 +107,34 @@ connectRedis()
         }
 
         // 🔥 Initialize Email Templates (Seeds DB)
+        // Guarded by readyState so it never fires before MongoDB is connected.
+        // Azure CosmosDB can take 20-40 s to handshake — firing before connection
+        // causes Mongoose to buffer the query and time out after 10 s.
         const emailTemplateService = require('./services/emailTemplate.service');
-        emailTemplateService.initializeDefaults().catch(err => console.error('❌ Failed to init templates:', err.message));
+        const initEmailTemplates = () => {
+            emailTemplateService.initializeDefaults()
+                .then(() => console.log('✅ Email templates initialized'))
+                .catch(err => console.error('❌ Failed to init templates:', err.message));
+        };
+
+        const mongoose = require('mongoose');
+        if (mongoose.connection.readyState === 1) {
+            // Already connected (hot reload / fast local start)
+            initEmailTemplates();
+        } else {
+            // Wait for connection — safe against slow cloud DB (CosmosDB, Atlas, etc.)
+            mongoose.connection.once('connected', initEmailTemplates);
+        }
+
 
         // ============================================================
         // MRV ENGINE — Seed Catalogue (standards, methodologies, sensor capabilities)
         // Runs AFTER MongoDB connection is confirmed ready (avoids Cosmos DB timeout race)
         // All entries are upserted (idempotent — safe to run on every restart)
         // ============================================================
-        const mongoose = require('mongoose');
+        // MRV seed uses the same `mongoose` already required above
         const runMRVSeedWhenReady = () => {
+
             try {
                 const { seedMRVCatalogue } = require('./services/mrv/mrvSeedService');
                 const { ensureContainers } = require('./services/mrv/mrvBlobService');

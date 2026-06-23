@@ -199,6 +199,10 @@ class NotificationService {
 
     /**
      * Update user preferences
+     *
+     * Uses a recursive deep merge so partial updates like:
+     *   { preferences: { email: { enabled: false } } }
+     * only update the `enabled` field without wiping `frequency` or other sibling fields.
      */
     async updateUserPreferences(userid, updates) {
         let prefs = await NotificationPreference.findOne({ userid });
@@ -210,13 +214,30 @@ class NotificationService {
             });
         }
 
-        // Update preferences
+        // Deep merge helper — recursively merges source into target
+        const deepMerge = (target, source) => {
+            for (const key of Object.keys(source)) {
+                if (
+                    source[key] !== null &&
+                    typeof source[key] === 'object' &&
+                    !Array.isArray(source[key]) &&
+                    typeof target[key] === 'object'
+                ) {
+                    deepMerge(target[key], source[key]);
+                } else {
+                    target[key] = source[key];
+                }
+            }
+        };
+
         if (updates.preferences) {
-            Object.assign(prefs.preferences, updates.preferences);
+            deepMerge(prefs.preferences, updates.preferences);
+            prefs.markModified('preferences'); // Needed for Mongoose to detect nested changes
         }
 
         if (updates.quietHours) {
-            Object.assign(prefs.quietHours, updates.quietHours);
+            deepMerge(prefs.quietHours, updates.quietHours);
+            prefs.markModified('quietHours');
         }
 
         prefs.updatedAt = new Date();

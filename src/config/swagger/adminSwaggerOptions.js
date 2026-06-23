@@ -4,8 +4,12 @@ const path = require('path');
 // API_URL is the canonical backend server URL.
 // In dev:  process.env.API_URL = http://localhost:3000  (from .env.development)
 // In prod: process.env.API_URL = https://cctelemetry-api-prod-...azurewebsites.net  (from Azure)
-const apiUrl  = process.env.API_URL  || `http://localhost:${process.env.PORT || 3000}`;
+let apiUrl  = process.env.API_URL  || `http://localhost:${process.env.PORT || 3000}`;
 const isProd  = process.env.NODE_ENV === 'production';
+
+if (apiUrl && !apiUrl.startsWith('http://') && !apiUrl.startsWith('https://')) {
+  apiUrl = `${isProd ? 'https' : 'http'}://${apiUrl}`;
+}
 
 const options = {
   definition: {

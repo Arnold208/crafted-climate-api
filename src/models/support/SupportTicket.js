@@ -132,7 +132,8 @@ SupportTicketSchema.index({ organizationId: 1, status: 1 });
 SupportTicketSchema.index({ userid: 1, status: 1 });
 SupportTicketSchema.index({ assignedTo: 1, status: 1 });
 SupportTicketSchema.index({ priority: 1, status: 1 });
-SupportTicketSchema.index({ createdAt: -1 });
+// Note: createdAt index is created automatically by timestamps:true (Mongoose 8)
+
 
 // Calculate SLA due dates based on priority
 SupportTicketSchema.methods.calculateSLA = function () {

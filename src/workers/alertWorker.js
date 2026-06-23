@@ -7,6 +7,7 @@ const Organization = require('../models/organization/organizationModel');
 const Deployment = require('../models/deployment/deploymentModel');
 const { sendSMS } = require('../config/sms/sms');
 const emailTemplateService = require('../services/emailTemplate.service');
+const pushService = require('../services/push.service');  // FCM push
 const logger = require('../utils/logger');
 const eventLog = require('../modules/devices/eventLog/eventLog.service');
 
@@ -73,11 +74,61 @@ function getStageConfig(stage, device, lastSeen, extras = {}) {
     return { sms, templateSlug, variables };
 }
 
-async function sendStageAlert(device, recipients, smsRecipients, stage, lastSeen, extras = {}) {
+/**
+ * Build the FCM push payload for a device offline alert stage.
+ * All three stages use type='alert' so Flutter routes to alerts_channel
+ * (Max importance, alarm ringtone, red LED).
+ *
+ * @returns {{ title, body, type, data }}
+ */
+function getPushPayloadForStage(stage, device, lastSeen, extras = {}) {
+    const nickname  = device.nickname || device.devid;
+    const location  = typeof device.metadata?.location === 'string'
+        ? device.metadata.location
+        : device.location || 'Unknown location';
+    const duration  = extras.minutesOffline ? formatDuration(extras.minutesOffline) : 'an unknown duration';
+    const timeStr   = new Date(lastSeen).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+    let title, body;
+
+    switch (stage.level) {
+        case 1:
+            title = `⚠️ ${nickname} is offline`;
+            body  = `${nickname} at ${location} went offline at ${timeStr}. Check power and connectivity.`;
+            break;
+        case 2:
+            title = `🚨 ${nickname} critically offline`;
+            body  = `${nickname} has been offline for ${duration}. Inspect the device immediately.`;
+            break;
+        case 3:
+            title = `🔴 ${nickname} — Severe Outage`;
+            body  = `${nickname} offline for ${duration}. Immediate action required to restore data.`;
+            break;
+        default:
+            return null;
+    }
+
+    return {
+        title,
+        body,
+        type: 'alert',  // → Flutter alerts_channel (Max priority)
+        data: {
+            screen:     'devices',            // tap → navigates to Devices tab
+            auid:       device.auid || '',
+            devid:      device.devid || '',
+            alertLevel: String(stage.level),
+            location,
+        },
+    };
+}
+
+async function sendStageAlert(device, recipients, smsRecipients, userIds, stage, lastSeen, extras = {}) {
     const config = getStageConfig(stage, device, lastSeen, extras);
     if (!config) return;
 
-    logger.info(`📢 Sending [${stage.tag}] Alert for ${device.devid} to ${recipients.length} emails, ${smsRecipients.length} SMS`);
+    const pushPayload = getPushPayloadForStage(stage, device, lastSeen, extras);
+
+    logger.info(`📢 Sending [${stage.tag}] Alert for ${device.devid} — emails:${recipients.length} sms:${smsRecipients.length} push:${userIds.length}`);
 
     // 1. Send Emails
     await Promise.allSettled(recipients.map(email =>
@@ -90,6 +141,24 @@ async function sendStageAlert(device, recipients, smsRecipients, stage, lastSeen
         sendSMS(contact, config.sms)
             .catch(e => logger.error(`❌ SMS failed for ${contact}:`, e.message))
     ));
+
+    // 3. Send FCM push to every recipient who has the app installed
+    //    pushService.sendToUser() internally gates on:
+    //      • User.notificationSettings.pushAlerts (user toggle in Settings)
+    //      • Valid FCM token exists in the fcm_tokens collection
+    if (pushPayload && userIds.length > 0) {
+        await Promise.allSettled(userIds.map(userid =>
+            pushService.sendToUser(userid, pushPayload)
+                .then(r => {
+                    if (r.skipped) {
+                        logger.debug(`[AlertWorker] Push skipped for ${userid}: ${r.skipped}`);
+                    } else {
+                        logger.debug(`[AlertWorker] Push sent=${r.sent} failed=${r.failed} for ${userid}`);
+                    }
+                })
+                .catch(e => logger.error(`❌ Push failed for ${userid}:`, e.message))
+        ));
+    }
 }
 
 class AlertWorker {
@@ -135,6 +204,7 @@ class AlertWorker {
 
             const emails = new Set();
             const phones = new Set();
+            const userIds = new Set();  // track userIds for push
 
             const addUserIfAllowed = async (userId, userEmail, userContact) => {
                 if (!userId) return;
@@ -148,14 +218,19 @@ class AlertWorker {
                     }
 
                     const emailEnabled = prefs.preferences?.email?.enabled !== false;
-                    const pushEnabled = prefs.preferences?.push?.enabled !== false; // Map push to SMS/Contact
+                    const smsEnabled   = prefs.preferences?.push?.enabled  !== false; // legacy SMS flag
 
                     if (emailEnabled && userEmail) emails.add(userEmail);
-                    if (pushEnabled && userContact) phones.add(userContact);
+                    if (smsEnabled   && userContact) phones.add(userContact);
                 } else {
-                    if (userEmail) emails.add(userEmail);
+                    // No preference doc — default allow
+                    if (userEmail)   emails.add(userEmail);
                     if (userContact) phones.add(userContact);
                 }
+
+                // Always add to push list — pushService.sendToUser() does its own
+                // preference gate (User.notificationSettings.pushAlerts) and FCM token check.
+                userIds.add(userId);
             };
 
             // 1. Owner
@@ -213,12 +288,17 @@ class AlertWorker {
                 }
             }
 
-            // E. Send Alert
-            if (emails.size > 0 || phones.size > 0) {
-                await sendStageAlert(device, Array.from(emails), Array.from(phones), targetStage, lastSeen, {
-                    minutesOffline,
-                    consecutivePartials,
-                });
+            // E. Send Alert (email + SMS + FCM push)
+            if (emails.size > 0 || phones.size > 0 || userIds.size > 0) {
+                await sendStageAlert(
+                    device,
+                    Array.from(emails),
+                    Array.from(phones),
+                    Array.from(userIds),
+                    targetStage,
+                    lastSeen,
+                    { minutesOffline, consecutivePartials }
+                );
 
                 // 📋 EVENT LOG — alert dispatched
                 eventLog.alertFired({
@@ -228,9 +308,10 @@ class AlertWorker {
                     orgId:          device.organizationId,
                     alertLevel:     targetStage.level,
                     alertTag:       targetStage.tag,
-                    recipientCount: emails.size + phones.size,
+                    recipientCount: emails.size + phones.size + userIds.size,
                     emailCount:     emails.size,
                     smsCount:       phones.size,
+                    pushCount:      userIds.size,
                 }).catch(() => {});
             }
 

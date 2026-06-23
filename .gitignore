@@ -8,6 +8,13 @@ node_modules/
 
 # ── Environment Variables ─────────────────────────────────────
 # ALL .env files are secret — never commit them.
+
+# ── Firebase Service Account Keys ─────────────────────────────
+# NEVER commit service account JSON files
+*-firebase-adminsdk-*.json
+serviceAccountKey.json
+firebase-adminsdk*.json
+
 .env
 .env.*
 !.env.example

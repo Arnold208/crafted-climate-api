@@ -29,8 +29,8 @@ const otaSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-// 🔧 Add index for CosmosDB compatibility with sort()
-otaSchema.index({ createdAt: -1 });
+// Note: createdAt index is created automatically by timestamps:true (Mongoose 8)
+
 
 const OTAUpdate = mongoose.model("OTAUpdate", otaSchema);
 module.exports = OTAUpdate;

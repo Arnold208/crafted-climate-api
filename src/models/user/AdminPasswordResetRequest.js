@@ -46,7 +46,8 @@ const adminPasswordResetRequestSchema = new mongoose.Schema({
   collection: 'adminpasswordresetrequests'
 });
 
-adminPasswordResetRequestSchema.index({ createdAt: -1 });
+// Note: createdAt index is created automatically by timestamps:true (Mongoose 8)
 adminPasswordResetRequestSchema.index({ token: 1 });
+
 
 module.exports = mongoose.model('AdminPasswordResetRequest', adminPasswordResetRequestSchema);
