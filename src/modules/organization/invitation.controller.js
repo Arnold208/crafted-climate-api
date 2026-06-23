@@ -90,8 +90,8 @@ class InvitationController {
             await invitation.save();
 
             // Setup URLs
-            const acceptUrl = `${process.env.APP_FRONTEND_URL || 'https://app.craftedclimate.com'}/accept-invite?token=${token}`;
-            const signupUrl = `${process.env.APP_FRONTEND_URL || 'https://app.craftedclimate.com'}/signup?invitationId=${invitationId}&token=${token}`;
+            const acceptUrl = `${process.env.APP_URL || 'https://console.craftedclimate.co'}/accept-invite?token=${token}`;
+            const signupUrl = `${process.env.APP_URL || 'https://console.craftedclimate.co'}/signup?invitationId=${invitationId}&token=${token}`;
 
             // Send email
             await emailService.sendInvitation(email, org.name, acceptUrl, signupUrl, isNewUser);

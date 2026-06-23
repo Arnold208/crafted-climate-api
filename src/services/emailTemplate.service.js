@@ -140,9 +140,9 @@ class EmailTemplateService {
         // Add default variables
         const allVariables = {
             platformName: 'CraftedClimate',
-            supportEmail: process.env.SUPPORT_EMAIL || 'support@craftedclimate.com',
+            supportEmail: process.env.SUPPORT_EMAIL || 'support@craftedclimate.org',
             currentYear: new Date().getFullYear(),
-            appUrl: process.env.APP_URL || 'https://app.craftedclimate.com',
+            appUrl: process.env.APP_URL || 'https://console.craftedclimate.co',
             ...variables
         };
 

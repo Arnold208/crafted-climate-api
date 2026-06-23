@@ -9,7 +9,14 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *   post:
  *     tags: [Organization - API Keys]
  *     summary: Generate new API key
- *     description: Create a new API key for organization
+ *     description: |
+ *       Create a new API key for the organization. Requires JWT Bearer auth.
+ *       - **Freemium plans**: Key generation is blocked.
+ *       - **Starter**: Max 3 active keys.
+ *       - **Premium**: Max 10 active keys.
+ *       - **Enterprise**: Unlimited keys.
+ *
+ *       The full key (`cc_live_...`) is returned **only once** on creation — store it securely.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -35,17 +42,16 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *                 type: array
  *                 items:
  *                   type: string
- *                   example: "permissions_example"
  *                   enum: [telemetry:read, telemetry:write, devices:read, devices:write, analytics:read]
  *               rateLimit:
  *                 type: object
  *                 properties:
  *                   requests:
  *                     type: integer
- *                     example: 1
+ *                     example: 1000
  *                   windowMs:
  *                     type: integer
- *                     example: 1
+ *                     example: 3600000
  *               expiresAt:
  *                 type: string
  *                 format: date-time
@@ -56,7 +62,6 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *                 type: array
  *                 items:
  *                   type: string
- *                   example: "properties_example"
  *             example:
  *               name: Production API Key
  *               permissions: [telemetry:write, devices:read]
@@ -66,7 +71,7 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *               rotationSchedule: quarterly
  *     responses:
  *       201:
- *         description: API key generated successfully
+ *         description: API key generated successfully — save the `key` field, it is shown only once
  *         content:
  *           application/json:
  *             schema:
@@ -80,14 +85,17 @@ const authenticateToken = require('../../middleware/bearermiddleware');
  *                   properties:
  *                     key:
  *                       type: string
- *                       example: "key_example"
+ *                       example: "cc_live_a1b2c3d4_abcdef..."
  *                       description: Full API key (shown only once)
  *                     keyPrefix:
  *                       type: string
- *                       example: "keyPrefix_example"
+ *                       example: "cc_live_a1b2c3d4"
  *                     message:
  *                       type: string
- *                       example: "properties_example"
+ *       400:
+ *         description: Plan limit reached or freemium plan
+ *       403:
+ *         description: Not a member of this organization
  */
 router.post('/', authenticateToken, orgApiKeyController.generateApiKey);
 
@@ -97,9 +105,10 @@ router.post('/', authenticateToken, orgApiKeyController.generateApiKey);
  *   get:
  *     tags: [Organization - API Keys]
  *     summary: List organization's API keys
- *     description: Get all API keys for this organization
+ *     description: Get all API keys for this organization. Accepts **JWT Bearer** or **org API key** (any permission). Key hashes are never returned — only metadata (prefix, status, permissions, usage counts).
  *     security:
  *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: orgId
@@ -114,6 +123,8 @@ router.post('/', authenticateToken, orgApiKeyController.generateApiKey);
  *     responses:
  *       200:
  *         description: API keys retrieved
+ *       403:
+ *         description: Not a member of this organization
  */
 router.get('/', authenticateToken, orgApiKeyController.listOrgApiKeys);
 
@@ -184,9 +195,10 @@ router.delete('/:keyId', authenticateToken, orgApiKeyController.revokeApiKey);
  *   get:
  *     tags: [Organization - API Keys]
  *     summary: Get API key usage statistics
- *     description: View usage statistics for specific API key
+ *     description: View usage statistics for a specific API key. Accepts **JWT Bearer** or **org API key**.
  *     security:
  *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: orgId

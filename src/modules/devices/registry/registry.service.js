@@ -48,7 +48,7 @@ class RegistryService {
         const [latitude, longitude] = location;
         let locationInfo = { latitude, longitude };
         try {
-            const geoRes = await axios.get('https://atlas.microsoft.com/search/address/reverse/json', {
+            const geoRes = await axios.get(`${process.env.AZURE_MAPS_BASE_URL || 'https://atlas.microsoft.com'}/search/address/reverse/json`, {
                 params: {
                     'api-version': '1.0',
                     'subscription-key': process.env.AZURE_MAPS_SUBSCRIPTION_KEY,
@@ -249,7 +249,7 @@ class RegistryService {
             const [latitude, longitude] = location;
             // Re-geocoding logic could be extracted to utility
             try {
-                const geoRes = await axios.get(`https://atlas.microsoft.com/search/address/reverse/json`, {
+                const geoRes = await axios.get(`${process.env.AZURE_MAPS_BASE_URL || 'https://atlas.microsoft.com'}/search/address/reverse/json`, {
                     params: {
                         'api-version': '1.0',
                         'subscription-key': process.env.AZURE_MAPS_SUBSCRIPTION_KEY, // Check naming consistency

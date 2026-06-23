@@ -2,20 +2,12 @@ const express = require('express');
 const router = express.Router();
 const manufacturerController = require('./manufacturer.controller');
 
-const authorizeRoles = require('../../../middleware/rbacMiddleware');
-const verifyApiKey = require('../../../middleware/apiKeymiddleware');
 const authenticateToken = require('../../../middleware/bearermiddleware');
+const authorizeRoles    = require('../../../middleware/rbacMiddleware');
 
-const verifyApiKeyOrTokenAdmin = (req, res, next) => {
-  const apiKey = req.headers['x-api-key'];
-  if (apiKey) {
-    return verifyApiKey(req, res, next);
-  }
-  return authenticateToken(req, res, (err) => {
-    if (err) return next(err);
-    return authorizeRoles('admin', 'supervisor')(req, res, next);
-  });
-};
+// System-admin only — JWT login required, admin or supervisor role
+// No API key access: manufacturer management is a privileged internal operation
+const adminOnly = [authenticateToken, authorizeRoles('admin', 'supervisor')];
 
 
 /**
@@ -75,7 +67,7 @@ const verifyApiKeyOrTokenAdmin = (req, res, next) => {
  *       500:
  *         description: Server error.
  */
-router.post('/', verifyApiKeyOrTokenAdmin, manufacturerController.createDevice);
+router.post('/', ...adminOnly, manufacturerController.createDevice);
 
 /**
  * @swagger
@@ -113,7 +105,7 @@ router.post('/', verifyApiKeyOrTokenAdmin, manufacturerController.createDevice);
  *       200: { description: Note UUID updated }
  *       400: { description: Invalid parameters }
  */
-router.patch('/update-note-uuid', verifyApiKeyOrTokenAdmin, manufacturerController.updateNoteUuid);
+router.patch('/update-note-uuid', ...adminOnly, manufacturerController.updateNoteUuid);
 
 /**
  * @swagger
@@ -142,7 +134,7 @@ router.patch('/update-note-uuid', verifyApiKeyOrTokenAdmin, manufacturerControll
  *       403:
  *         description: Forbidden (Admin/Supervisor only)
  */
-router.get('/', verifyApiKeyOrTokenAdmin, manufacturerController.getAllDevices);
+router.get('/', ...adminOnly, manufacturerController.getAllDevices);
 
 /**
  * @swagger
@@ -164,7 +156,7 @@ router.get('/', verifyApiKeyOrTokenAdmin, manufacturerController.getAllDevices);
  *       404:
  *         description: Device not found
  */
-router.get('/:id', verifyApiKeyOrTokenAdmin, manufacturerController.getDeviceById);
+router.get('/:id', ...adminOnly, manufacturerController.getDeviceById);
 
 /**
  * @swagger
@@ -213,7 +205,7 @@ router.get('/:id', verifyApiKeyOrTokenAdmin, manufacturerController.getDeviceByI
  *       404:
  *         description: Device not found
  */
-router.put('/:id', verifyApiKeyOrTokenAdmin, manufacturerController.updateDevice);
+router.put('/:id', ...adminOnly, manufacturerController.updateDevice);
 
 /**
  * @swagger
@@ -235,6 +227,6 @@ router.put('/:id', verifyApiKeyOrTokenAdmin, manufacturerController.updateDevice
  *       404:
  *         description: Device not found
  */
-router.delete('/:id', verifyApiKeyOrTokenAdmin, manufacturerController.deleteDevice);
+router.delete('/:id', ...adminOnly, manufacturerController.deleteDevice);
 
 module.exports = router;

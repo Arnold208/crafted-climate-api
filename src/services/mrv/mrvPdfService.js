@@ -52,7 +52,7 @@ let _logoBuf = null;
 async function getLogoBuf() {
   if (_logoBuf) return _logoBuf;
   return new Promise((resolve) => {
-    const url = 'https://craftedclimate.org/wp-content/uploads/2024/01/wesite_logo.webp';
+    const url = process.env.EMAIL_LOGO_URL || 'https://console.craftedclimate.co/cc_logo_raw.png';
     const mod  = url.startsWith('https') ? https : http;
     mod.get(url, (res) => {
       const chunks = [];
@@ -683,7 +683,7 @@ async function generatePdf(reportDoc) {
     hline(doc, ML, doc.y, CW, B.green, 1.5);
     doc.moveDown(0.5);
     doc.font('Helvetica').fontSize(8).fillColor(B.grey)
-      .text('craftedclimate.org  |  Connected environmental intelligence', 0, doc.y, { align: 'center', width: PW });
+      .text(`${new URL(process.env.WEBSITE_URL || 'https://console.craftedclimate.co').hostname}  |  Connected environmental intelligence`, 0, doc.y, { align: 'center', width: PW });
 
     // Finish final page
     finishPage();

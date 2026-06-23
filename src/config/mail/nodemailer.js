@@ -53,7 +53,7 @@ async function sendPayload(payload) {
 async function sendEmail(to, subject, htmlBody, attachments = []) {
     try {
         const mailOptions = {
-            from: process.env.EMAIL_FROM_NAME ? `"${process.env.EMAIL_FROM_NAME}" <${process.env.SENDER}>` : (process.env.SENDER || '"Crafted Climate" <noreply@craftedclimate.org>'),
+            from: process.env.EMAIL_FROM_NAME ? `"${process.env.EMAIL_FROM_NAME}" <${process.env.SENDER || process.env.EMAIL_FROM_ADDRESS}>` : (process.env.SENDER || '"Crafted Climate" <noreply@craftedclimate.org>'),
             to,
             subject,
             html: htmlBody,

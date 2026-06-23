@@ -88,8 +88,8 @@ class EmailService {
                 frequency,
                 count:            notifications.length,
                 items,
-                notificationsUrl: `${process.env.APP_URL || 'https://app.craftedclimate.org'}/notifications`,
-                preferencesUrl:   `${process.env.APP_URL || 'https://app.craftedclimate.org'}/notifications/preferences`,
+                notificationsUrl: `${process.env.APP_URL || 'https://console.craftedclimate.co'}/notifications`,
+                preferencesUrl:   `${process.env.APP_URL || 'https://console.craftedclimate.co'}/notifications/preferences`,
                 transactional:    false,
             },
         });

@@ -48,16 +48,30 @@ const PlanSchema = new mongoose.Schema({
     },
 
     /**
-     * NEW SUBSCRIPTION CAPABILITIES
+     * SUBSCRIPTION CAPABILITIES
      */
-    device_read: { type: Boolean, default: true },       // Freemium allowed
-    device_update: { type: Boolean, default: false },
-    collaboration: { type: Boolean, default: false },
+    device_read:     { type: Boolean, default: true },   // Freemium allowed
+    device_update:   { type: Boolean, default: false },
+    collaboration:   { type: Boolean, default: false },
     location_access: { type: Boolean, default: false },
-    public_listing: { type: Boolean, default: true },
-    export: { type: Boolean, default: false },
-    maxMembers: { type: Number, default: null }
+    public_listing:  { type: Boolean, default: true },
+    export:          { type: Boolean, default: false },
+    analytics:       { type: Boolean, default: false },
+    org_management:  { type: Boolean, default: false },
+    mrvEngine:       { type: Boolean, default: false },
+
+    /**
+     * API & INTEGRATION CAPABILITIES
+     * These were previously only in planFeatures.js config — now DB-driven.
+     * null = unlimited for numeric fields.
+     */
+    websockets:          { type: Boolean, default: false },
+    webhooks:            { type: Boolean, default: false },
+    maxApiCallsPerMonth: { type: Number, default: 0 },   // 0 = blocked, null = unlimited
+    maxApiKeys:          { type: Number, default: 0 },   // 0 = no API keys, null = unlimited
+    maxMembers:          { type: Number, default: 1 }    // null = unlimited
   },
+
 
   enterprise: {
     enableSLAs: { type: Boolean, default: false },

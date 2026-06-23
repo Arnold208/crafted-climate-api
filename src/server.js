@@ -36,11 +36,12 @@ const { startMRVWebhookWorker }        = require('./workers/mrv/mrvWebhookWorker
 const { QueueEvents } = require('bullmq');
 
 // Crons (Moved to src/cron)
-const { startFlushDirectCron } = require('./cron/flushEnqueueCron');
-const { startOfflineAlertCron } = require('./cron/offlineAlertCron');
-const { startSubscriptionCheckCron } = require('./cron/subscriptionCheckCron');
-const { startSLABreachCron } = require('./cron/slaBreachCron');
-const { startAutoDisableCron } = require('./cron/autoDisableCron');
+const { startFlushDirectCron }      = require('./cron/flushEnqueueCron');
+const { startOfflineAlertCron }     = require('./cron/offlineAlertCron');
+const { startSubscriptionCheckCron }= require('./cron/subscriptionCheckCron');
+const { startSLABreachCron }        = require('./cron/slaBreachCron');
+const { startAutoDisableCron }      = require('./cron/autoDisableCron');
+const { startResetApiQuotaCron }    = require('./cron/resetApiQuotaCron'); // 🔄 Monthly API quota reset
 
 // 🔒 SECURITY: Validate required environment variables on startup
 const requiredEnvVars = [
@@ -78,6 +79,7 @@ connectRedis()
         startSubscriptionCheckCron();
         startSLABreachCron();
         startAutoDisableCron(); // 🔄 Auto-disable devices inactive > 30 days
+        startResetApiQuotaCron(); // 🔄 Reset monthly API call counters on 1st of month
         emailWorker.start().then(() => console.log('✅ Email worker started'));
         alertWorker.start().then(() => console.log('✅ Alert worker started'));
         webhookWorker.start().then(() => console.log('✅ Webhook worker started'));

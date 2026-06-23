@@ -198,7 +198,7 @@ class MRVNotificationService {
         heading: `Sensor Data Gap — ${stage.tag}`,
         bodyHtml,
         ctaText: 'View Project',
-        ctaUrl: `${process.env.APP_URL || 'https://app.craftedclimate.com'}/mrv/projects/${projectId}`
+        ctaUrl: `${process.env.APP_URL || 'https://console.craftedclimate.co'}/mrv/projects/${projectId}`
       });
     }
   }
@@ -232,7 +232,7 @@ class MRVNotificationService {
         heading: 'Monitoring Period Completeness',
         bodyHtml,
         ctaText: 'View Period',
-        ctaUrl: `${process.env.APP_URL || 'https://app.craftedclimate.com'}/mrv/projects/${projectId}/periods/${monitoringPeriodId}`
+        ctaUrl: `${process.env.APP_URL || 'https://console.craftedclimate.co'}/mrv/projects/${projectId}/periods/${monitoringPeriodId}`
       });
     }
   }
@@ -261,7 +261,7 @@ class MRVNotificationService {
         heading: 'Quarantined Observations',
         bodyHtml,
         ctaText: 'Open Data Quality Dashboard',
-        ctaUrl: `${process.env.APP_URL || 'https://app.craftedclimate.com'}/mrv/projects/${projectId}/data-quality`
+        ctaUrl: `${process.env.APP_URL || 'https://console.craftedclimate.co'}/mrv/projects/${projectId}/data-quality`
       });
     }
   }
@@ -285,7 +285,7 @@ class MRVNotificationService {
     const subject = `Verification deadline in ${daysLeft} day(s) — ${projectName}`;
     const heading = 'Verification Deadline Reminder';
     const ctaText = 'View Verification Case';
-    const ctaUrl  = `${process.env.APP_URL || 'https://app.craftedclimate.com'}/mrv/projects/${projectId}/verification/${verificationCaseId}`;
+    const ctaUrl  = `${process.env.APP_URL || 'https://console.craftedclimate.co'}/mrv/projects/${projectId}/verification/${verificationCaseId}`;
 
     const toList = [vvbEmail, projectOwnerEmail].filter(Boolean);
     for (const to of toList) {

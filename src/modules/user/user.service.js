@@ -224,7 +224,13 @@ class UserService {
             throw new Error('Please provide email and password');
         }
 
+        // Guard against NoSQL injection: reject non-string inputs before touching the DB
+        if (typeof email !== 'string' || typeof password !== 'string') {
+            throw Object.assign(new Error('Invalid credentials format'), { statusCode: 400 });
+        }
+
         const user = await User.findOne({ email: email.toLowerCase() });
+
         if (!user) {
             throw new Error('User not found');
         }
@@ -519,7 +525,7 @@ class UserService {
                     to: user.email,
                     vars: {
                         userName,
-                        dashboardUrl: process.env.APP_URL || 'https://app.craftedclimate.org',
+                        dashboardUrl: process.env.APP_URL || 'https://console.craftedclimate.co',
                     },
                 });
             } catch (err) {

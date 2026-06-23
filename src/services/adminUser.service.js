@@ -372,7 +372,7 @@ class AdminUserService {
         const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
         // Send reset link email
-        const resetLink = `${process.env.APP_URL || 'http://localhost:3000'}/backoffice/reset-password?token=${token}&requestId=${requestId}`;
+        const resetLink = `${process.env.BACKOFFICE_URL || process.env.APP_URL}/backoffice/reset-password?token=${token}&requestId=${requestId}`;
         const message = `Your password reset request has been approved. Please click the link below to securely set your new password:\n\n${resetLink}\n\nThis link will expire in 24 hours.`;
         
         try {

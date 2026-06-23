@@ -1,3 +1,22 @@
+/**
+ * ⚠️  DEAD CODE — NOT IN USE
+ *
+ * This file implements an alternative email sender using the Mailchimp
+ * Transactional (Mandrill) REST API SDK directly.
+ *
+ * It is NOT wired into the application. Nothing requires this file.
+ *
+ * The active email pipeline is:
+ *   sendCCEmail (craftedClimateMailer.js)
+ *     → sendPayload (nodemailer.js)
+ *       → Nodemailer SMTP (MAIL_HOST / MAIL_PORT / MAIL_USER / MAIL_PASSWORD)
+ *
+ * To activate this service, update craftedClimateMailer.js to call
+ * MandrillEmailService.sendEmail() instead of sendPayload(), and set
+ * MANDRILL_API_KEY in the environment (same value as MAIL_PASSWORD).
+ *
+ * Until then, this file can safely be ignored or removed.
+ */
 const mandrill = require('@mailchimp/mailchimp_transactional')(process.env.MANDRILL_API_KEY);
 
 /**
@@ -12,7 +31,7 @@ class MandrillEmailService {
     async sendEmail({ to, subject, html, text, from, replyTo, tags }) {
         try {
             const message = {
-                from_email: from || process.env.EMAIL_FROM || 'noreply@craftedclimate.com',
+                from_email: from || process.env.SENDER || process.env.EMAIL_FROM || 'noreply@craftedclimate.org',
                 from_name: process.env.EMAIL_FROM_NAME || 'CraftedClimate',
                 to: [
                     {
@@ -76,7 +95,7 @@ class MandrillEmailService {
     async sendBatch(emails) {
         try {
             const messages = emails.map(email => ({
-                from_email: email.from || process.env.EMAIL_FROM || 'noreply@craftedclimate.com',
+                from_email: email.from || process.env.SENDER || process.env.EMAIL_FROM || 'noreply@craftedclimate.org',
                 from_name: process.env.EMAIL_FROM_NAME || 'CraftedClimate',
                 to: [{ email: email.to, type: 'to' }],
                 subject: email.subject,

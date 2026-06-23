@@ -33,7 +33,7 @@ function getStageConfig(stage, device, lastSeen, extras = {}) {
     const timeStr = new Date(lastSeen).toLocaleString();
     const nickname = device.nickname || device.devid;
     const location = device.metadata?.location || device.location || 'Unknown';
-    const appUrl   = process.env.APP_URL || 'https://app.craftedclimate.com';
+    const appUrl   = process.env.APP_URL || 'https://console.craftedclimate.co';
 
     let sms = '';
     let templateSlug = '';

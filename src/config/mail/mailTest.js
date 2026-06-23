@@ -4,7 +4,7 @@ const subject = 'Welcome to Crafted Climate!';
 const content = `
     <p>Dear User,</p>
     <p>We are excited to invite you to join <strong>CraftedClimate</strong>, your go-to platform for climate monitoring and analytics.</p>
-    <p><a href="https://craftedclimate.org/welcome" target="_blank">Get Started</a></p>
+    <p><a href="${process.env.APP_URL || 'https://console.craftedclimate.co'}/welcome" target="_blank">Get Started</a></p>
     <p>Thank you for joining us!</p>
 `;
 

@@ -1,8 +1,11 @@
 const swaggerJsdoc = require('swagger-jsdoc');
 const path = require('path');
 
-const isProd = process.env.NODE_ENV === 'production';
-const prodUrl = process.env.PROD_URL;
+// API_URL is the canonical backend server URL.
+// In dev:  process.env.API_URL = http://localhost:3000  (from .env.development)
+// In prod: process.env.API_URL = https://cctelemetry-api-prod-...azurewebsites.net  (from Azure)
+const apiUrl  = process.env.API_URL  || `http://localhost:${process.env.PORT || 3000}`;
+const isProd  = process.env.NODE_ENV === 'production';
 
 const options = {
   definition: {
@@ -35,8 +38,9 @@ This API provides tenant-isolated, multi-organizational access for climate senso
 - Multi-Tenant (Organization-Based)
 - Role-Based Access Control (RBAC)
 - JWT Authentication
-- API Key for Telemetry Devices & Factory Manufacturing
+- Org API Keys (`cc_live_...`) for programmatic access — generate, rotate, revoke, restrict by IP/Origin
 - WebSocket Real-Time Telemetry & Status Bridge
+- Plan-based feature gating (freemium → starter → premium → enterprise)
 
 ---
 
@@ -54,7 +58,7 @@ x-org-id: org_xxx   ← required for org-scoped routes
 Clients can listen to live telemetry events by establishing a WebSocket connection and joining a device room:
 
 \`\`\`javascript
-const socket = io('https://api.craftedclimate.org', {
+const socket = io(process.env.API_URL || 'https://api.craftedclimate.org', {
   transports: ['websocket'],
   auth: { token: JWT_ACCESS_TOKEN }
 });
@@ -151,14 +155,14 @@ If a payment fails or the checkout window expires:
 `,
       contact: {
         name: 'CraftedClimate Support',
-        email: 'support@craftedclimate.com',
-        url: 'https://craftedclimate.com/support'
+        email: process.env.SUPPORT_EMAIL || 'support@craftedclimate.org',
+        url: process.env.WEBSITE_URL ? `${process.env.WEBSITE_URL}/support` : 'https://console.craftedclimate.co/support'
       }
     },
 
     servers: [
       {
-        url: isProd ? prodUrl : 'http://localhost:3000',
+        url: apiUrl,
         description: isProd ? 'Production Server' : 'Development Server'
       }
     ],
@@ -183,8 +187,8 @@ If a payment fails or the checkout window expires:
         apiKeyAuth: {
           type: 'apiKey',
           in: 'header',
-          name: 'X-API-KEY',
-          description: 'API key for device telemetry'
+          name: 'x-api-key',
+          description: 'Organization API key (format: `cc_live_XXXXXXXX_...`). Generated per org via `POST /api/org/:orgId/api-keys`. Supports IP and origin restrictions, rotation, and revocation. Scoped by permissions: `telemetry:read`, `telemetry:write`, `devices:read`, `devices:write`, `analytics:read`.'
         }
       },
 
@@ -253,6 +257,8 @@ If a payment fails or the checkout window expires:
       { name: 'Support', description: 'Ticketing and customer support system' },
       { name: 'Analytics', description: 'System-wide and organization-specific analytics' },
       { name: 'API Keys', description: 'Management of organization API keys' },
+      { name: 'Organization - API Keys', description: 'Generate, list, rotate, revoke, and view usage stats for org-scoped API keys. Keys follow the format cc_live_XXXXXX_... and support IP/Origin restrictions and plan-based limits.' },
+      { name: 'Organization Security', description: 'Manage allowed IP addresses and origins for org API key access. Changes take effect immediately via Redis cache invalidation.' },
       { name: 'System Config', description: 'Platform-level system settings' },
       { name: 'Notecard', description: 'Blues Notecard integration and management' },
       { name: 'Firmware', description: 'OTA updates and firmware management' },

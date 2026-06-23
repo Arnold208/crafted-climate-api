@@ -46,7 +46,7 @@ const SystemConfigSchema = new mongoose.Schema({
     email: {
         enabled: { type: Boolean, default: true },
         provider: { type: String, default: 'smtp' },
-        fromAddress: { type: String, default: 'noreply@craftedclimate.com' },
+        fromAddress: { type: String, default: 'noreply@craftedclimate.org' },
         fromName: { type: String, default: 'CraftedClimate' }
     },
 

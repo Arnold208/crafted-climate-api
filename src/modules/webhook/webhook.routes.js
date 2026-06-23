@@ -3,7 +3,7 @@ const router = express.Router();
 const webhookController = require('./webhook.controller');
 
 // Middleware
-const auth = require('../../middleware/auth');
+const { authenticateApiKeyOrToken, requirePermission } = require('../../middleware/authenticateApiKey');
 const checkOrgAccess = require('../../middleware/organization/checkOrgAccess');
 const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeature');
 
@@ -56,7 +56,8 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  */
 router.post(
     '/subscriptions',
-    auth,
+    authenticateApiKeyOrToken,
+    requirePermission('webhooks:manage'),
     checkOrgAccess('org.manage'),
     checkPlanFeature('webhooks'),
     webhookController.createSubscription
@@ -81,7 +82,8 @@ router.post(
  */
 router.get(
     '/subscriptions',
-    auth,
+    authenticateApiKeyOrToken,
+    requirePermission('webhooks:manage'),
     checkOrgAccess('org.manage'),
     checkPlanFeature('webhooks'),
     webhookController.getSubscriptions
@@ -134,7 +136,8 @@ router.get(
  */
 router.put(
     '/subscriptions/:subscriptionId',
-    auth,
+    authenticateApiKeyOrToken,
+    requirePermission('webhooks:manage'),
     checkOrgAccess('org.manage'),
     checkPlanFeature('webhooks'),
     webhookController.updateSubscription
@@ -164,7 +167,8 @@ router.put(
  */
 router.delete(
     '/subscriptions/:subscriptionId',
-    auth,
+    authenticateApiKeyOrToken,
+    requirePermission('webhooks:manage'),
     checkOrgAccess('org.manage'),
     checkPlanFeature('webhooks'),
     webhookController.deleteSubscription

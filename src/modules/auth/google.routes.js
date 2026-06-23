@@ -78,7 +78,7 @@ router.get('/callback', (req, res, next) => {
                 failureUrl.searchParams.set('error', 'Authentication failed');
                 failureRedirect = failureUrl.toString();
             } else {
-                const defaultAppUrl = process.env.APP_URL || 'https://app.craftedclimate.com';
+                const defaultAppUrl = process.env.APP_URL || 'https://console.craftedclimate.co';
                 failureRedirect = `${defaultAppUrl}/login?error=Authentication failed`;
             }
         } catch (e) {

@@ -79,11 +79,15 @@ router.post('/force-plan', async (req, res) => {
     const Plan             = require('../../models/subscriptions/Plan');
 
     // 1. Find or create the target plan by name
+    const { PLAN_FEATURES } = require('../../config/planFeatures');
+    const MAX_API_KEYS = { free: 0, freemium: 0, starter: 3, premium: 10, enterprise: null, maas_starter: 3, maas_premium: 10, maas_enterprise: null };
+    // Use hasOwnProperty so null (unlimited) is preserved — `null ?? 0` would wrongly give 0
+    const maxApiKeysForPlan = MAX_API_KEYS.hasOwnProperty(plan.toLowerCase()) ? MAX_API_KEYS[plan.toLowerCase()] : 0;
+    const features = PLAN_FEATURES[plan.toLowerCase()] || {};
+
     let targetPlan = await Plan.findOne({ name: new RegExp(`^${plan}$`, 'i'), isActive: true });
     if (!targetPlan) {
-      // Plan doesn't exist in DB yet — create it using PLAN_FEATURES config
-      const { PLAN_FEATURES } = require('../../config/planFeatures');
-      const features = PLAN_FEATURES[plan.toLowerCase()] || { mrvEngine: true };
+      // Plan doesn't exist — create it with full features block
       targetPlan = await Plan.findOneAndUpdate(
         { name: plan },
         {
@@ -95,10 +99,38 @@ router.post('/force-plan', async (req, res) => {
             maxDevices:           features.maxDevices ?? null,
             maxDataRetentionDays: features.maxDataRetentionDays ?? 365,
             isActive:             true,
+            features: {
+              apiAccess:           features.apiAccess           || 'none',
+              analytics:           features.analytics           || false,
+              websockets:          features.websockets          || false,
+              webhooks:            features.webhooks            || false,
+              org_management:      features.org_management      || false,
+              collaboration:       features.collaboration       || false,
+              export:              features.export              || false,
+              device_read:         features.device_read         !== false,
+              device_update:       features.device_update       || false,
+              mrvEngine:           features.mrvEngine           || false,
+              maxApiCallsPerMonth: features.maxApiCallsPerMonth ?? 0,
+              maxApiKeys:          maxApiKeysForPlan,
+              maxMembers:          features.maxMembers          ?? 1,
+            },
           },
         },
         { upsert: true, new: true }
       );
+    } else {
+      // Plan exists — always patch features so stale DB plans get correct maxApiKeys
+      await Plan.updateOne({ planId: targetPlan.planId }, {
+        $set: {
+          'features.maxApiKeys':          maxApiKeysForPlan,
+          'features.maxApiCallsPerMonth': features.maxApiCallsPerMonth ?? 0,
+          'features.apiAccess':           features.apiAccess || 'none',
+          'features.websockets':          features.websockets || false,
+          'features.webhooks':            features.webhooks || false,
+        }
+      });
+      // Refresh the document
+      targetPlan = await Plan.findOne({ planId: targetPlan.planId });
     }
 
     // 2. Update ALL existing subscriptions for this org to the target plan

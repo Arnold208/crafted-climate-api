@@ -3,7 +3,7 @@ const axios = require('axios');
 class PaystackService {
     async initializeTransaction(email, amountInPesewas, metadata = {}) {
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
-        const callbackUrl = process.env.PAYSTACK_CALLBACK_URL || 'https://app.craftedclimate.com/payment/callback';
+        const callbackUrl = process.env.PAYSTACK_CALLBACK_URL;
 
         // Mock mode for testing/local env without keys
         if (!secretKey) {
@@ -16,7 +16,7 @@ class PaystackService {
         }
 
         try {
-            const response = await axios.post('https://api.paystack.co/transaction/initialize', {
+            const response = await axios.post(`${process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co'}/transaction/initialize`, {
                 email,
                 amount: amountInPesewas,
                 currency: process.env.PAYMENT_CURRENCY || 'GHS',
@@ -59,7 +59,7 @@ class PaystackService {
         }
 
         try {
-            const response = await axios.get(`https://api.paystack.co/transaction/verify/${reference}`, {
+            const response = await axios.get(`${process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co'}/transaction/verify/${reference}`, {
                 headers: {
                     Authorization: `Bearer ${secretKey}`
                 }

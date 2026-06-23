@@ -88,7 +88,7 @@ exports.googleCallback = async (req, res) => {
         }
 
         // Web Redirect Flow
-        const defaultAppUrl = process.env.APP_URL || 'https://app.craftedclimate.com';
+        const defaultAppUrl = process.env.APP_URL || 'https://console.craftedclimate.co';
         const targetUrlStr = decodedState.redirectUri || defaultAppUrl;
 
         try {

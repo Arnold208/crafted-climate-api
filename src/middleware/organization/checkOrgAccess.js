@@ -21,10 +21,14 @@ module.exports = function checkOrgAccess(requiredPermission) {
                 return res.status(401).json({ message: "Unauthorized: Missing user context" });
             }
 
-            // 2. Get the organization the user wants to access
-            const orgId = req.headers['x-org-id'] || user.currentOrganizationId;
+            // 2. Determine which org is being accessed
+            // SECURITY: Must use the orgId from the URL params — NOT x-org-id header or
+            // user.currentOrganizationId, as those refer to the requesting user's own org.
+            // Using anything other than req.params.orgId here would allow IDOR attacks where
+            // any authenticated user could access/modify any other org's resources.
+            const orgId = req.params.orgId || req.headers['x-org-id'] || user.currentOrganizationId;
             if (!orgId) {
-                return res.status(400).json({ message: "No organization selected" });
+                return res.status(400).json({ message: "No organization specified" });
             }
 
             req.currentOrgId = orgId; // attach for downstream handlers

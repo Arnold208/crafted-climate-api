@@ -31,7 +31,7 @@ if (!AZURE_STORAGE_CONNECTION_STRING) {
 // --------------------------------------------------
 // BLOB STORAGE SETUP
 // --------------------------------------------------
-const CONTAINER_NAME = "images";
+const CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER || "images";
 
 let blobServiceClient, containerClient;
 

@@ -640,4 +640,11 @@ router.use('/:orgId/api-keys', orgApiKeyRoutes);
 const invitationRoutes = require('./invitation.routes');
 router.use('/', invitationRoutes);
 
+// ========================================
+// 🔒 ORG SECURITY ROUTES
+// Manage allowedOrigins and allowedIPs for API key enforcement
+// ========================================
+const orgSecurityRoutes = require('./orgSecurity.routes');
+router.use('/', orgSecurityRoutes);
+
 module.exports = router;

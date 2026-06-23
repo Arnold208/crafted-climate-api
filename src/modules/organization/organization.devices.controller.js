@@ -77,7 +77,7 @@ class OrganizationDevicesController {
                     return res.status(400).json({ message: 'Invalid location format' });
                 }
                 const [latitude, longitude] = location;
-                const geoRes = await axios.get(`https://atlas.microsoft.com/search/address/reverse/json`, {
+                const geoRes = await axios.get(`${process.env.AZURE_MAPS_BASE_URL || 'https://atlas.microsoft.com'}/search/address/reverse/json`, {
                     params: {
                         'api-version': '1.0',
                         'subscription-key': process.env.AZURE_MAPS_SUBSCRIPTION_KEY || process.env.AZURE_MAPS_KEY,

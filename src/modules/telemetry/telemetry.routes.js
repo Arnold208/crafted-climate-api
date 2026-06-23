@@ -22,7 +22,12 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  *     tags:
  *       - Telemetry
  *     summary: Ingest telemetry data
- *     description: Ingests telemetry data.
+ *     description: |
+ *       Ingests telemetry data from a device. Requires an **org API key** with `telemetry:write` permission
+ *       (format: `x-api-key: cc_live_...`). JWT is **not** accepted on this endpoint — devices always authenticate
+ *       via API key. The `model` path parameter identifies the sensor schema (e.g. ENV, AQUA).
+ *     security:
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: model
@@ -30,7 +35,7 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  *         schema:
  *           type: string
  *           example: "ENV"
- *         description: The model type.
+ *         description: The telemetry model / sensor schema type.
  *     requestBody:
  *       required: true
  *       content:
@@ -46,8 +51,12 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  *         description: Created
  *       400:
  *         description: Bad Request
+ *       401:
+ *         description: Missing or invalid API key
  *       404:
  *         description: Not Found
+ *       429:
+ *         description: Rate limit exceeded
  *       500:
  *         description: Server Error
  */
@@ -59,7 +68,10 @@ router.post('/:model', ingestRouteLimiter, requirePermission('telemetry:write'),
  *   get:
  *     tags: [Telemetry]
  *     summary: Get device telemetry summary
- *     description: Fetches telemetry entries and device metadata from Redis. Falls back to MongoDB if Redis is empty. Validates that the user has access to the device.
+ *     description: Fetches telemetry entries and device metadata from Redis. Falls back to MongoDB if Redis is empty. Validates that the user has access to the device. Accepts **JWT Bearer** or **org API key** (`telemetry:read`).
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: userid
@@ -113,9 +125,10 @@ router.get('/:userid/device/:auid',
  *   delete:
  *     tags: [Telemetry]
  *     summary: Delete all telemetry for a device
- *     description: Deletes all telemetry data for a specific device from both Redis cache and MongoDB. Requires Owner or Org Admin privileges.
+ *     description: Deletes all telemetry data for a specific device from both Redis cache and MongoDB. Requires Owner or Org Admin privileges. Accepts **JWT Bearer** or **org API key** (`telemetry:write`).
  *     security:
  *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: userid
@@ -212,9 +225,10 @@ router.get('/public/telemetry', publicTelemetryLimiter, telemetryController.getP
  *   get:
  *     tags: [Telemetry]
  *     summary: Get historical telemetry from database
- *     description: Retrieve telemetry data from the database for a given device auid and telemetry model.
+ *     description: Retrieve telemetry data from the database for a given device auid and telemetry model. Accepts **JWT Bearer** or **org API key** (`telemetry:read`).
  *     security:
  *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: model
@@ -283,9 +297,10 @@ router.get('/db/:model/:auid',
  *   get:
  *     tags: [Telemetry]
  *     summary: Export telemetry as CSV
- *     description: Streams telemetry rows for the given device AUID as CSV, sorted by transport_time descending (newest → oldest). Includes transport_time, telem_time, and all sensor fields. Optionally filter by a date range using start and/or end (applies to transport_time).
+ *     description: Streams telemetry rows for the given device AUID as CSV, sorted by transport_time descending (newest → oldest). Includes transport_time, telem_time, and all sensor fields. Optionally filter by a date range using start and/or end (applies to transport_time). Accepts **JWT Bearer** or **org API key** (`telemetry:read` + `export` plan feature).
  *     security:
  *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: model
@@ -340,9 +355,10 @@ router.get('/db/:model/:auid/csv',
  *   get:
  *     tags: [Telemetry]
  *     summary: Get raw telemetry data (Enterprise Only)
- *     description: Returns raw JSON sensor data for auditing.
+ *     description: Returns raw JSON sensor data for auditing. Requires Enterprise plan (`apiAccess: full`). Accepts **JWT Bearer** or **org API key** (`telemetry:read`).
  *     security:
  *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: model
@@ -377,6 +393,10 @@ router.get('/db/:model/:auid/raw',
  *     tags:
  *       - Telemetry
  *     summary: Get graph data
+ *     description: Returns aggregated time-series telemetry for charting. Accepts **JWT Bearer** or **org API key** (`telemetry:read`).
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: model

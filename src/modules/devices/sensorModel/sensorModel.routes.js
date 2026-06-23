@@ -3,9 +3,11 @@ const router = express.Router();
 const { upload } = require('../../../config/storage/storage');
 const sensorModelController = require('./sensorModel.controller');
 
-const authorizeRoles = require('../../../middleware/rbacMiddleware');
-const verifyApiKey = require('../../../middleware/apiKeymiddleware');
 const authenticateToken = require('../../../middleware/bearermiddleware');
+const authorizeRoles    = require('../../../middleware/rbacMiddleware');
+
+// System-admin only — JWT login required, admin or supervisor role
+const adminOnly = [authenticateToken, authorizeRoles('admin', 'supervisor')];
 
 /**
  * @swagger
@@ -74,7 +76,7 @@ router.post("/models",
  *       200: { description: List of sensor models }
  */
 router.get("/models",
-    verifyApiKey,
+    ...adminOnly,
     authenticateToken,
     authorizeRoles('admin'),
     sensorModelController.getAllModels
@@ -93,7 +95,7 @@ router.get("/models",
  *       200: { description: Search results }
  */
 router.get("/models/search",
-    verifyApiKey,
+    ...adminOnly,
     authenticateToken,
     authorizeRoles('admin'),
     sensorModelController.searchModels
@@ -113,7 +115,7 @@ router.get("/models/search",
  *       404: { description: Model not found }
  */
 router.get("/models/uuid/:uuid",
-    verifyApiKey,
+    ...adminOnly,
     authenticateToken,
     authorizeRoles('admin'),
     sensorModelController.getModelByUuid
@@ -133,7 +135,7 @@ router.get("/models/uuid/:uuid",
  *       404: { description: Model not found }
  */
 router.get("/models/:model",
-    verifyApiKey,
+    ...adminOnly,
     authenticateToken,
     authorizeRoles('admin'),
     sensorModelController.getModelByName
@@ -169,7 +171,7 @@ router.get("/models/:model",
  *       404: { description: Model not found }
  */
 router.put("/models/:model",
-    verifyApiKey,
+    ...adminOnly,
     authenticateToken,
     authorizeRoles('admin'),
     upload.single("image"),
@@ -190,7 +192,7 @@ router.put("/models/:model",
  *       404: { description: Model not found }
  */
 router.delete("/models/:model",
-    verifyApiKey,
+    ...adminOnly,
     authenticateToken,
     authorizeRoles('admin'),
     sensorModelController.deleteModel

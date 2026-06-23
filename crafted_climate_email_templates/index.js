@@ -77,10 +77,10 @@ const BRAND = Object.freeze({
   text: "#1F2937",
   mutedText: "#667085",
   supportEmail: process.env.SUPPORT_EMAIL || "support@craftedclimate.org",
-  websiteUrl: process.env.WEBSITE_URL || "https://craftedclimate.org",
-  appUrl: process.env.APP_URL || "https://app.craftedclimate.org",
-  privacyUrl: process.env.PRIVACY_URL || "https://craftedclimate.org/privacy",
-  termsUrl: process.env.TERMS_URL || "https://craftedclimate.org/terms",
+  websiteUrl: process.env.WEBSITE_URL || "https://console.craftedclimate.co",
+  appUrl: process.env.APP_URL || "https://console.craftedclimate.co",
+  privacyUrl: process.env.PRIVACY_URL || "https://console.craftedclimate.co/privacy",
+  termsUrl: process.env.TERMS_URL || "https://console.craftedclimate.co/terms",
   address: process.env.COMPANY_ADDRESS || "Accra, Ghana",
   logoCid: "crafted-climate-logo",
   logoPath: resolveLogoFilePath(),
@@ -437,7 +437,7 @@ function renderFooter({ recipientEmail, preferencesUrl, transactional = true }) 
           <div style="margin-top:12px;color:#475467;font-family:Inter,Arial,sans-serif;font-size:12px;line-height:20px;">
             <a href="mailto:${supportEmail}" style="color:#006838;text-decoration:none;">${escapeHtml(supportEmail)}</a>
             <span style="color:#D0D5DD;">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
-            <a href="${safeUrl(BRAND.websiteUrl)}" style="color:#006838;text-decoration:none;">craftedclimate.org</a>
+            <a href="${safeUrl(BRAND.websiteUrl)}" style="color:#006838;text-decoration:none;">${new URL(BRAND.websiteUrl).hostname}</a>
             <span style="color:#D0D5DD;">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
             ${escapeHtml(BRAND.address)}
           </div>

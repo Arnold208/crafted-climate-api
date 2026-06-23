@@ -1,30 +1,41 @@
-// middleware/apiKeymiddleware.js
-const mongoose = require('mongoose');
-const dotenv = require('dotenv');
-const path = require('path');
+'use strict';
 
-let envFile;
+/**
+ * Manufacturer API Key Middleware
+ * ================================
+ * PURPOSE: Machine-to-machine auth for the hardware MANUFACTURER only.
+ *          Used when factory systems push newly provisioned devices into the platform.
+ *
+ * THIS IS NOT THE ORG API KEY SYSTEM.
+ * Org API keys use: src/middleware/authenticateApiKey.js (bcrypt-hashed, DB-stored, scoped)
+ * This key is a single static secret shared only with the device manufacturer.
+ *
+ * Env variable: MANUFACTURER_API_KEY
+ * Legacy fallback: API_KEY (for backward compat during transition — remove after all envs updated)
+ *
+ * Routes using this: manufacturer.routes.js, ota.routes.js, sensorModel.routes.js
+ */
 
-if (process.env.NODE_ENV === 'development') {
-  envFile = '.env.development';
-} else {
-  envFile = '.env';   // default for production or if NODE_ENV not set
+function verifyManufacturerApiKey(req, res, next) {
+    const incomingKey = req.headers['x-api-key'];
+
+    // Prefer the explicit MANUFACTURER_API_KEY, fall back to legacy API_KEY
+    const validKey = process.env.MANUFACTURER_API_KEY || process.env.API_KEY;
+
+    if (!validKey) {
+        console.error('[ManufacturerAuth] ❌ MANUFACTURER_API_KEY env var is not set.');
+        return res.status(500).json({ error: 'Server misconfiguration: manufacturer key not configured.' });
+    }
+
+    if (!incomingKey) {
+        return res.status(401).json({ error: 'Manufacturer API key missing. Provide key in X-API-Key header.' });
+    }
+
+    if (incomingKey !== validKey) {
+        return res.status(403).json({ error: 'Invalid manufacturer API key.' });
+    }
+
+    next();
 }
 
-dotenv.config({ path: path.resolve(__dirname, `../../${envFile}`) });
-function verifyApiKey(req, res, next) {
-  const apiKeyFromHeader = req.headers['x-api-key']; // Case-insensitive by Node.js
-  const validApiKey = process.env.API_KEY;
-
-  if (!apiKeyFromHeader) {
-    return res.status(401).json({ error: 'API key missing from headers' });
-  }
-
-  if (apiKeyFromHeader !== validApiKey) {
-    return res.status(403).json({ error: 'Invalid API key' });
-  }
-
-  next(); // Authorized
-}
-
-module.exports = verifyApiKey;
+module.exports = verifyManufacturerApiKey;

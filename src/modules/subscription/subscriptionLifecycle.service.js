@@ -76,7 +76,7 @@ class SubscriptionLifecycleService {
                 userName:    user.firstName || user.username || 'there',
                 planName,
                 expiryDate:  subscription.endDate ? subscription.endDate.toISOString() : undefined,
-                renewalUrl:  `${process.env.FRONTEND_URL || process.env.APP_URL}/subscriptions`,
+                renewalUrl:  `${process.env.APP_URL}/subscriptions`,
             },
         });
 
@@ -150,7 +150,7 @@ class SubscriptionLifecycleService {
                     userName:    user.firstName || user.username || 'there',
                     planName,
                     graceEndsAt: gracePeriodEnd.toISOString(),
-                    renewalUrl:  `${process.env.FRONTEND_URL || process.env.APP_URL}/subscriptions`,
+                    renewalUrl:  `${process.env.APP_URL}/subscriptions`,
                 },
             });
         }
@@ -181,7 +181,7 @@ class SubscriptionLifecycleService {
                 userName:    user.firstName || user.username || 'there',
                 planName,
                 graceEndsAt: subscription.gracePeriodEndDate ? subscription.gracePeriodEndDate.toISOString() : undefined,
-                renewalUrl:  `${process.env.FRONTEND_URL || process.env.APP_URL}/subscriptions`,
+                renewalUrl:  `${process.env.APP_URL}/subscriptions`,
             },
         });
 
@@ -231,7 +231,7 @@ class SubscriptionLifecycleService {
                 vars: {
                     userName:    user.firstName || user.username || 'there',
                     planName:    oldPlanName,
-                    renewalUrl:  `${process.env.FRONTEND_URL || process.env.APP_URL}/subscriptions`,
+                    renewalUrl:  `${process.env.APP_URL}/subscriptions`,
                 },
             });
         }

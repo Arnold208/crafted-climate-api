@@ -1,8 +1,11 @@
 const swaggerJsdoc = require('swagger-jsdoc');
 const path = require('path');
 
-const isProd = process.env.NODE_ENV === 'production';
-const prodUrl = process.env.PROD_URL;
+// API_URL is the canonical backend server URL.
+// In dev:  process.env.API_URL = http://localhost:3000  (from .env.development)
+// In prod: process.env.API_URL = https://cctelemetry-api-prod-...azurewebsites.net  (from Azure)
+const apiUrl  = process.env.API_URL  || `http://localhost:${process.env.PORT || 3000}`;
+const isProd  = process.env.NODE_ENV === 'production';
 
 const options = {
   definition: {
@@ -48,14 +51,14 @@ Authorization: Bearer <admin-jwt-token>
 `,
       contact: {
         name: 'CraftedClimate Support',
-        email: 'support@craftedclimate.com',
-        url: 'https://craftedclimate.com/support'
+        email: process.env.SUPPORT_EMAIL || 'support@craftedclimate.org',
+        url: process.env.WEBSITE_URL ? `${process.env.WEBSITE_URL}/support` : 'https://console.craftedclimate.co/support'
       }
     },
 
     servers: [
       {
-        url: isProd ? prodUrl : 'http://localhost:3000',
+        url: apiUrl,
         description: isProd ? 'Production Server' : 'Development Server'
       }
     ],

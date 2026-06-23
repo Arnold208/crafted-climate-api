@@ -4,8 +4,10 @@ const { upload } = require('../../../config/storage/storage');
 const otaController = require('./ota.controller');
 
 const authenticateToken = require('../../../middleware/bearermiddleware');
-const authorizeRoles = require('../../../middleware/rbacMiddleware');
-const verifyApiKey = require('../../../middleware/apiKeymiddleware');
+const authorizeRoles    = require('../../../middleware/rbacMiddleware');
+
+// System-admin only — JWT login required, admin or supervisor role
+const adminOnly = [authenticateToken, authorizeRoles('admin', 'supervisor')];
 
 /**
  * @swagger
@@ -27,7 +29,7 @@ const verifyApiKey = require('../../../middleware/apiKeymiddleware');
  *       400: { description: No file uploaded }
  */
 router.post("/upload-firmware",
-    verifyApiKey,
+    ...adminOnly,
     authenticateToken,
     authorizeRoles('admin'),
     upload.single("firmware"),
@@ -44,7 +46,7 @@ router.post("/upload-firmware",
  *       200: { description: Latest version check result }
  */
 router.get("/latest-update",
-    verifyApiKey,
+    ...adminOnly,
     authenticateToken,
     authorizeRoles('admin', 'supervisor'),
     otaController.getLatestUpdate
@@ -60,7 +62,7 @@ router.get("/latest-update",
  *       200: { description: Firmware list retrieved }
  */
 router.get("/list-firmware",
-    verifyApiKey,
+    ...adminOnly,
     authenticateToken,
     authorizeRoles('admin', 'supervisor'),
     otaController.listFirmware
@@ -82,7 +84,7 @@ router.get("/list-firmware",
  *       404: { description: Firmware not found }
  */
 router.delete("/delete-firmware/:uuid",
-    verifyApiKey,
+    ...adminOnly,
     authenticateToken,
     authorizeRoles('admin', 'supervisor'),
     otaController.deleteFirmware

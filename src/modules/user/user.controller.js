@@ -36,6 +36,11 @@ class UserController {
                 return res.status(400).send({ message: 'Please provide email and password' });
             }
 
+            // Reject non-string inputs early — prevents NoSQL injection attempts from crashing toLowerCase()
+            if (typeof email !== 'string' || typeof password !== 'string') {
+                return res.status(400).send({ message: 'Invalid credentials format' });
+            }
+
             const result = await userService.login({ email: email.toLowerCase(), password });
 
             // Create a session alongside the JWT so browser clients (dashboard, partner portals)
@@ -54,12 +59,13 @@ class UserController {
             if (error.message === 'User not found' || error.message === 'Invalid Password' || error.message === 'Account not verified') {
                 return res.status(401).send({ message: error.message });
             }
-            if (error.message.includes('provide email')) {
+            if (error.message.includes('provide email') || error.message.includes('Invalid credentials') || error.statusCode === 400) {
                 return res.status(400).send({ message: error.message });
             }
             return res.status(500).send({ message: 'Internal server error', error: error.message });
         }
     }
+
 
     async verifyOtp(req, res) {
         try {

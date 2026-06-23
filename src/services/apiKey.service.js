@@ -26,6 +26,38 @@ class ApiKeyService {
             throw new Error('Account Suspended: Cannot generate API keys.');
         }
 
+        // ── Plan-based API key count limit ───────────────────────────────────
+        // Reads maxApiKeys from the Plan DB schema (null = unlimited).
+        // Falls back to planFeatures.js config for legacy plans without the field.
+        const { PLAN_FEATURES } = require('../config/planFeatures');
+        const getUserPlan = require('../middleware/subscriptions/getUserPlan');
+        const { plan } = await getUserPlan(createdBy, organizationId);
+
+        // Resolve the limit: DB field takes priority, then config file, then 0 (blocked)
+        const planName = (plan?.name || '').toLowerCase();
+        const configFeatures = PLAN_FEATURES[planName] || {};
+        const maxApiKeys = plan?.features?.maxApiKeys !== undefined
+            ? plan.features.maxApiKeys    // DB schema (new)
+            : (configFeatures.maxApiKeys ?? 0); // config fallback
+
+        if (maxApiKeys === 0) {
+            throw new Error('API key generation is not available on your current plan. Upgrade to Starter or higher.');
+        }
+
+        if (maxApiKeys !== null) {
+            // null = unlimited — skip count check for Enterprise
+            const existingCount = await ApiKey.countDocuments({
+                organizationId,
+                status: { $in: ['active', 'suspended'] } // revoked keys don't count
+            });
+            if (existingCount >= maxApiKeys) {
+                throw new Error(
+                    `API key limit reached. Your plan allows a maximum of ${maxApiKeys} active API key${maxApiKeys === 1 ? '' : 's'}. ` +
+                    `Revoke an existing key to create a new one, or upgrade your plan.`
+                );
+            }
+        }
+
         const { name, permissions, rateLimit, expiresAt, rotationSchedule, allowedIPs, keyType = 'org' } = data;
 
         // ── Scope validation for partner keys ───────────────────────────────
@@ -341,8 +373,9 @@ class ApiKeyService {
 
         const keys = await ApiKey.find(query)
             .select('-keyHash')
-            .sort({ createdAt: -1 })
+            .sort({ _id: -1 })  // _id is always indexed; createdAt caused CosmosDB index errors
             .lean();
+
 
         return keys;
     }

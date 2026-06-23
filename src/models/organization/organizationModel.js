@@ -336,6 +336,22 @@ const organizationSchema = new mongoose.Schema(
     },
 
     // ============================================================
+    // 🔒 ORG-LEVEL API SECURITY SETTINGS
+    // Controls which origins and IPs can use this org's API keys.
+    // Empty array = allow all (default — no existing org is broken on rollout).
+    // Enforced in authenticateApiKey.js via Redis-cached lookup.
+    // ============================================================
+    security: {
+      // Allowed browser origins (CORS) — e.g. "https://app.theirclient.com"
+      // Checked against the Origin header when an API key request comes from a browser.
+      allowedOrigins: { type: [String], default: [] },
+
+      // Allowed server IPs — e.g. "102.45.67.89"
+      // Checked against req.ip for server-to-server API key requests.
+      allowedIPs: { type: [String], default: [] },
+    },
+
+    // ============================================================
     // MRV ENGINE FIELDS (optional — additive, non-breaking)
     // ============================================================
 
