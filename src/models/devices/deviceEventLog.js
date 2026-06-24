@@ -84,7 +84,9 @@ const schema = new mongoose.Schema({
     createdAt: {
         type:    Date,
         default: Date.now,
-        index:   true,
+        // NOTE: do NOT add index:true here — the TTL schema.index below
+        // already declares { createdAt: 1 }. A second index would trigger
+        // a Mongoose duplicate index warning.
     },
 }, { versionKey: false });
 

@@ -173,52 +173,13 @@ router.delete('/unregister-token', authenticateToken, notificationController.unr
  *       - **target=group**:  queued batch send to a list of users
  *       - **target=all**:    FCM topic broadcast to all users (most efficient)
  *
- *       Optionally attach an `image` file — the backend uploads it to Azure Blob
- *       Storage and embeds the permanent public URL in the notification automatically.
- *       No separate upload step is required.
+ *       Use **application/json** for text-only notifications (default).
+ *       Use **multipart/form-data** only when you want to attach an image —
+ *       the backend uploads it to Azure Blob Storage and includes the URL automatically.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
  *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required: [target, title, body]
- *             properties:
- *               target:
- *                 type: string
- *                 enum: [single, group, all]
- *                 description: Delivery target — single user, group, or everyone
- *               email:
- *                 type: string
- *                 description: Target user email (required when target=single)
- *               userId:
- *                 type: string
- *                 description: Target user ID — alternative to email for single target
- *               emails:
- *                 type: array
- *                 items: { type: string }
- *                 description: Array of email addresses (required when target=group)
- *               title:
- *                 type: string
- *                 example: "Air Quality Alert"
- *               body:
- *                 type: string
- *                 example: "PM2.5 has exceeded safe levels in your area."
- *               type:
- *                 type: string
- *                 enum: [general, promotion, alert]
- *                 default: general
- *               image:
- *                 type: string
- *                 format: binary
- *                 description: |
- *                   Optional image file (jpg, png, gif, webp — max 5 MB).
- *                   Uploaded inline; the resulting public URL is added to the
- *                   notification automatically.
- *               data:
- *                 type: object
- *                 description: Extra key-value data forwarded to the device
  *         application/json:
  *           schema:
  *             type: object
@@ -227,13 +188,49 @@ router.delete('/unregister-token', authenticateToken, notificationController.unr
  *               target:
  *                 type: string
  *                 enum: [single, group, all]
+ *                 description: "single = one user | group = list of emails | all = everyone"
+ *               email:
+ *                 type: string
+ *                 description: Required when target=single (preferred over userId)
+ *               userId:
+ *                 type: string
+ *                 description: Alternative to email when target=single
+ *               emails:
+ *                 type: array
+ *                 items: { type: string }
+ *                 description: Required when target=group
+ *               title:
+ *                 type: string
+ *                 description: Notification title shown on device
+ *               body:
+ *                 type: string
+ *                 description: Notification message body
+ *               type:
+ *                 type: string
+ *                 enum: [general, promotion, alert]
+ *                 default: general
+ *               data:
+ *                 type: object
+ *                 description: Extra key-value pairs forwarded to the device
+ *           example:
+ *             target: single
+ *             email: sylviankimkpe@yahoo.com
+ *             title: "Air Quality Alert"
+ *             body: "PM2.5 has exceeded safe levels in your area."
+ *             type: alert
+ *             data: {}
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [target, title, body]
+ *             properties:
+ *               target:
+ *                 type: string
+ *                 enum: [single, group, all]
  *               email:
  *                 type: string
  *               userId:
  *                 type: string
- *               emails:
- *                 type: array
- *                 items: { type: string }
  *               title:
  *                 type: string
  *               body:
@@ -241,8 +238,11 @@ router.delete('/unregister-token', authenticateToken, notificationController.unr
  *               type:
  *                 type: string
  *                 enum: [general, promotion, alert]
- *               data:
- *                 type: object
+ *                 default: general
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: Optional image (jpg/png/gif/webp, max 5 MB) — uploaded inline
  *     responses:
  *       200:
  *         description: Notification sent or queued
@@ -253,7 +253,7 @@ router.delete('/unregister-token', authenticateToken, notificationController.unr
  *               properties:
  *                 success:  { type: boolean }
  *                 message:  { type: string }
- *                 imageUrl: { type: string, description: Public URL of uploaded image (if any) }
+ *                 imageUrl: { type: string }
  *                 result:   { type: object }
  */
 router.post(

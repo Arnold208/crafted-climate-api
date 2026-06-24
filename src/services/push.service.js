@@ -97,8 +97,14 @@ function chunk(arr, size) {
  * Upload a notification image to Azure Blob Storage and return
  * a permanent, non-expiring public URL.
  *
- * The container must have public access level = "Blob" (set once in Azure portal
- * or via the Azure CLI: az storage container set-permission --public-access blob).
+ * Re-uses the existing `images` container (same one used for profile pictures)
+ * with a `notifications/` subfolder prefix.  We do NOT create a separate
+ * `notification-images` container because the storage account has
+ * "Allow Blob public access" disabled at the account level — any attempt to
+ * create a new container with publicAccessLevel='blob' returns 409 PublicAccessNotPermitted.
+ * The `images` container was provisioned before that policy was applied and
+ * already has blob-level public access, so uploads there produce permanent
+ * public URLs with no SAS token required.
  *
  * @param {Buffer} fileBuffer
  * @param {string} originalName  original filename (for extension)
@@ -109,15 +115,14 @@ async function uploadNotificationImage(fileBuffer, originalName, mimeType) {
     const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING;
     if (!connStr) throw new Error('AZURE_STORAGE_CONNECTION_STRING not set');
 
-    const CONTAINER = process.env.AZURE_NOTIFICATION_IMAGES_CONTAINER || 'notification-images';
+    // Re-use the existing public-access container (same as profile pictures).
+    // Notifications live under the  notifications/  prefix to keep things organised.
+    const CONTAINER = process.env.AZURE_IMAGES_CONTAINER || 'images';
 
     const blobServiceClient = BlobServiceClient.fromConnectionString(connStr);
     const containerClient   = blobServiceClient.getContainerClient(CONTAINER);
 
-    // Create container with public blob access if it doesn't exist
-    await containerClient.createIfNotExists({ access: 'blob' });
-
-    // Unique blob name: notifications/<uuid>.<ext>
+    // Unique blob name inside the notifications subfolder
     const ext      = (originalName.split('.').pop() || 'jpg').toLowerCase();
     const blobName = `notifications/${nanoid(16)}.${ext}`;
 
