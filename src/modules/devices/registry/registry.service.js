@@ -20,6 +20,7 @@ const eventLog = require('../eventLog/eventLog.service');
 const EnvTelemetry = require('../../../models/telemetry/envModel');
 const AquaTelemetry = require('../../../models/telemetry/aquaModel');
 const GasSoloTelemetry = require('../../../models/telemetry/gasSoloModel');
+const { normalizeDevice } = require('../../../utils/normalizeDevice');
 
 const MODEL_MAP = {
     env: EnvTelemetry,
@@ -172,7 +173,8 @@ class RegistryService {
     }
 
     async getOrganizationDevices(organizationId) {
-        return await registerNewDevice.find({ organizationId });
+        const devices = await registerNewDevice.find({ organizationId });
+        return devices.map(d => normalizeDevice(d.toObject()));
     }
 
     async getUserDevices(userid) {
@@ -182,7 +184,8 @@ class RegistryService {
         const shared = await registerNewDevice.find({ 'collaborators.userid': userid });
         const distinctShared = shared.filter(d => !ownedIds.has(d.devid)).map(d => ({ ...d.toObject(), shared: true }));
 
-        return [...owned.map(d => ({ ...d.toObject(), shared: false })), ...distinctShared];
+        const all = [...owned.map(d => ({ ...d.toObject(), shared: false })), ...distinctShared];
+        return all.map(d => normalizeDevice(d));
     }
 
     async updateDevice(userid, auid, reqBody) {

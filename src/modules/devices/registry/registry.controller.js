@@ -5,6 +5,7 @@ const { checkDeviceAccessCompatibility } = require('../../../middleware/devices/
 
 // MRV field visibility: strip MRV fields from device responses for non-MRV users
 const { applyDeviceMRVVisibility } = require('../../../services/mrv/mrvFieldVisibility');
+const { normalizeDevice } = require('../../../utils/normalizeDevice');
 
 class RegistryController {
     async registerDevice(req, res) {
@@ -27,7 +28,7 @@ class RegistryController {
                 auid, serial, location, nickname, userid, organizationId, frequency, batch
             });
 
-            return res.status(201).json(newDevice);
+            return res.status(201).json(normalizeDevice(newDevice.toObject ? newDevice.toObject() : newDevice));
 
         } catch (error) {
             if (error.message.includes('already registered')) return res.status(409).json({ message: error.message });
@@ -86,7 +87,8 @@ class RegistryController {
             }
             // Strip MRV fields for users without MRV project access
             const orgId = req.currentOrgId || req.headers['x-org-id'] || req.query.orgId;
-            res.json(applyDeviceMRVVisibility(accessible, req.user, orgId, req));
+            const sanitized = applyDeviceMRVVisibility(accessible, req.user, orgId, req);
+            res.json(sanitized.map(d => normalizeDevice(d)));
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
@@ -103,7 +105,7 @@ class RegistryController {
             // Strip MRV fields for users without MRV project access
             const orgId = req.currentOrgId || req.headers['x-org-id'] || req.query.orgId;
             const sanitized = applyDeviceMRVVisibility(device?.toObject ? device.toObject() : device, req.user, orgId, req);
-            res.status(200).json(sanitized);
+            res.status(200).json(normalizeDevice(sanitized));
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
@@ -174,7 +176,7 @@ class RegistryController {
             }
 
             const updated = await registryService.updateDevice(req.params.userid, auid, req.body);
-            res.json({ message: 'Device updated', device: updated });
+            res.json({ message: 'Device updated', device: normalizeDevice(updated) });
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
