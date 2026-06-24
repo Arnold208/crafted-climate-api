@@ -137,9 +137,28 @@ async function uploadNotificationImage(fileBuffer, originalName, mimeType) {
 
 /**
  * Register or refresh a user's FCM token.
- * Upsert on token value: updates lastActiveAt and marks valid if previously invalid.
+ *
+ * Strategy — one active token per user:
+ *   1. Delete all existing tokens for this user (except the incoming one).
+ *   2. Upsert the new token so it is always fresh.
+ *
+ * This prevents stale token buildup when a device re-installs the app or
+ * FCM rotates the registration token, and ensures pushes go to the right device.
  */
 async function registerToken(userid, token, platform = 'android', deviceId = null) {
+    // 1. Remove all OLD tokens for this user (any token that isn't the new one)
+    const oldDocs = await FcmToken.find({ userid, token: { $ne: token } }).lean();
+    if (oldDocs.length > 0) {
+        const oldTokens = oldDocs.map(d => d.token);
+        // Unsubscribe old tokens from FCM topic before deleting
+        try {
+            await messaging().unsubscribeFromTopic(oldTokens, 'all-users');
+        } catch (_) {}
+        await FcmToken.deleteMany({ userid, token: { $ne: token } });
+        console.log(`[PushService] Cleared ${oldDocs.length} old token(s) for user ${userid}`);
+    }
+
+    // 2. Upsert the new token
     await FcmToken.findOneAndUpdate(
         { token },
         {
@@ -153,7 +172,7 @@ async function registerToken(userid, token, platform = 'android', deviceId = nul
         { upsert: true, new: true }
     );
 
-    // Subscribe new token to the all-users FCM topic
+    // 3. Subscribe new token to the all-users FCM topic
     try {
         await messaging().subscribeToTopic([token], 'all-users');
     } catch (e) {

@@ -167,13 +167,58 @@ router.delete('/unregister-token', authenticateToken, notificationController.unr
  *     tags: [Notifications - Admin]
  *     summary: Send push notification to users
  *     description: |
- *       - target=single: instant direct send to one user (no queue)
- *       - target=group:  queued batch send to a list of users
- *       - target=all:    FCM topic broadcast to all users (most efficient)
+ *       Sends a push notification to one user, a group, or all users.
+ *
+ *       - **target=single**: instant direct send to one user (no queue)
+ *       - **target=group**:  queued batch send to a list of users
+ *       - **target=all**:    FCM topic broadcast to all users (most efficient)
+ *
+ *       Optionally attach an `image` file — the backend uploads it to Azure Blob
+ *       Storage and embeds the permanent public URL in the notification automatically.
+ *       No separate upload step is required.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
  *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [target, title, body]
+ *             properties:
+ *               target:
+ *                 type: string
+ *                 enum: [single, group, all]
+ *                 description: Delivery target — single user, group, or everyone
+ *               email:
+ *                 type: string
+ *                 description: Target user email (required when target=single)
+ *               userId:
+ *                 type: string
+ *                 description: Target user ID — alternative to email for single target
+ *               emails:
+ *                 type: array
+ *                 items: { type: string }
+ *                 description: Array of email addresses (required when target=group)
+ *               title:
+ *                 type: string
+ *                 example: "Air Quality Alert"
+ *               body:
+ *                 type: string
+ *                 example: "PM2.5 has exceeded safe levels in your area."
+ *               type:
+ *                 type: string
+ *                 enum: [general, promotion, alert]
+ *                 default: general
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: |
+ *                   Optional image file (jpg, png, gif, webp — max 5 MB).
+ *                   Uploaded inline; the resulting public URL is added to the
+ *                   notification automatically.
+ *               data:
+ *                 type: object
+ *                 description: Extra key-value data forwarded to the device
  *         application/json:
  *           schema:
  *             type: object
@@ -182,10 +227,13 @@ router.delete('/unregister-token', authenticateToken, notificationController.unr
  *               target:
  *                 type: string
  *                 enum: [single, group, all]
- *               userIds:
+ *               email:
+ *                 type: string
+ *               userId:
+ *                 type: string
+ *               emails:
  *                 type: array
  *                 items: { type: string }
- *                 description: Required for single/group targets
  *               title:
  *                 type: string
  *               body:
@@ -193,58 +241,28 @@ router.delete('/unregister-token', authenticateToken, notificationController.unr
  *               type:
  *                 type: string
  *                 enum: [general, promotion, alert]
- *                 default: general
- *               imageUrl:
- *                 type: string
- *                 description: Permanent public URL from the upload-image endpoint
  *               data:
  *                 type: object
- *                 description: Extra key-value data sent to the device
  *     responses:
  *       200:
- *         description: Sent or queued
- */
-router.post('/admin/send', authenticateToken, adminPushController.send.bind(adminPushController));
-
-/**
- * @swagger
- * /api/notifications/admin/upload-image:
- *   post:
- *     tags: [Notifications - Admin]
- *     summary: Upload image for a push notification
- *     description: |
- *       Uploads an image to Azure Blob Storage and returns a PERMANENT
- *       public URL (no SAS token, never expires). Use this URL in the
- *       imageUrl field of the send endpoint.
- *     security: [{ bearerAuth: [] }]
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required: [image]
- *             properties:
- *               image:
- *                 type: string
- *                 format: binary
- *     responses:
- *       200:
- *         description: Image uploaded
+ *         description: Notification sent or queued
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 success: { type: boolean }
- *                 imageUrl: { type: string }
+ *                 success:  { type: boolean }
+ *                 message:  { type: string }
+ *                 imageUrl: { type: string, description: Public URL of uploaded image (if any) }
+ *                 result:   { type: object }
  */
 router.post(
-    '/admin/upload-image',
+    '/admin/send',
     authenticateToken,
     uploadMiddleware.single('image'),
-    adminPushController.uploadImage.bind(adminPushController)
+    adminPushController.send.bind(adminPushController)
 );
+
 
 /**
  * @swagger

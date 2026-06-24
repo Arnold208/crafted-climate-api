@@ -12,6 +12,14 @@ const { telemetryQueue, statusQueue, subscriptionQueue } = require("../queue/bul
 const logger = require("../../utils/logger");
 
 const JWT_SECRET = process.env.ACCESS_TOKEN_SECRET;
+
+// Azure Web PubSub is the preferred adapter on Azure App Service.
+// If the connection string is NOT set (local dev, non-Azure deployments),
+// the Redis adapter is used instead. The server NEVER crashes on missing vars.
+const AZURE_CS  = process.env.AZURE_WEB_PUBSUB_CONNECTION_STRING;
+const AZURE_HUB = process.env.AZURE_WEB_PUBSUB_HUB_NAME || 'crowdsense';
+const USE_AZURE_PUBSUB = !!(AZURE_CS);
+
 let io;
 let statusBridgeStarted = false;
 
@@ -34,25 +42,43 @@ function setupRealtime(server) {
     console.error("❌ Engine connection error - Code:", err.code, "Message:", err.message);
   });
 
-  // ─── REDIS ADAPTER ────────────────────────────────────────────────────────
-  const pubClient = redisClient.duplicate();
-  const subClient = redisClient.duplicate();
+  // ─── TRANSPORT ADAPTER ────────────────────────────────────────────────────
+  // Azure Web PubSub  → set AZURE_WEB_PUBSUB_CONNECTION_STRING + AZURE_WEB_PUBSUB_HUB_NAME
+  // Redis adapter     → used automatically when Azure env vars are absent
+  if (USE_AZURE_PUBSUB) {
+    try {
+      const { useAzureSocketIO } = require('@azure/web-pubsub-socket.io');
+      useAzureSocketIO(io, { connectionString: AZURE_CS, hub: AZURE_HUB });
+      console.log(`✅ Socket.IO Azure Web PubSub adapter initialized (hub: ${AZURE_HUB})`);
+    } catch (err) {
+      console.error('❌ Azure Web PubSub init failed — falling back to Redis adapter:', err.message);
+      _initRedisAdapter();
+    }
+  } else {
+    _initRedisAdapter();
+  }
 
-  pubClient.on("error", (err) => {
-    console.error("❌ Socket.IO Redis Adapter pubClient Error:", err.message);
-  });
-  subClient.on("error", (err) => {
-    console.error("❌ Socket.IO Redis Adapter subClient Error:", err.message);
-  });
+  function _initRedisAdapter() {
+    const pubClient = redisClient.duplicate();
+    const subClient = redisClient.duplicate();
 
-  Promise.all([pubClient.connect(), subClient.connect()])
-    .then(() => {
-      io.adapter(createAdapter(pubClient, subClient));
-      console.log("✅ Socket.IO Redis Adapter initialized");
-    })
-    .catch((err) => {
-      console.error("❌ Socket.IO Redis Adapter failed:", err);
+    pubClient.on("error", (err) => {
+      console.error("❌ Socket.IO Redis Adapter pubClient Error:", err.message);
     });
+    subClient.on("error", (err) => {
+      console.error("❌ Socket.IO Redis Adapter subClient Error:", err.message);
+    });
+
+    Promise.all([pubClient.connect(), subClient.connect()])
+      .then(() => {
+        io.adapter(createAdapter(pubClient, subClient));
+        console.log("✅ Socket.IO Redis Adapter initialized");
+      })
+      .catch((err) => {
+        console.error("❌ Socket.IO Redis Adapter failed:", err);
+      });
+  }
+
 
   // ─── DUAL AUTHENTICATION MIDDLEWARE ───────────────────────────────────────
   io.use(async (socket, next) => {

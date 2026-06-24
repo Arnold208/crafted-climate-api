@@ -127,7 +127,7 @@ class AdminPushController {
 
     // ── POST /api/admin/notifications/send ───────────────────────────────
     /**
-     * Body:
+     * Body (multipart/form-data or application/json):
      * {
      *   target:    'single' | 'group' | 'all',
      *
@@ -143,9 +143,13 @@ class AdminPushController {
      *   title:     string,
      *   body:      string,
      *   type:      'general' | 'promotion' | 'alert',
-     *   imageUrl?: string,    ← from upload-image endpoint
-     *   data?:     object     ← extra key-value pairs sent to device
+     *   image?:    File     ← optional image file (uploaded inline, multipart/form-data)
+     *   data?:     object   ← extra key-value pairs sent to device
      * }
+     *
+     * If an image file is attached, it is uploaded to Azure Blob Storage first
+     * and the permanent public URL is embedded in the notification automatically.
+     * No separate upload step is needed.
      */
     async send(req, res) {
         try {
@@ -157,7 +161,6 @@ class AdminPushController {
                 title,
                 body,
                 type = 'general',
-                imageUrl,
                 data,
             } = req.body;
 
@@ -168,12 +171,23 @@ class AdminPushController {
                 return res.status(400).json({ success: false, message: "target is required: 'single', 'group', or 'all'" });
             }
 
+            // ── Inline image upload ──────────────────────────────────────────
+            // If a file is attached (multipart/form-data field: 'image'),
+            // upload it to Azure Blob Storage now and use the permanent URL.
+            let imageUrl;
+            if (req.file) {
+                const { buffer, originalname, mimetype } = req.file;
+                if (!mimetype.startsWith('image/')) {
+                    return res.status(400).json({ success: false, message: 'Attached file must be an image' });
+                }
+                imageUrl = await pushService.uploadNotificationImage(buffer, originalname, mimetype);
+            }
+
             const payload = { title, body, type, imageUrl, data: data || {} };
             let result;
 
             switch (target) {
                 case 'single': {
-                    // Accept either email or userId — email takes priority
                     const identifier = email || userId;
                     if (!identifier) {
                         return res.status(400).json({
@@ -181,7 +195,6 @@ class AdminPushController {
                             message: "Provide 'email' or 'userId' for target='single'",
                         });
                     }
-                    // sendToEmail handles both email strings and userId strings
                     result = await pushService.sendToEmail(identifier, payload);
 
                     return res.status(200).json({
@@ -189,6 +202,7 @@ class AdminPushController {
                         message: result.error
                             ? `User not found: ${identifier}`
                             : `Notification sent (sent=${result.sent}, failed=${result.failed})`,
+                        imageUrl: imageUrl || null,
                         result,
                     });
                 }
@@ -200,12 +214,12 @@ class AdminPushController {
                             message: "Provide 'emails' array for target='group'",
                         });
                     }
-                    // One DB query resolves all emails → userIds, then chunks into queue jobs
                     result = await pushService.queueToEmails(emails, payload);
 
                     return res.status(200).json({
                         success: true,
                         message: `Notification queued to ${emails.length} addresses (${result.jobCount} job${result.jobCount !== 1 ? 's' : ''})`,
+                        imageUrl: imageUrl || null,
                         queued:    emails.length - (result.notFound?.length ?? 0),
                         notFound:  result.notFound ?? [],
                         jobCount:  result.jobCount,
@@ -213,12 +227,12 @@ class AdminPushController {
                 }
 
                 case 'all': {
-                    // FCM topic broadcast — Firebase handles delivery fanout
                     result = await pushService.queueToAll(payload);
 
                     return res.status(200).json({
                         success: true,
                         message: 'Notification queued for all users via FCM topic broadcast',
+                        imageUrl: imageUrl || null,
                         jobCount: result.jobCount,
                     });
                 }
@@ -236,39 +250,6 @@ class AdminPushController {
     }
 
 
-    // ── POST /api/admin/notifications/upload-image ───────────────────────
-    /**
-     * Accepts multipart/form-data with field name "image".
-     * Returns: { success: true, imageUrl: "https://..." }
-     *
-     * The returned URL is permanent, never expires, and can be used
-     * directly in the send endpoint's imageUrl field.
-     */
-    async uploadImage(req, res) {
-        try {
-            if (!req.file) {
-                return res.status(400).json({ success: false, message: 'No image file provided (field: image)' });
-            }
-
-            const { buffer, originalname, mimetype } = req.file;
-
-            // Validate: images only
-            if (!mimetype.startsWith('image/')) {
-                return res.status(400).json({ success: false, message: 'File must be an image' });
-            }
-
-            const imageUrl = await pushService.uploadNotificationImage(buffer, originalname, mimetype);
-
-            res.status(200).json({
-                success:  true,
-                imageUrl,
-                message:  'Image uploaded successfully. Use imageUrl in your send request.',
-            });
-        } catch (error) {
-            console.error('[AdminPushController] uploadImage:', error);
-            res.status(500).json({ success: false, message: error.message });
-        }
-    }
 
     // ── GET /api/admin/notifications/queue-status ─────────────────────────
     async queueStatus(req, res) {
