@@ -623,4 +623,122 @@ router.post('/devices/:deviceId/mute', authenticateToken, userController.muteDev
  */
 router.post('/devices/:deviceId/unmute', authenticateToken, userController.unmuteDevice);
 
+/**
+ * @swagger
+ * /api/user/me/points:
+ *   get:
+ *     tags: [User Settings]
+ *     summary: Get loyalty points for the authenticated user
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Points summary retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 points:       { type: integer, example: 120 }
+ *                 level:        { type: string,  example: "Advocate" }
+ *                 actionsCount: { type: integer, example: 8 }
+ *                 lessonsCount: { type: integer, example: 3 }
+ *                 recentHistory:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       action:    { type: string }
+ *                       value:     { type: integer }
+ *                       timestamp: { type: string, format: date-time }
+ *       401:
+ *         description: Unauthorised
+ */
+router.get('/me/points', authenticateToken, userController.getMyPoints);
+
+/**
+ * @swagger
+ * /api/user/me/points/add:
+ *   post:
+ *     tags: [User Settings]
+ *     summary: Award eco-points to the authenticated user
+ *     description: |
+ *       Awards server-authoritative points for a recognised action type.
+ *       The `value` in the body is ignored — the server uses its own table.
+ *       Allowed actions: lesson_completed (10), quiz_completed (15),
+ *       challenge_completed (25), community_report (5),
+ *       device_connected (10), daily_login (2).
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [action]
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 example: "lesson_completed"
+ *               metadata:
+ *                 type: object
+ *                 example: { "lessonId": "l_001" }
+ *     responses:
+ *       200:
+ *         description: Points awarded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:  { type: boolean, example: true }
+ *                 awarded:  { type: integer, example: 10 }
+ *                 newTotal: { type: integer, example: 130 }
+ *                 level:    { type: string,  example: "Advocate" }
+ *       400:
+ *         description: Invalid action type
+ *       401:
+ *         description: Unauthorised
+ */
+router.post('/me/points/add', authenticateToken, userController.addPoints);
+
+/**
+ * @swagger
+ * /api/user/leaderboard:
+ *   get:
+ *     tags: [User Settings]
+ *     summary: Retrieve loyalty points leaderboard
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Leaderboard retrieved successfully
+ */
+router.get('/leaderboard', authenticateToken, userController.getLeaderboard);
+
+/**
+ * @swagger
+ * /api/user/me/points/opt-in:
+ *   post:
+ *     tags: [User Settings]
+ *     summary: Opt in/out of the points leaderboard
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [participate]
+ *             properties:
+ *               participate: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: Status updated successfully
+ */
+router.post('/me/points/opt-in', authenticateToken, userController.optInPoints);
+
 module.exports = router;
+

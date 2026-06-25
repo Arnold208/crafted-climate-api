@@ -63,6 +63,8 @@ const notificationRoutes = require('./modules/notification/notification.routes')
 const adminNotificationRoutes = require('./modules/admin/adminNotification.routes');
 // PLATFORM ADMIN - EMAIL TEMPLATES
 const emailTemplateRoutes = require('./modules/admin/emailTemplate.routes');
+// PLATFORM ADMIN - LOYALTY / POINTS SYSTEM
+const adminLoyaltyRoutes  = require('./modules/admin/adminLoyalty.routes');
 // ANALYTICS
 // const analyticsRoutes = require('./modules/analytics/analytics.routes'); // Duplicate removed
 
@@ -229,6 +231,9 @@ app.use('/api/admin/analytics', adminAnalyticsRoutes);
 // PLATFORM ADMIN - SYSTEM CONFIGURATION
 app.use('/api/admin/config', systemConfigRoutes);
 
+// PLATFORM ADMIN - LOYALTY / POINTS CONFIG
+app.use('/api/admin/loyalty', adminLoyaltyRoutes);
+
 // PLATFORM ADMIN - ANNOUNCEMENTS
 app.use('/api/admin/announcements', announcementRoutes);
 
@@ -259,6 +264,7 @@ app.use('/api/admin/email-templates', emailTemplateRoutes);
 // I will create user.routes.js in NEXT STEP.
 app.use('/api/auth', userRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/users', userRoutes);
 
 app.use('/api/org', organizationRoutes);
 

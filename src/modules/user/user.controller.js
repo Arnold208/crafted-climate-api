@@ -1,5 +1,6 @@
 const userService = require('./user.service');
 const { createUserSession, destroyUserSession } = require('../../middleware/sessionMiddleware');
+const levelConfigService = require('../../services/levelConfig.service');
 
 class UserController {
     async signup(req, res) {
@@ -363,6 +364,198 @@ class UserController {
             return res.status(500).json({ message: 'Logout failed' });
         }
     }
+
+    // ── LOYALTY POINTS ────────────────────────────────────────────────────────
+
+    /**
+     * GET /api/users/me/points
+     * Returns the authenticated user's current points total, level and recent history.
+     */
+    async getMyPoints(req, res) {
+        try {
+            const userId = req.user?.userid || req.user?.id || req.user?._id;
+            if (!userId) return res.status(401).json({ message: 'Unauthorised' });
+
+            const User = require('../../models/user/userModel');
+            const user = await User.findOne(
+                { userid: userId },
+                { loyaltyPoints: 1, pointsHistory: 1 }
+            ).lean();
+
+            if (!user) return res.status(404).json({ message: 'User not found' });
+
+            const points        = user.loyaltyPoints || 0;
+            const history       = (user.pointsHistory || []).slice(0, 50);
+            const actionsCount  = history.length;
+            const lessonsCount  = history.filter(h => h.action === 'lesson_completed').length;
+
+            // Level resolved from configurable DB thresholds (cached, with default fallback)
+            const level = await levelConfigService.computeLevelAsync(points);
+
+            return res.status(200).json({
+                points,
+                level,
+                actionsCount,
+                lessonsCount,
+                recentHistory: history.slice(0, 20).map(h => ({
+                    action:    h.action,
+                    value:     h.value,
+                    timestamp: h.timestamp,
+                })),
+            });
+        } catch (error) {
+            console.error('[UserController] getMyPoints Error:', error.message);
+            return res.status(500).json({ message: 'Failed to retrieve points' });
+        }
+    }
+
+    /**
+     * POST /api/users/me/points/add
+     * Body: { action: string, metadata?: object }
+     * Awards points using the server-authoritative action values from LevelConfig.
+     */
+    async addPoints(req, res) {
+        try {
+            const userId = req.user?.userid || req.user?.id || req.user?._id;
+            if (!userId) return res.status(401).json({ message: 'Unauthorised' });
+
+            // Load action values from the configurable LevelConfig (cached)
+            const config = await levelConfigService.getConfig();
+            const actionValues = config.actionValues;
+
+            const { action, metadata } = req.body;
+            if (!action || !(action in actionValues)) {
+                return res.status(400).json({
+                    message: `Invalid action. Allowed: ${Object.keys(actionValues).join(', ')}`,
+                });
+            }
+
+            // Server-authoritative value — client cannot override
+            const awardedPoints = actionValues[action];
+
+            const User = require('../../models/user/userModel');
+
+            // Atomically increment points and push to history (capped at 50 entries)
+            const updated = await User.findOneAndUpdate(
+                { userid: userId },
+                {
+                    $inc: { loyaltyPoints: awardedPoints },
+                    $push: {
+                        pointsHistory: {
+                            $each: [{ action, value: awardedPoints, timestamp: new Date(), metadata: metadata || {} }],
+                            $slice: -50, // keep only the last 50 entries
+                        },
+                    },
+                },
+                { new: true, select: 'loyaltyPoints' }
+            ).lean();
+
+            if (!updated) return res.status(404).json({ message: 'User not found' });
+
+            const level = await levelConfigService.computeLevelAsync(updated.loyaltyPoints);
+
+            return res.status(200).json({
+                success:  true,
+                awarded:  awardedPoints,
+                newTotal: updated.loyaltyPoints,
+                level,
+            });
+        } catch (error) {
+            console.error('[UserController] addPoints Error:', error.message);
+            return res.status(500).json({ message: 'Failed to add points' });
+        }
+    }
+
+    /**
+     * GET /api/user/leaderboard
+     * Returns the loyalty points leaderboard.
+     * Only users with participateInPoints = true are included.
+     * Returns top 10 users + the authenticated user's current rank and status.
+     */
+    async getLeaderboard(req, res) {
+        try {
+            const userId = req.user?.userid || req.user?.id || req.user?._id;
+            if (!userId) return res.status(401).json({ message: 'Unauthorised' });
+
+            const User = require('../../models/user/userModel');
+
+            // Find the current user first to check participation
+            const currentUser = await User.findOne({ userid: userId }, { username: 1, loyaltyPoints: 1, participateInPoints: 1 }).lean();
+            if (!currentUser) return res.status(404).json({ message: 'User not found' });
+
+            // Fetch all participating users sorted by points desc
+            const allParticipating = await User.find(
+                { participateInPoints: true, deletedAt: null },
+                { username: 1, loyaltyPoints: 1, userid: 1 }
+            ).sort({ loyaltyPoints: -1 }).lean();
+
+            // Calculate ranks
+            const leaderboard = allParticipating.map((u, index) => ({
+                userid: u.userid,
+                name: u.username,
+                points: u.loyaltyPoints || 0,
+                rank: index + 1,
+                isSelf: u.userid === userId
+            }));
+
+            // Find current user's rank if participating
+            let currentUserRank = -1;
+            if (currentUser.participateInPoints) {
+                currentUserRank = leaderboard.findIndex(u => u.userid === userId) + 1;
+            }
+
+            // Return top 10
+            const topTen = leaderboard.slice(0, 10);
+
+            return res.status(200).json({
+                success: true,
+                participating: currentUser.participateInPoints ?? null,
+                userPoints: currentUser.loyaltyPoints || 0,
+                userRank: currentUserRank,
+                topTen,
+                leaderboard // full list for fallback
+            });
+        } catch (error) {
+            console.error('[UserController] getLeaderboard Error:', error.message);
+            return res.status(500).json({ message: 'Failed to retrieve leaderboard' });
+        }
+    }
+
+    /**
+     * POST /api/user/me/points/opt-in
+     * Body: { participate: boolean }
+     * Opts the user in or out of the points leaderboard system.
+     */
+    async optInPoints(req, res) {
+        try {
+            const userId = req.user?.userid || req.user?.id || req.user?._id;
+            if (!userId) return res.status(401).json({ message: 'Unauthorised' });
+
+            const { participate } = req.body;
+            if (participate === undefined) {
+                return res.status(400).json({ message: 'participate value is required' });
+            }
+
+            const User = require('../../models/user/userModel');
+            const updated = await User.findOneAndUpdate(
+                { userid: userId },
+                { $set: { participateInPoints: participate } },
+                { new: true, select: 'participateInPoints loyaltyPoints' }
+            ).lean();
+
+            if (!updated) return res.status(404).json({ message: 'User not found' });
+
+            return res.status(200).json({
+                success: true,
+                participateInPoints: updated.participateInPoints,
+                points: updated.loyaltyPoints || 0
+            });
+        } catch (error) {
+            console.error('[UserController] optInPoints Error:', error.message);
+            return res.status(500).json({ message: 'Failed to update opt-in status' });
+        }
+    }
 }
 
 module.exports = new UserController();
+

@@ -84,6 +84,9 @@ class NotificationController {
     /**
      * Called by the mobile app after login or whenever the FCM token refreshes.
      * Body: { token: string, platform?: 'android'|'ios', deviceId?: string }
+     *
+     * This always resets invalid:false — the core self-healing fix.
+     * If the token was previously dead-marked, it is revived here.
      */
     async registerToken(req, res) {
         try {
@@ -112,6 +115,44 @@ class NotificationController {
             res.status(200).json({ success: true, message: 'FCM token unregistered' });
         } catch (error) {
             console.error('[NotificationController] unregisterToken:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    // ── GET /api/notifications/token-status ───────────────────────────────
+    /**
+     * Self-healing endpoint called by the mobile app on foreground resume.
+     * Returns the health of the current user's FCM token so the app can decide
+     * whether to force re-register.
+     *
+     * Response:
+     * {
+     *   hasToken: boolean,
+     *   invalid: boolean,          — true means the token is dead and must be re-registered
+     *   shouldReregister: boolean, — convenience flag: true if the app MUST re-register now
+     *   tokenPartial: string,      — first 20 chars for logging only
+     *   lastActiveAt: string,
+     *   validTokens: number,
+     * }
+     */
+    async getTokenStatus(req, res) {
+        try {
+            const status = await pushService.getTokenStatusForUser(req.user.userid);
+
+            const shouldReregister =
+                !status.hasToken ||                          // never registered
+                status.invalid ||                            // dead token
+                status.validTokens === 0;                    // all tokens invalid
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    ...status,
+                    shouldReregister,
+                },
+            });
+        } catch (error) {
+            console.error('[NotificationController] getTokenStatus:', error);
             res.status(500).json({ success: false, message: error.message });
         }
     }
@@ -172,8 +213,6 @@ class AdminPushController {
             }
 
             // ── Inline image upload ──────────────────────────────────────────
-            // If a file is attached (multipart/form-data field: 'image'),
-            // upload it to Azure Blob Storage now and use the permanent URL.
             let imageUrl;
             if (req.file) {
                 const { buffer, originalname, mimetype } = req.file;
@@ -197,13 +236,24 @@ class AdminPushController {
                     }
                     result = await pushService.sendToEmail(identifier, payload);
 
+                    // ── Enrich response with diagnosis when nothing was sent ──
+                    const diagMsg = result.error
+                        ? `User not found: ${identifier}`
+                        : result.sent === 0 && result.failed === 0
+                            ? _describeSentZero(result)
+                            : `Notification sent (sent=${result.sent}, failed=${result.failed})`;
+
                     return res.status(200).json({
-                        success: true,
-                        message: result.error
-                            ? `User not found: ${identifier}`
-                            : `Notification sent (sent=${result.sent}, failed=${result.failed})`,
-                        imageUrl: imageUrl || null,
-                        result,
+                        success:   result.sent > 0 || (!result.error && result.sent === 0 && result.skipped === 'push_disabled'),
+                        message:   diagMsg,
+                        imageUrl:  imageUrl || null,
+                        result: {
+                            sent:        result.sent,
+                            failed:      result.failed,
+                            invalidated: result.invalidated,
+                            skipped:     result.skipped || null,
+                            reason:      result.reason  || null,
+                        },
                     });
                 }
 
@@ -219,7 +269,7 @@ class AdminPushController {
                     return res.status(200).json({
                         success: true,
                         message: `Notification queued to ${emails.length} addresses (${result.jobCount} job${result.jobCount !== 1 ? 's' : ''})`,
-                        imageUrl: imageUrl || null,
+                        imageUrl:  imageUrl || null,
                         queued:    emails.length - (result.notFound?.length ?? 0),
                         notFound:  result.notFound ?? [],
                         jobCount:  result.jobCount,
@@ -230,8 +280,8 @@ class AdminPushController {
                     result = await pushService.queueToAll(payload);
 
                     return res.status(200).json({
-                        success: true,
-                        message: 'Notification queued for all users via FCM topic broadcast',
+                        success:  true,
+                        message:  'Notification queued for all users via FCM topic broadcast',
                         imageUrl: imageUrl || null,
                         jobCount: result.jobCount,
                     });
@@ -248,8 +298,6 @@ class AdminPushController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
-
-
 
     // ── GET /api/admin/notifications/queue-status ─────────────────────────
     async queueStatus(req, res) {
@@ -271,6 +319,85 @@ class AdminPushController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+
+    // ── GET /api/admin/notifications/token-health/:emailOrId ──────────────
+    /**
+     * Admin diagnostic: check the FCM token health for any user.
+     * Useful when a user reports "I'm not receiving notifications".
+     *
+     * Response:
+     * {
+     *   found: boolean,
+     *   userid: string,
+     *   hasToken: boolean,
+     *   invalid: boolean,
+     *   shouldReregister: boolean,
+     *   validTokens: number,
+     *   totalTokens: number,
+     *   lastActiveAt: string,
+     *   platform: string,
+     * }
+     */
+    async getTokenHealth(req, res) {
+        try {
+            const emailOrId = req.params.emailOrId;
+            if (!emailOrId) {
+                return res.status(400).json({ success: false, message: 'emailOrId param is required' });
+            }
+
+            const health = await pushService.getTokenHealthForUser(emailOrId);
+
+            if (!health.found) {
+                return res.status(404).json({ success: false, message: `User not found: ${emailOrId}` });
+            }
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    ...health,
+                    shouldReregister: !health.hasToken || health.invalid || health.validTokens === 0,
+                    diagnosis: _tokenDiagnosis(health),
+                },
+            });
+        } catch (error) {
+            console.error('[AdminPushController] getTokenHealth:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Private helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Human-readable diagnosis message for admin dashboard.
+ */
+function _tokenDiagnosis(health) {
+    if (!health.hasToken) {
+        return '🔴 No FCM token registered. User has never received push notifications on this device, or token was purged by the 90-day TTL.';
+    }
+    if (health.invalid) {
+        return `🔴 Token is marked INVALID. FCM rejected it (dead token). The device must re-register. Last active: ${health.lastActiveAt}.`;
+    }
+    if (health.validTokens === 0) {
+        return '🟡 All tokens for this user are invalid. Device must re-register.';
+    }
+    return `✅ ${health.validTokens} valid token(s). Last active: ${health.lastActiveAt}.`;
+}
+
+/**
+ * Human-readable explanation of why sent=0 and failed=0.
+ * This is the "mystery" result the admin was seeing.
+ */
+function _describeSentZero(result) {
+    if (result.skipped === 'push_disabled') {
+        return 'Notification skipped — user has push notifications disabled in their settings.';
+    }
+    if (result.reason) {
+        return `Sent=0: ${result.reason}. The device must re-register its FCM token. Ask the user to restart the app.`;
+    }
+    return 'Sent=0, Failed=0 — no valid FCM tokens found for this user. The device needs to re-register.';
 }
 
 module.exports = {

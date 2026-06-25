@@ -137,8 +137,44 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null,
     index: true
+  },
+
+  /**
+   * 🏆 LOYALTY / POINTS SYSTEM
+   * Tracks cumulative eco-points earned across all actions.
+   * Default: 0 for all users (existing users inherit 0 on next update).
+   */
+  loyaltyPoints: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+
+  /**
+   * Whether the user has opted in to participate in the learning points system & leaderboard.
+   * Default: null (unasked), false (opted out), true (opted in).
+   */
+  participateInPoints: {
+    type: Boolean,
+    default: null
+  },
+
+  /**
+   * 📜 POINTS HISTORY — last 50 entries stored inline for fast reads.
+   * For full history, query the PointsEvent collection.
+   */
+  pointsHistory: {
+    type: [{
+      action:    { type: String, required: true },
+      value:     { type: Number, required: true },
+      timestamp: { type: Date,   default: Date.now },
+      metadata:  { type: mongoose.Schema.Types.Mixed, default: {} }
+    }],
+    default: [],
+    _id: false
   }
 }, { timestamps: true });
+
 
 const User = mongoose.model('User', userSchema);
 module.exports = User;

@@ -145,7 +145,8 @@ async function uploadNotificationImage(fileBuffer, originalName, mimeType) {
  *
  * Strategy — one active token per user:
  *   1. Delete all existing tokens for this user (except the incoming one).
- *   2. Upsert the new token so it is always fresh.
+ *   2. Upsert the new token — ALWAYS resetting invalid:false so a token that
+ *      was previously dead-marked but refreshed by FCM can re-activate.
  *
  * This prevents stale token buildup when a device re-installs the app or
  * FCM rotates the registration token, and ensures pushes go to the right device.
@@ -155,7 +156,6 @@ async function registerToken(userid, token, platform = 'android', deviceId = nul
     const oldDocs = await FcmToken.find({ userid, token: { $ne: token } }).lean();
     if (oldDocs.length > 0) {
         const oldTokens = oldDocs.map(d => d.token);
-        // Unsubscribe old tokens from FCM topic before deleting
         try {
             await messaging().unsubscribeFromTopic(oldTokens, 'all-users');
         } catch (_) {}
@@ -163,16 +163,19 @@ async function registerToken(userid, token, platform = 'android', deviceId = nul
         console.log(`[PushService] Cleared ${oldDocs.length} old token(s) for user ${userid}`);
     }
 
-    // 2. Upsert the new token
+    // 2. Upsert the new token — ALWAYS set invalid:false (even if it was previously
+    //    marked dead; FCM may re-issue the same token after a reinstall)
     await FcmToken.findOneAndUpdate(
-        { token },
+        { token },           // match by token string (unique key)
         {
-            userid,
-            token,
-            platform,
-            deviceId,
-            lastActiveAt: new Date(),
-            invalid: false,
+            $set: {
+                userid,
+                token,
+                platform,
+                deviceId,
+                lastActiveAt: new Date(),
+                invalid: false,  // ← always reset — this is the self-healing fix
+            },
         },
         { upsert: true, new: true }
     );
@@ -183,6 +186,8 @@ async function registerToken(userid, token, platform = 'android', deviceId = nul
     } catch (e) {
         console.warn('[PushService] Topic subscribe skipped:', e.message);
     }
+
+    console.log(`[PushService] ✅ Token registered for user ${userid} (${platform})`);
 }
 
 /**
@@ -255,11 +260,44 @@ async function _filterPushEnabledUsers(userIds) {
 }
 
 /**
+ * Get the token health status for a user — used by mobile self-healing and admin diagnostics.
+ * Returns { hasToken, token (partial), invalid, lastActiveAt, platform }
+ */
+async function getTokenStatusForUser(userid) {
+    const docs = await FcmToken.find({ userid }).lean();
+    if (!docs.length) {
+        return { hasToken: false, reason: 'no_token_registered' };
+    }
+    // Return status of the most recently active token
+    const sorted = docs.sort((a, b) => new Date(b.lastActiveAt) - new Date(a.lastActiveAt));
+    const latest = sorted[0];
+    return {
+        hasToken:     true,
+        tokenPartial: latest.token.slice(0, 20) + '...',
+        invalid:      latest.invalid,
+        platform:     latest.platform,
+        lastActiveAt: latest.lastActiveAt,
+        totalTokens:  docs.length,
+        validTokens:  docs.filter(d => !d.invalid).length,
+    };
+}
+
+/**
+ * Get full token health for a user identified by email — for admin use.
+ */
+async function getTokenHealthForUser(emailOrId) {
+    const userid = await resolveToUserId(emailOrId);
+    if (!userid) return { found: false, reason: 'user_not_found' };
+    const status = await getTokenStatusForUser(userid);
+    return { found: true, userid, ...status };
+}
+
+/**
  * Send a push notification directly to ONE user.
  * Bypasses the queue — suitable for real-time alerts (AQI threshold, device offline).
  * Respects the user's push notification preference.
  *
- * @returns {{ sent: number, failed: number, invalidated: number, skipped?: string }}
+ * @returns {{ sent: number, failed: number, invalidated: number, skipped?: string, reason?: string }}
  */
 async function sendToUser(userid, { title, body, type = 'general', imageUrl, data }) {
     // Preference gate — respect user's push setting
@@ -270,7 +308,15 @@ async function sendToUser(userid, { title, body, type = 'general', imageUrl, dat
     }
 
     const tokenDocs = await getTokensForUser(userid);
-    if (!tokenDocs.length) return { sent: 0, failed: 0, invalidated: 0 };
+    if (!tokenDocs.length) {
+        // Diagnose WHY there are no tokens
+        const allDocs = await FcmToken.find({ userid }).lean();
+        const reason = allDocs.length === 0
+            ? 'no_token_registered — user never registered an FCM token or token was purged'
+            : `all_tokens_invalid — ${allDocs.length} token(s) exist but all marked invalid`;
+        console.warn(`[PushService] No valid tokens for user ${userid}: ${reason}`);
+        return { sent: 0, failed: 0, invalidated: 0, reason };
+    }
 
     const messages = tokenDocs.map(t => buildMessage(t.token, title, body, type, imageUrl, data));
     return _sendBatch(messages);
@@ -541,6 +587,10 @@ module.exports = {
     removeAllTokens,
     getTokensForUser,
 
+    // Token health / diagnostics
+    getTokenStatusForUser,
+    getTokenHealthForUser,
+
     // Sending — by userId
     sendToUser,       // direct, instant — single user by userid
     queueToUsers,     // queued   — array of userIds
@@ -560,3 +610,4 @@ module.exports = {
     // Worker processor
     processQueueJob,
 };
+
