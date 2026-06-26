@@ -23,18 +23,19 @@ class OrganizationManagementController {
             const userid = req.user.userid;
             const platformRole = req.user.platformRole || 'user';
 
-            // Validation
-            if (!newName || !reason) {
+            // Validation — reason is optional; default to a placeholder if omitted
+            if (!newName) {
                 return res.status(400).json({
-                    message: 'newName and reason are required'
+                    message: 'newName is required'
                 });
             }
+            const resolvedReason = (reason && reason.trim()) ? reason.trim() : 'No reason provided';
 
             const result = await organizationManagementService.updateOrganizationName(
                 orgId,
                 newName,
                 userid,
-                reason,
+                resolvedReason,
                 platformRole
             );
 

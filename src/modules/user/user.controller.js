@@ -555,6 +555,222 @@ class UserController {
             return res.status(500).json({ message: 'Failed to update opt-in status' });
         }
     }
+
+    // ── QUESTS ────────────────────────────────────────────────────────────────
+
+    /**
+     * Default quests definition (extend here or move to DB later)
+     */
+    _getQuestDefinitions() {
+        return [
+            {
+                questId: 'quest_aqi_explorer',
+                title: 'Open Air Quality Preview',
+                description: 'Open the AQI detail card from the dashboard to explore real-time air quality data.',
+                points: 30,
+                badgeId: 'badge_air_seeker',
+                oneTimeOnly: true,
+                category: 'exploration',
+                iconKey: 'wind',
+            },
+        ];
+    }
+
+    /**
+     * Default badges definition
+     */
+    _getBadgeDefinitions() {
+        return [
+            {
+                badgeId: 'badge_first_step',
+                title: 'First Step',
+                description: 'Successfully signed up and logged in for the first time.',
+                iconKey: 'sprout',
+                colorHex: '#4CAF50',
+                awardedOn: 'signup',
+            },
+            {
+                badgeId: 'badge_air_seeker',
+                title: 'Air Seeker',
+                description: 'Opened the AQI detail card for the first time.',
+                iconKey: 'wind',
+                colorHex: '#2196F3',
+                awardedOn: 'quest_aqi_explorer',
+            },
+        ];
+    }
+
+    /**
+     * GET /api/users/me/quests
+     * Returns all available quests with completion status for the authenticated user.
+     */
+    async getMyQuests(req, res) {
+        try {
+            const userId = req.user?.userid || req.user?.id || req.user?._id;
+            if (!userId) return res.status(401).json({ message: 'Unauthorised' });
+
+            const User = require('../../models/user/userModel');
+            const user = await User.findOne({ userid: userId }, { completedQuests: 1 }).lean();
+            if (!user) return res.status(404).json({ message: 'User not found' });
+
+            const completedIds = new Set((user.completedQuests || []).map(q => q.questId));
+            const quests = this._getQuestDefinitions().map(q => ({
+                ...q,
+                completed: completedIds.has(q.questId),
+                completedAt: (user.completedQuests || []).find(cq => cq.questId === q.questId)?.completedAt ?? null,
+            }));
+
+            return res.status(200).json({ quests });
+        } catch (error) {
+            console.error('[UserController] getMyQuests Error:', error.message);
+            return res.status(500).json({ message: 'Failed to retrieve quests' });
+        }
+    }
+
+    /**
+     * POST /api/users/me/quests/:questId/complete
+     * Marks a quest as completed and awards points + badge. Idempotent.
+     */
+    async completeQuest(req, res) {
+        try {
+            const userId = req.user?.userid || req.user?.id || req.user?._id;
+            if (!userId) return res.status(401).json({ message: 'Unauthorised' });
+
+            const { questId } = req.params;
+            const quest = this._getQuestDefinitions().find(q => q.questId === questId);
+            if (!quest) return res.status(404).json({ message: 'Quest not found' });
+
+            const User = require('../../models/user/userModel');
+            const user = await User.findOne({ userid: userId }, { completedQuests: 1, loyaltyPoints: 1, earnedBadges: 1 }).lean();
+            if (!user) return res.status(404).json({ message: 'User not found' });
+
+            // Idempotency check — do not double-award
+            const alreadyCompleted = (user.completedQuests || []).some(q => q.questId === questId);
+            if (alreadyCompleted) {
+                return res.status(200).json({
+                    alreadyClaimed: true,
+                    message: 'Quest already completed',
+                    points: user.loyaltyPoints || 0,
+                });
+            }
+
+            // Award points
+            const config = await levelConfigService.getConfig();
+            const awardedPoints = quest.points;
+
+            const now = new Date();
+            const update = {
+                $inc: { loyaltyPoints: awardedPoints },
+                $push: {
+                    pointsHistory: {
+                        $each: [{ action: 'challenge_completed', value: awardedPoints, timestamp: now, metadata: { questId } }],
+                        $slice: -50,
+                    },
+                    completedQuests: { questId, completedAt: now },
+                },
+            };
+
+            // Also award badge if applicable and not already earned
+            let badgeAwarded = null;
+            if (quest.badgeId) {
+                const alreadyHasBadge = (user.earnedBadges || []).some(b => b.badgeId === quest.badgeId);
+                if (!alreadyHasBadge) {
+                    update.$push.earnedBadges = { badgeId: quest.badgeId, earnedAt: now };
+                    const badge = this._getBadgeDefinitions().find(b => b.badgeId === quest.badgeId);
+                    badgeAwarded = badge || null;
+                }
+            }
+
+            const updated = await User.findOneAndUpdate(
+                { userid: userId },
+                update,
+                { new: true, select: 'loyaltyPoints' }
+            ).lean();
+
+            const level = await levelConfigService.computeLevelAsync(updated.loyaltyPoints);
+
+            return res.status(200).json({
+                alreadyClaimed: false,
+                awarded: awardedPoints,
+                newTotal: updated.loyaltyPoints,
+                level,
+                badgeAwarded,
+            });
+        } catch (error) {
+            console.error('[UserController] completeQuest Error:', error.message);
+            return res.status(500).json({ message: 'Failed to complete quest' });
+        }
+    }
+
+    /**
+     * GET /api/users/me/badges
+     * Returns all badges with earned/locked status for the authenticated user.
+     */
+    async getMyBadges(req, res) {
+        try {
+            const userId = req.user?.userid || req.user?.id || req.user?._id;
+            if (!userId) return res.status(401).json({ message: 'Unauthorised' });
+
+            const User = require('../../models/user/userModel');
+            const user = await User.findOne({ userid: userId }, { earnedBadges: 1 }).lean();
+            if (!user) return res.status(404).json({ message: 'User not found' });
+
+            const earnedIds = new Set((user.earnedBadges || []).map(b => b.badgeId));
+            const badges = this._getBadgeDefinitions().map(b => ({
+                ...b,
+                earned: earnedIds.has(b.badgeId),
+                earnedAt: (user.earnedBadges || []).find(eb => eb.badgeId === b.badgeId)?.earnedAt ?? null,
+            }));
+
+            return res.status(200).json({ badges });
+        } catch (error) {
+            console.error('[UserController] getMyBadges Error:', error.message);
+            return res.status(500).json({ message: 'Failed to retrieve badges' });
+        }
+    }
+
+    /**
+     * POST /api/users/me/badges/check
+     * Awards First Step badge on first login if not already earned.
+     */
+    async checkAndAwardBadges(req, res) {
+        try {
+            const userId = req.user?.userid || req.user?.id || req.user?._id;
+            if (!userId) return res.status(401).json({ message: 'Unauthorised' });
+
+            const User = require('../../models/user/userModel');
+            const user = await User.findOne({ userid: userId }, { earnedBadges: 1 }).lean();
+            if (!user) return res.status(404).json({ message: 'User not found' });
+
+            const earnedIds = new Set((user.earnedBadges || []).map(b => b.badgeId));
+            const newBadges = [];
+            const now = new Date();
+
+            // Award First Step badge if not yet earned
+            if (!earnedIds.has('badge_first_step')) {
+                newBadges.push({ badgeId: 'badge_first_step', earnedAt: now });
+            }
+
+            if (newBadges.length > 0) {
+                await User.updateOne(
+                    { userid: userId },
+                    { $push: { earnedBadges: { $each: newBadges } } }
+                );
+            }
+
+            const awardedDefs = newBadges.map(nb =>
+                this._getBadgeDefinitions().find(b => b.badgeId === nb.badgeId)
+            ).filter(Boolean);
+
+            return res.status(200).json({
+                success: true,
+                newBadges: awardedDefs,
+            });
+        } catch (error) {
+            console.error('[UserController] checkAndAwardBadges Error:', error.message);
+            return res.status(500).json({ message: 'Failed to check badges' });
+        }
+    }
 }
 
 module.exports = new UserController();

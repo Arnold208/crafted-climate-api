@@ -117,6 +117,7 @@ class UserService {
                 lastOtpSentAt: isVerified ? null : new Date(),
                 verified: isVerified,
                 platformRole: "user",
+                earnedBadges: [{ badgeId: 'badge_first_step', earnedAt: new Date() }],
             });
 
             await newUser.save();

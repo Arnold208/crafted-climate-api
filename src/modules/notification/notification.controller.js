@@ -202,6 +202,9 @@ class AdminPushController {
                 title,
                 body,
                 type = 'general',
+                imageUrl: bodyImageUrl,
+                image_url: bodyImageUrl2,
+                image: bodyImageUrl3,
                 data,
             } = req.body;
 
@@ -212,8 +215,8 @@ class AdminPushController {
                 return res.status(400).json({ success: false, message: "target is required: 'single', 'group', or 'all'" });
             }
 
-            // ── Inline image upload ──────────────────────────────────────────
-            let imageUrl;
+            // ── Inline image upload or URL from body ──────────────────────────
+            let imageUrl = bodyImageUrl || bodyImageUrl2 || bodyImageUrl3;
             if (req.file) {
                 const { buffer, originalname, mimetype } = req.file;
                 if (!mimetype.startsWith('image/')) {

@@ -740,5 +740,13 @@ router.get('/leaderboard', authenticateToken, userController.getLeaderboard);
  */
 router.post('/me/points/opt-in', authenticateToken, userController.optInPoints);
 
+// ── Quests ──────────────────────────────────────────────────────────────────
+router.get('/me/quests', authenticateToken, userController.getMyQuests);
+router.post('/me/quests/:questId/complete', authenticateToken, userController.completeQuest);
+
+// ── Badges ──────────────────────────────────────────────────────────────────
+router.get('/me/badges', authenticateToken, userController.getMyBadges);
+router.post('/me/badges/check', authenticateToken, userController.checkAndAwardBadges);
+
 module.exports = router;
 

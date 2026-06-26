@@ -172,6 +172,30 @@ const userSchema = new mongoose.Schema({
     }],
     default: [],
     _id: false
+  },
+
+  /**
+   * 🎯 QUESTS — tracks which quests the user has completed.
+   */
+  completedQuests: {
+    type: [{
+      questId:     { type: String, required: true },
+      completedAt: { type: Date,   default: Date.now },
+    }],
+    default: [],
+    _id: false
+  },
+
+  /**
+   * 🏅 BADGES — tracks which achievement badges the user has earned.
+   */
+  earnedBadges: {
+    type: [{
+      badgeId:  { type: String, required: true },
+      earnedAt: { type: Date,   default: Date.now },
+    }],
+    default: [],
+    _id: false
   }
 }, { timestamps: true });
 
