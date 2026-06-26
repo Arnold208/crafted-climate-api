@@ -3,6 +3,13 @@ const { createUserSession, destroyUserSession } = require('../../middleware/sess
 const levelConfigService = require('../../services/levelConfig.service');
 
 class UserController {
+    constructor() {
+        this.getMyQuests = this.getMyQuests.bind(this);
+        this.completeQuest = this.completeQuest.bind(this);
+        this.getMyBadges = this.getMyBadges.bind(this);
+        this.checkAndAwardBadges = this.checkAndAwardBadges.bind(this);
+    }
+
     async signup(req, res) {
         try {
             const { username, email, password, invitationId, contact, firstName, lastName, country } = req.body;
@@ -483,11 +490,14 @@ class UserController {
             const currentUser = await User.findOne({ userid: userId }, { username: 1, loyaltyPoints: 1, participateInPoints: 1 }).lean();
             if (!currentUser) return res.status(404).json({ message: 'User not found' });
 
-            // Fetch all participating users sorted by points desc
+            // Fetch all participating users
             const allParticipating = await User.find(
                 { participateInPoints: true, deletedAt: null },
                 { username: 1, loyaltyPoints: 1, userid: 1 }
-            ).sort({ loyaltyPoints: -1 }).lean();
+            ).lean();
+
+            // Sort in memory to avoid Cosmos DB excluded index path order-by errors
+            allParticipating.sort((a, b) => (b.loyaltyPoints || 0) - (a.loyaltyPoints || 0));
 
             // Calculate ranks
             const leaderboard = allParticipating.map((u, index) => ({
