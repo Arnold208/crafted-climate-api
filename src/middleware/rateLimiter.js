@@ -31,7 +31,7 @@ const robustIpKeyGenerator = (req) => {
 const globalRateLimiter = rateLimit({
   windowMs: parseInt(process.env.GLOBAL_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   max: parseInt(process.env.GLOBAL_LIMIT_MAX) || 300,
-  message: 'Too many requests from this IP, please try again later.',
+  message: { message: 'Too many requests from this IP, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => robustIpKeyGenerator(req),
@@ -42,7 +42,7 @@ const globalRateLimiter = rateLimit({
 const swaggerRateLimiter = rateLimit({
   windowMs: parseInt(process.env.SWAGGER_LIMIT_WINDOW_MS) || 1 * 60 * 1000,
   max: parseInt(process.env.SWAGGER_LIMIT_MAX) || 60,
-  message: 'Too many requests to Swagger docs. Try again later.',
+  message: { message: 'Too many requests to Swagger docs. Try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => robustIpKeyGenerator(req),
@@ -53,7 +53,7 @@ const swaggerRateLimiter = rateLimit({
 const authLimiter = rateLimit({
   windowMs: parseInt(process.env.AUTH_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   max: parseInt(process.env.AUTH_LIMIT_MAX) || 20,
-  message: 'Too many login attempts from this IP, please try again after 15 minutes',
+  message: { message: 'Too many login attempts from this IP, please try again after 15 minutes' },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => robustIpKeyGenerator(req),
@@ -65,7 +65,7 @@ const otpLimiter = rateLimit({
   max: parseInt(process.env.OTP_LIMIT_MAX) || 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: 'Too many OTP requests. Please try again after 15 minutes.',
+  message: { message: 'Too many OTP requests. Please try again after 15 minutes.' },
   keyGenerator: (req) => robustIpKeyGenerator(req),
   store: createStore('otp'),
 });
@@ -86,7 +86,7 @@ const perDeviceKeyGen = (req) => {
 const dbRouteLimiter = rateLimit({
   windowMs: parseInt(process.env.DB_LIMIT_WINDOW_MS, 10) || 5 * 60 * 1000,
   max: parseInt(process.env.DB_LIMIT_MAX, 10) || 120,
-  message: 'Too many DB reads for this device from your client. Please slow down.',
+  message: { message: 'Too many DB reads for this device from your client. Please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => robustIpKeyGenerator(req),
@@ -97,7 +97,7 @@ const dbRouteLimiter = rateLimit({
 const csvRouteLimiter = rateLimit({
   windowMs: parseInt(process.env.CSV_LIMIT_WINDOW_MS, 10) || 10 * 60 * 1000,
   max: parseInt(process.env.CSV_LIMIT_MAX, 10) || 20,
-  message: 'CSV export rate limit exceeded for this device. Please try again later.',
+  message: { message: 'CSV export rate limit exceeded for this device. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => robustIpKeyGenerator(req),
@@ -108,7 +108,7 @@ const csvRouteLimiter = rateLimit({
 const publicTelemetryLimiter = rateLimit({
   windowMs: parseInt(process.env.PUBLIC_TELEMETRY_LIMIT_WINDOW_MS, 10) || 5 * 60 * 1000,
   max: parseInt(process.env.PUBLIC_TELEMETRY_LIMIT_MAX, 10) || 120,
-  message: 'Too many requests to the public telemetry API. Please slow down.',
+  message: { message: 'Too many requests to the public telemetry API. Please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => robustIpKeyGenerator(req),
@@ -119,7 +119,7 @@ const publicTelemetryLimiter = rateLimit({
 const ingestRouteLimiter = rateLimit({
   windowMs: parseInt(process.env.INGEST_LIMIT_WINDOW_MS, 10) || 1 * 60 * 1000,
   max: parseInt(process.env.INGEST_LIMIT_MAX, 10) || 60,
-  message: 'Ingestion rate limit exceeded. Please slow down.',
+  message: { message: 'Ingestion rate limit exceeded. Please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.body.i || robustIpKeyGenerator(req), // Safely handle Device ID or IP
