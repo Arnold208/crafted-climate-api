@@ -113,6 +113,20 @@ function startStatusWorker() {
                 tx.set(cacheKey, JSON.stringify(deviceDoc), { EX: 24 * 60 * 60 });
             }
 
+            const deviceState = deviceDoc.state || 'active';
+            if (deviceState === 'inactive' || deviceState === 'disabled') {
+                console.log(`[StatusWorker] Ignoring heartbeat for ${auid}; device state is ${deviceState}.`);
+                tx.del(presenceKey);
+                tx.set(stateKey, deviceState, { EX: LASTSEEN_TTL_SECONDS });
+                if (typeof tx.zRem === 'function') {
+                    tx.zRem('devices:heartbeat', auid);
+                } else if (typeof tx.zrem === 'function') {
+                    tx.zrem('devices:heartbeat', auid);
+                }
+                await tx.exec();
+                return;
+            }
+
             // 3) HEARTBEAT UPDATE (ZSET)
             // Use AUID as member for direct dashboard compatibility
             if (typeof tx.zAdd === 'function') {

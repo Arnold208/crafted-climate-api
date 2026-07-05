@@ -74,15 +74,19 @@ router.post('/', ...adminOnly, manufacturerController.createDevice);
  * /api/devices/manufacturer/update-note-uuid:
  *   patch:
  *     tags: [Manufacturer]
- *     summary: Update Notecard device UUID
+ *     summary: Backfill or update a device's Notehub device UID
  *     security:
  *       - bearerAuth: []
- *       - apiKeyAuth: []
  *     description: |
- *       Allows an authenticated client (via API key) to update the Notecard device UUID (`noteDevUuid`) for a specific device.
+ *       Admin/supervisor-only endpoint used to backfill or correct the Notecard/Notehub
+ *       device UID (`noteDevUuid`) for a device by serial number.
+ *
+ *       This value is required for remote device-state sync. Without it, disabling
+ *       a device updates the platform state but cannot push the new state to Notehub.
+ *
  *       This route ensures that:
  *         - The new `noteDevUuid` does not already exist for another device.
- *         - Both manufacturer (`addDevice`) and registered device (`registerNewDevice`) records remain in sync.
+ *         - Both manufacturer (`AddDevice`) and registered device (`registeredDevices`) records remain in sync.
  *     requestBody:
  *       required: true
  *       content:
@@ -96,14 +100,17 @@ router.post('/', ...adminOnly, manufacturerController.createDevice);
  *               serial:
  *                 type: string
  *                 description: The serial number of the device to update.
- *                 example: "12345"
+ *                 example: "GH-XH0VM428XF"
  *               newNoteDevUuid:
  *                 type: string
- *                 description: The new Notecard UUID (noteDevUuid) to assign to the device.
+ *                 description: The Notehub device UID to assign to the device.
  *                 example: "dev:861059068079643"
  *     responses:
  *       200: { description: Note UUID updated }
  *       400: { description: Invalid parameters }
+ *       403: { description: Forbidden (Admin/Supervisor only) }
+ *       404: { description: Device not found }
+ *       409: { description: Notehub device UID already used by another device }
  */
 router.patch('/update-note-uuid', ...adminOnly, manufacturerController.updateNoteUuid);
 

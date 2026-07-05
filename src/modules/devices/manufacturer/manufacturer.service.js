@@ -18,8 +18,11 @@ class ManufacturerService {
         }
 
         // 2. Check Duplicates
+        const duplicateChecks = [{ devid }, { mac }];
+        if (noteDevUuid) duplicateChecks.push({ noteDevUuid });
+
         const existingDevice = await AddDevice.findOne({
-            $or: [{ devid }, { mac }, { noteDevUuid }]
+            $or: duplicateChecks
         });
 
         if (existingDevice) {
@@ -48,7 +51,8 @@ class ManufacturerService {
             status: 'MANUFACTURED',
             datapoints,
             auid,
-            serial
+            serial,
+            noteDevUuid
         });
 
         return await newDevice.save();

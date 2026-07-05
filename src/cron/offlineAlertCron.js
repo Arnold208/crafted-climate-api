@@ -125,7 +125,18 @@ async function checkOfflineDevices() {
                     const meta = JSON.parse(metaStr);
                     if (meta.status !== 'offline') {
                         meta.status = 'offline';
+                        meta.statusUpdatedAt = new Date().toISOString();
                         await redis.hSet(auid, 'metadata', JSON.stringify(meta));
+
+                        await RegisterDevice.updateOne(
+                            { auid },
+                            {
+                                $set: {
+                                    status: 'offline',
+                                    lastSeen: new Date(lastSeen),
+                                },
+                            }
+                        );
                         
                         // 📣 Publish real-time status change event
                         await redis.publish('device:status-change', JSON.stringify({ auid, status: 'offline' }));
