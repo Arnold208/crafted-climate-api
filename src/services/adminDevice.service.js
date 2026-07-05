@@ -1,5 +1,6 @@
 const RegisterDevice = require('../models/devices/registerDevice');
 const { createAuditLog } = require('../utils/auditLogger');
+const registryService = require('../modules/devices/registry/registry.service');
 
 /**
  * Admin Device Service
@@ -189,6 +190,44 @@ class AdminDeviceService {
             success: true,
             message: 'Device reassigned successfully',
             device
+        };
+    }
+
+    /**
+     * Platform admin state control.
+     *
+     * Admin-disabled devices are locked so owners cannot reactivate devices that
+     * were disabled for subscription, billing, or compliance reasons.
+     */
+    async setDeviceState(auid, state, adminId, reason = null) {
+        const device = await RegisterDevice.findOne({ auid, deletedAt: null });
+        if (!device) {
+            throw new Error('Device not found');
+        }
+
+        const result = await registryService.setDeviceState(
+            auid,
+            state,
+            adminId,
+            null,
+            {
+                actorType: 'platform-admin',
+                reason: reason || (state === 'disabled' ? 'subscription_or_billing_enforcement' : 'platform_admin_reactivated')
+            }
+        );
+
+        await createAuditLog({
+            action: 'ADMIN_DEVICE_STATE_CHANGE',
+            userid: adminId,
+            organizationId: device.organizationId,
+            details: { auid, state, reason },
+            ipAddress: null
+        });
+
+        return {
+            success: true,
+            message: result.message,
+            data: result
         };
     }
 }

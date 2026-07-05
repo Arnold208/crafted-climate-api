@@ -128,6 +128,18 @@ router.get('/offline/list', authenticateToken, authorizeRoles('admin', 'supervis
 
 /**
  * @swagger
+ * /api/admin/devices/{auid}/state:
+ *   put:
+ *     tags: [Admin Devices]
+ *     summary: Set device operational state as platform admin
+ *     description: Platform admin control for billing/subscription enforcement. If an admin disables a device, owners cannot reactivate it.
+ *     security:
+ *       - bearerAuth: []
+ */
+router.put('/:auid/state', authenticateToken, authorizeRoles('admin', 'supervisor'), adminDeviceController.setDeviceState);
+
+/**
+ * @swagger
  * /api/admin/devices/{deviceId}/reassign:
  *   post:
  *     tags: [Admin Devices]

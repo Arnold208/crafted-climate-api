@@ -276,6 +276,31 @@ class RegistryController {
         }
     }
 
+    async getDeviceState(req, res) {
+        try {
+            const { auid } = req.params;
+            const device = await registryService.getDeviceByAuid(auid);
+            if (!device) return res.status(404).json({ message: 'Device not found' });
+
+            if (!await checkDeviceAccessCompatibility(req, device, 'view')) {
+                return res.status(403).json({ message: 'Forbidden' });
+            }
+
+            res.status(200).json({
+                auid,
+                state: device.state || 'active',
+                status: device.status || 'offline',
+                stateChangedAt: device.stateChangedAt || null,
+                stateChangedBy: device.stateChangedBy || null,
+                stateLockedByAdmin: device.stateLockedByAdmin || false,
+                stateLockReason: device.stateLockReason || null,
+                stateLockedAt: device.stateLockedAt || null
+            });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    }
+
     async setAvailability(req, res) {
         try {
             const { auid } = req.params;

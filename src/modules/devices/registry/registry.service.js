@@ -548,7 +548,7 @@ class RegistryService {
      * @param {string} newState    - 'active' | 'inactive' | 'disabled'
      * @param {string} changedBy   - userid of the operator making this change
      */
-    async setDeviceState(auid, newState, changedBy, newNetMode = null) {
+    async setDeviceState(auid, newState, changedBy, newNetMode = null, options = {}) {
         const VALID_STATES = ['active', 'inactive', 'disabled'];
         if (!VALID_STATES.includes(newState)) {
             throw new Error(`Invalid state. Must be one of: ${VALID_STATES.join(', ')}`);
@@ -560,13 +560,41 @@ class RegistryService {
         const device = await registerNewDevice.findOne({ auid });
         if (!device) throw new Error('Device not found');
 
+        const actorType = options.actorType || 'owner';
+        const isPlatformAdminAction = actorType === 'platform-admin';
+
+        if (device.stateLockedByAdmin && !isPlatformAdminAction && newState !== 'disabled') {
+            throw new Error('Device disabled by platform admin. Contact support to reactivate this device.');
+        }
+
         const prevState = device.state;
         const prevNetMode = device.netMode || 'cellular';
-        if (prevState === newState && (!newNetMode || prevNetMode === newNetMode)) {
+        const sameStateAndMode = prevState === newState && (!newNetMode || prevNetMode === newNetMode);
+        const adminNeedsToApplyLock = isPlatformAdminAction && newState === 'disabled' && !device.stateLockedByAdmin;
+        const adminNeedsToClearLock = isPlatformAdminAction && newState !== 'disabled' && device.stateLockedByAdmin;
+        if (sameStateAndMode && !adminNeedsToApplyLock && !adminNeedsToClearLock) {
             return { message: `Device is already ${newState} and netMode is ${prevNetMode}`, device };
         }
 
         const now = new Date();
+        const lockUpdates = {};
+
+        if (isPlatformAdminAction && newState === 'disabled') {
+            lockUpdates.stateLockedByAdmin = true;
+            lockUpdates.stateLockReason = options.reason || 'platform_admin_disabled';
+            lockUpdates.stateLockedAt = now;
+            lockUpdates.stateLockedBy = changedBy;
+        } else if (isPlatformAdminAction && newState !== 'disabled') {
+            lockUpdates.stateLockedByAdmin = false;
+            lockUpdates.stateLockReason = null;
+            lockUpdates.stateLockedAt = null;
+            lockUpdates.stateLockedBy = null;
+        } else if (!isPlatformAdminAction && newState === 'disabled') {
+            lockUpdates.stateLockedByAdmin = false;
+            lockUpdates.stateLockReason = null;
+            lockUpdates.stateLockedAt = null;
+            lockUpdates.stateLockedBy = null;
+        }
 
         // 1. Persist to MongoDB
         await registerNewDevice.updateOne(
@@ -576,10 +604,11 @@ class RegistryService {
                     state: newState,
                     stateChangedAt: now,
                     stateChangedBy: changedBy,
+                    ...lockUpdates,
                     ...(newNetMode && { netMode: newNetMode }),
-                    // If re-activating: keep status as-is (device is not necessarily online yet)
-                    // If deactivating: set status to 'inactive' for display clarity
-                    ...(newState !== 'active' && { status: newState })
+                    // If re-activating: mark offline until real telemetry arrives.
+                    // If deactivating: set status to inactive/disabled for display clarity.
+                    status: newState === 'active' ? 'offline' : newState
                 }
             }
         );
@@ -594,8 +623,10 @@ class RegistryService {
                 const meta = JSON.parse(metaStr);
                 meta.state = newState;
                 meta.stateChangedAt = now.toISOString();
+                meta.stateLockedByAdmin = lockUpdates.stateLockedByAdmin ?? device.stateLockedByAdmin ?? false;
+                meta.stateLockReason = lockUpdates.stateLockReason ?? device.stateLockReason ?? null;
                 if (newNetMode) meta.netMode = newNetMode;
-                if (newState !== 'active') meta.status = newState;
+                meta.status = newState === 'active' ? 'offline' : newState;
                 await redisClient.hSet(auid, 'metadata', JSON.stringify(meta));
             }
         } catch (e) {
@@ -605,10 +636,11 @@ class RegistryService {
         // 4. Publish real-time status-change event to WebSocket bridge
         await redisClient.publish('device:status-change', JSON.stringify({
             auid,
-            status: newState !== 'active' ? newState : 'online',
+            status: newState !== 'active' ? newState : 'offline',
             state: newState,
             netMode: newNetMode || device.netMode || 'cellular',
             stateChangedAt: now.toISOString(),
+            stateLockedByAdmin: lockUpdates.stateLockedByAdmin ?? device.stateLockedByAdmin ?? false,
             changedBy
         }));
 
@@ -633,9 +665,18 @@ class RegistryService {
             action: 'DEVICE_STATE_CHANGE',
             userid: changedBy,
             organizationId: device.organizationId,
-            details: { auid, prevState, newState, prevNetMode, newNetMode },
+            details: { auid, prevState, newState, prevNetMode, newNetMode, actorType, reason: options.reason || null },
             ipAddress: null
         });
+
+        eventLog.stateChanged({
+            auid,
+            devid: device.devid,
+            userId: changedBy,
+            orgId: device.organizationId,
+            from: prevState,
+            to: newState
+        }).catch(() => {});
 
         // 7. 📡 Sync new state to physical Notecard device via Notehub env var
         // cc_state: 'active' | 'inactive' | 'disabled'
@@ -646,7 +687,7 @@ class RegistryService {
             state: newState, 
             ...(newNetMode && { netMode: newNetMode }) 
         };
-        notecardService.syncStateToNotecard(updatedDevice).catch(() => {}); // Non-blocking, non-fatal
+        const notehubSync = await notecardService.syncStateToNotecard(updatedDevice);
 
         return {
             message: `Device state changed from '${prevState}' to '${newState}'`,
@@ -654,7 +695,10 @@ class RegistryService {
             state: newState,
             netMode: newNetMode || device.netMode || 'cellular',
             stateChangedAt: now,
-            stateChangedBy: changedBy
+            stateChangedBy: changedBy,
+            stateLockedByAdmin: lockUpdates.stateLockedByAdmin ?? device.stateLockedByAdmin ?? false,
+            stateLockReason: lockUpdates.stateLockReason ?? device.stateLockReason ?? null,
+            notehubSync
         };
     }
 

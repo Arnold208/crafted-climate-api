@@ -81,6 +81,10 @@ const registerNewDeviceSchema = new mongoose.Schema({
   },
   stateChangedAt: { type: Date, default: null },
   stateChangedBy: { type: String, default: null }, // userid that last changed state
+  stateLockedByAdmin: { type: Boolean, default: false },
+  stateLockReason: { type: String, default: null },
+  stateLockedAt: { type: Date, default: null },
+  stateLockedBy: { type: String, default: null },
 
   datapoints: { type: [String], default: [] },
   subscription: { type: [String], default: [] },

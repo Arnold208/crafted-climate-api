@@ -46,6 +46,12 @@ async function checkThresholds(auid, data) {
     const info = await getDeviceInfoByAUID(auid);
     if (!info) return;
 
+    const deviceState = info.deviceObject?.state || 'active';
+    if (deviceState === 'inactive' || deviceState === 'disabled') {
+      console.log(`[ThresholdEngine] Skipping thresholds for ${auid}; device state is ${deviceState}`);
+      return;
+    }
+
     const { user, nickname } = info;
     const now = Date.now();
 

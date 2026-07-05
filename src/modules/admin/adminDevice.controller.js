@@ -90,6 +90,26 @@ class AdminDeviceController {
             res.status(400).json({ success: false, message: error.message });
         }
     }
+
+    async setDeviceState(req, res) {
+        try {
+            const { auid } = req.params;
+            const { state, reason } = req.body;
+            const adminId = req.user.userid;
+
+            if (!state) {
+                return res.status(400).json({ success: false, message: 'state is required (active | inactive | disabled)' });
+            }
+
+            const result = await adminDeviceService.setDeviceState(auid, state, adminId, reason);
+            res.status(200).json(result);
+        } catch (error) {
+            console.error('[AdminDeviceController] State change error:', error);
+            if (error.message.includes('Invalid state')) return res.status(400).json({ success: false, message: error.message });
+            if (error.message.includes('not found')) return res.status(404).json({ success: false, message: error.message });
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
 }
 
 module.exports = new AdminDeviceController();

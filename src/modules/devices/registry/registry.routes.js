@@ -629,6 +629,22 @@ const stateChangeLimiter = rateLimit({
 /**
  * @swagger
  * /api/devices/device/{auid}/state:
+ *   get:
+ *     tags:
+ *       - Device Registry
+ *     summary: Get device operational state
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/device/:auid/state',
+    authenticateToken,
+    requirePermission('devices:read'),
+    registryController.getDeviceState
+);
+
+/**
+ * @swagger
+ * /api/devices/device/{auid}/state:
  *   put:
  *     tags:
  *       - Device Registry
