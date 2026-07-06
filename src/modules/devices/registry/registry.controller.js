@@ -182,6 +182,44 @@ class RegistryController {
         }
     }
 
+    async getDeviceConfig(req, res) {
+        try {
+            const { auid } = req.params;
+            const device = await registryService.getDeviceByAuid(auid);
+            if (!device) return res.status(404).json({ message: 'Device not found' });
+
+            if (!await checkDeviceAccessCompatibility(req, device, 'view')) {
+                return res.status(403).json({ message: 'Forbidden' });
+            }
+
+            const config = await registryService.getDeviceConfig(auid);
+            res.status(200).json(config);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    }
+
+    async updateDeviceConfig(req, res) {
+        try {
+            const { auid } = req.params;
+            const device = await registryService.getDeviceByAuid(auid);
+            if (!device) return res.status(404).json({ message: 'Device not found' });
+
+            if (!await checkDeviceAccessCompatibility(req, device, 'edit')) {
+                return res.status(403).json({ message: 'Forbidden' });
+            }
+
+            const config = await registryService.updateDeviceConfig(auid, req.body, req.user.userid);
+            res.status(200).json({ message: 'Device reporting schedule updated', config });
+        } catch (error) {
+            if (error.message.includes('Frequency') || error.message.includes('Batch') || error.message.includes('frequency') || error.message.includes('batch')) {
+                return res.status(400).json({ message: error.message });
+            }
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
+            res.status(500).json({ error: error.message });
+        }
+    }
+
     async addCollaborator(req, res) {
         try {
             const { auid } = req.params;

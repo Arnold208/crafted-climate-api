@@ -28,6 +28,64 @@ const MODEL_MAP = {
     'gas-solo': GasSoloTelemetry
 };
 
+const SCHEDULE_LIMITS = Object.freeze({
+    minFrequencyMinutes: 5,
+    maxFrequencyMinutes: 180,
+    frequencyStepMinutes: 5,
+    minBatch: 2,
+    maxTransmitWindowMinutes: 720,
+    inboundGraceMinutes: 5,
+});
+
+function toPositiveInteger(value, fieldName) {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed)) {
+        throw new Error(`${fieldName} must be a whole number.`);
+    }
+    return parsed;
+}
+
+function deriveScheduleConfig(frequency, batch) {
+    const frequencyMinutes = toPositiveInteger(frequency, 'Frequency');
+    const batchCount = toPositiveInteger(batch, 'Batch size');
+
+    if (frequencyMinutes < SCHEDULE_LIMITS.minFrequencyMinutes) {
+        throw new Error(`Minimum reporting frequency is ${SCHEDULE_LIMITS.minFrequencyMinutes} minutes.`);
+    }
+    if (frequencyMinutes > SCHEDULE_LIMITS.maxFrequencyMinutes) {
+        throw new Error(`Maximum reporting frequency is ${SCHEDULE_LIMITS.maxFrequencyMinutes} minutes.`);
+    }
+    if (frequencyMinutes % SCHEDULE_LIMITS.frequencyStepMinutes !== 0) {
+        throw new Error(`Reporting frequency must be in ${SCHEDULE_LIMITS.frequencyStepMinutes}-minute steps.`);
+    }
+    if (batchCount < SCHEDULE_LIMITS.minBatch) {
+        throw new Error(`Minimum batch size is ${SCHEDULE_LIMITS.minBatch} readings.`);
+    }
+
+    const maxBatch = Math.max(
+        SCHEDULE_LIMITS.minBatch,
+        Math.floor(SCHEDULE_LIMITS.maxTransmitWindowMinutes / frequencyMinutes)
+    );
+    if (batchCount > maxBatch) {
+        throw new Error(`Maximum batch size is ${maxBatch} for a ${frequencyMinutes}-minute frequency.`);
+    }
+
+    const outboundMinutes = frequencyMinutes * batchCount;
+    const inboundMinutes = outboundMinutes + SCHEDULE_LIMITS.inboundGraceMinutes;
+
+    return {
+        frequency: frequencyMinutes,
+        batch: batchCount,
+        batchWindowMinutes: outboundMinutes,
+        outboundMinutes,
+        inboundMinutes,
+        limits: {
+            ...SCHEDULE_LIMITS,
+            maxBatch,
+        },
+    };
+}
+
 class RegistryService {
     async registerDevice({ auid, serial, location, nickname, userid, organizationId, frequency, batch }) {
         // 1. Check Existence
@@ -199,17 +257,11 @@ class RegistryService {
         const { nickname, location, frequency, batch, netMode } = reqBody;
 
         // ── Validate frequency / batch minimums (frequency is in MINUTES) ──────
-        if (frequency !== undefined) {
-            const freqNum = Number(frequency);
-            if (isNaN(freqNum) || freqNum < 10) {
-                throw new Error('Minimum transmission frequency is 10 minutes.');
-            }
-        }
-        if (batch !== undefined) {
-            const batchNum = Number(batch);
-            if (isNaN(batchNum) || batchNum < 2) {
-                throw new Error('Minimum batch size is 2 readings per batch.');
-            }
+        if (frequency !== undefined || batch !== undefined) {
+            deriveScheduleConfig(
+                frequency !== undefined ? frequency : (device.frequency || 30),
+                batch !== undefined ? batch : (device.batch || 2)
+            );
         }
 
         // Capture before-state for CONFIG_CHANGED event log
@@ -365,6 +417,59 @@ class RegistryService {
         );
 
         return plainDevice;
+    }
+
+    async getDeviceConfig(auid) {
+        const device = await registerNewDevice.findOne({ auid });
+        if (!device) throw new Error('Device not found.');
+
+        const schedule = deriveScheduleConfig(device.frequency || 30, device.batch || 2);
+        return {
+            auid: device.auid,
+            frequency: schedule.frequency,
+            batch: schedule.batch,
+            batchWindowMinutes: schedule.batchWindowMinutes,
+            outboundMinutes: schedule.outboundMinutes,
+            inboundMinutes: schedule.inboundMinutes,
+            state: device.state || 'active',
+            netMode: device.netMode || 'cellular',
+            source: 'database',
+            limits: schedule.limits,
+        };
+    }
+
+    async updateDeviceConfig(auid, reqBody, changedBy) {
+        const device = await registerNewDevice.findOne({ auid });
+        if (!device) throw new Error('Device not found.');
+
+        const schedule = deriveScheduleConfig(reqBody.frequency, reqBody.batch);
+        const configBefore = { frequency: device.frequency, batch: device.batch, netMode: device.netMode };
+        const changed = device.frequency !== schedule.frequency || device.batch !== schedule.batch;
+
+        device.frequency = schedule.frequency;
+        device.batch = schedule.batch;
+        await device.save();
+        await CacheService.invalidate(`device:${auid}:meta`);
+
+        CacheService.warmUp(
+            `device:${auid}:meta`,
+            () => registerNewDevice.findOne({ auid }).lean(),
+            86400
+        ).catch(() => {});
+
+        if (changed) {
+            notecardService.syncConfigToNotecard(device).catch(() => {});
+            eventLog.configChanged({
+                auid,
+                devid: device.devid,
+                userId: changedBy,
+                orgId: device.organizationId,
+                before: configBefore,
+                after: { frequency: device.frequency, batch: device.batch, netMode: device.netMode },
+            }).catch(() => {});
+        }
+
+        return this.getDeviceConfig(auid);
     }
 
     async deleteDevice(auid) {

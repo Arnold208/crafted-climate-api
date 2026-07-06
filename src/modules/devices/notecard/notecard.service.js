@@ -49,6 +49,16 @@ function _buildEnvUrl(projectUid, devUuid) {
     return `${NOTEHUB_BASE_URL}/v1/projects/${projectUid}/devices/${devUuid}/environment_variables`;
 }
 
+function _deriveSyncWindows(frequency, batch) {
+    const frequencyMinutes = Number(frequency || 30);
+    const batchCount = Number(batch || 2);
+    const outboundMinutes = frequencyMinutes * batchCount;
+    return {
+        outboundMinutes,
+        inboundMinutes: outboundMinutes + 5,
+    };
+}
+
 /** Standard Notehub request headers. */
 function _headers() {
     return {
@@ -160,6 +170,13 @@ class NotecardService {
             await device.save();
             const CacheService = require('../../../modules/common/cache.service');
             await CacheService.invalidate(`device:${auid}:meta`);
+        }
+
+        if ((normalizedEnvVars.CC_FREQUENCY || normalizedEnvVars.CC_BATCH) &&
+            (!normalizedEnvVars.CC_INBOUND || !normalizedEnvVars.CC_OUTBOUND)) {
+            const { outboundMinutes, inboundMinutes } = _deriveSyncWindows(device.frequency, device.batch);
+            if (!normalizedEnvVars.CC_INBOUND) normalizedEnvVars.CC_INBOUND = inboundMinutes;
+            if (!normalizedEnvVars.CC_OUTBOUND) normalizedEnvVars.CC_OUTBOUND = outboundMinutes;
         }
 
         // 3. If the device is in a deployment, strip fleet-level variables to preserve inheritance
@@ -499,21 +516,20 @@ class NotecardService {
         try {
             // CC_INBOUND / CC_OUTBOUND = full batch cycle time (how often Notecard syncs with Notehub)
             // frequency (min) × batch (count) = total minutes per batch window
-            const cycleMinutes = (device.frequency || 10) * (device.batch || 2);
+            const { outboundMinutes, inboundMinutes } = _deriveSyncWindows(device.frequency, device.batch);
             const envVars = {
                 CC_FREQUENCY: device.frequency,
                 CC_BATCH:     device.batch,
                 CC_NET_MODE:  device.netMode || 'cellular',
-                CC_INBOUND:   cycleMinutes,
-                CC_OUTBOUND:  cycleMinutes
+                CC_INBOUND:   inboundMinutes,
+                CC_OUTBOUND:  outboundMinutes
             };
             const result = await _pushEnvToDevice(device, envVars);
             if (!result.skipped) {
                 logger.info(
                     `[Notecard] Synced config to Notehub for ${device.auid} — ` +
                     `freq=${device.frequency}min, batch=${device.batch}, ` +
-                    `read_every=${(device.frequency / device.batch).toFixed(1)}min, ` +
-                    `cycle=${cycleMinutes}min (inbound/outbound)`
+                    `outbound=${outboundMinutes}min, inbound=${inboundMinutes}min`
                 );
             }
             return result;
@@ -533,13 +549,14 @@ class NotecardService {
             return { skipped: true, reason: 'Device is in a deployment (inherits from Fleet)' };
         }
         try {
+            const { outboundMinutes, inboundMinutes } = _deriveSyncWindows(device.frequency, device.batch);
             const envVars = {
                 CC_STATE: device.state || 'active',
                 CC_FREQUENCY: String(device.frequency || 30),
                 CC_BATCH: String(device.batch || 2),
                 CC_BUZZER_EN: '1',
-                CC_INBOUND: String((device.frequency || 30) * (device.batch || 2)),
-                CC_OUTBOUND: String((device.frequency || 30) * (device.batch || 2)),
+                CC_INBOUND: String(inboundMinutes),
+                CC_OUTBOUND: String(outboundMinutes),
                 CC_NET_MODE: device.netMode || 'cellular'
             };
             const result = await _pushEnvToDevice(device, envVars);

@@ -618,6 +618,19 @@ router.put('/user/:userid/device/:auid/availability',
 
 // ── STATE (On / Off) ──────────────────────────────────────────────────────────
 
+router.get('/device/:auid/config',
+    authenticateToken,
+    requirePermission('devices:read'),
+    registryController.getDeviceConfig
+);
+
+router.put('/device/:auid/config',
+    authenticateToken,
+    requirePermission('devices:write'),
+    checkFeatureAccess("device_update"),
+    registryController.updateDeviceConfig
+);
+
 const stateChangeLimiter = rateLimit({
     windowMs: 60 * 1000,   // 1 minute
     max: 10,               // Max 10 state changes per minute (prevents abuse)
