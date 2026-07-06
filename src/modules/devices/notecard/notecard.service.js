@@ -108,7 +108,10 @@ async function _pushEnvToDevice(device, envVars) {
     }
 
     const url = _buildEnvUrl(projectUid, device.noteDevUuid);
-    const response = await axios.put(url, { environment_variables: envVars }, {
+    const environmentVariables = Object.fromEntries(
+        Object.entries(envVars).map(([key, value]) => [key, String(value)])
+    );
+    const response = await axios.put(url, { environment_variables: environmentVariables }, {
         headers: _headers(),
         timeout: 10000
     });
@@ -179,23 +182,9 @@ class NotecardService {
             if (!normalizedEnvVars.CC_OUTBOUND) normalizedEnvVars.CC_OUTBOUND = outboundMinutes;
         }
 
-        // 3. If the device is in a deployment, strip fleet-level variables to preserve inheritance
-        const envVarsToPush = { ...normalizedEnvVars };
-        if (device.deployment) {
-            const fleetKeys = ['CC_FREQUENCY', 'CC_BATCH', 'CC_INBOUND', 'CC_OUTBOUND'];
-            for (const key of fleetKeys) {
-                delete envVarsToPush[key];
-            }
-            logger.debug(`[Notecard] Device ${auid} is in deployment ${device.deployment} — stripped fleet keys ${JSON.stringify(fleetKeys)} from device-level push.`);
-        }
-
-        // 4. Push env variables to Notehub (only if there are variables left to push)
-        let result = { skipped: true, reason: 'No environment variables to push after filtering' };
-        if (Object.keys(envVarsToPush).length > 0) {
-            result = await _pushEnvToDevice(device, envVarsToPush);
-        } else if (device.deployment) {
-            result = { skipped: false, noteDevUuid: device.noteDevUuid, projectUid: _resolveProjectUid(device.model), notehubResponse: { message: "Sync bypassed; settings inherited from deployment fleet" } };
-        }
+        // 3. Push env variables to Notehub at device level.
+        // Device-level env vars intentionally override Fleet and Project env vars.
+        const result = await _pushEnvToDevice(device, normalizedEnvVars);
 
         return { auid, ...result, updated: normalizedEnvVars };
     }
@@ -268,32 +257,12 @@ class NotecardService {
         // 2. Put environment variables at the Fleet level in Notehub
         const notehubResponse = await this.updateFleetEnv(projectUid, fleetUid, envVars);
 
-        // 3. Clear device-level overrides for all devices of this model in the deployment
-        // so that they immediately inherit the new Fleet variables.
-        const devices = await RegisteredDevice.find({
-            auid: { $in: deployment.devices },
-            model: { $regex: new RegExp(`^${cleanModel}$`, 'i') }
-        });
-
-        const keysToDelete = ['CC_FREQUENCY', 'CC_BATCH', 'CC_INBOUND', 'CC_OUTBOUND'];
-        const clearResults = await Promise.all(devices.map(async (device) => {
-            if (device.noteDevUuid) {
-                try {
-                    await this.deleteDeviceEnvKeys(projectUid, device.noteDevUuid, keysToDelete);
-                    return { auid: device.auid, status: 'cleared_overrides' };
-                } catch (err) {
-                    return { auid: device.auid, status: 'error', error: err.message };
-                }
-            }
-            return { auid: device.auid, status: 'skipped_non_notecard' };
-        }));
-
         return {
             deploymentId,
             model: cleanModel,
             fleetUid,
             notehubResponse,
-            clearResults
+            deviceOverridesPreserved: true
         };
     }
 
@@ -509,10 +478,6 @@ class NotecardService {
      * Called automatically by updateDevice() — no auth check needed (internal).
      */
     async syncConfigToNotecard(device) {
-        if (device.deployment) {
-            logger.debug(`[Notecard] Device ${device.auid} is in a deployment (${device.deployment}) — skipping device-level config sync to preserve Fleet inheritance.`);
-            return { skipped: true, reason: 'Device is in a deployment (inherits from Fleet)' };
-        }
         try {
             // CC_INBOUND / CC_OUTBOUND = full batch cycle time (how often Notecard syncs with Notehub)
             // frequency (min) × batch (count) = total minutes per batch window

@@ -10,6 +10,7 @@ const emailTemplateService = require('../services/emailTemplate.service');
 const pushService = require('../services/push.service');  // FCM push
 const logger = require('../utils/logger');
 const eventLog = require('../modules/devices/eventLog/eventLog.service');
+const { formatDuration } = require('../utils/formatDuration');
 
 const connection = {
     host: process.env.REDIS_HOST || '127.0.0.1',
@@ -18,17 +19,6 @@ const connection = {
     keepAlive: 30000,
     maxRetriesPerRequest: null,
 };
-
-function formatDuration(minutes) {
-    if (minutes < 60) {
-        return `${Math.round(minutes)} minutes`;
-    }
-    const hours = minutes / 60;
-    if (hours === 1) {
-        return `1 hour`;
-    }
-    return `${parseFloat(hours.toFixed(1))} hours`;
-}
 
 function getStageConfig(stage, device, lastSeen, extras = {}) {
     const timeStr = new Date(lastSeen).toLocaleString();

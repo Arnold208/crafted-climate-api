@@ -220,6 +220,30 @@ class RegistryController {
         }
     }
 
+    async resetDeviceConfigOverride(req, res) {
+        try {
+            const { auid } = req.params;
+            const device = await registryService.getDeviceByAuid(auid);
+            if (!device) return res.status(404).json({ message: 'Device not found' });
+
+            if (!await checkDeviceAccessCompatibility(req, device, 'edit')) {
+                return res.status(403).json({ message: 'Forbidden' });
+            }
+
+            const result = await registryService.resetDeviceConfigOverride(auid, req.user.userid);
+            res.status(200).json({
+                message: 'Device now uses deployment telemetry schedule',
+                result,
+            });
+        } catch (error) {
+            if (error.message.includes('not assigned to a deployment')) {
+                return res.status(400).json({ message: error.message });
+            }
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
+            res.status(500).json({ error: error.message });
+        }
+    }
+
     async addCollaborator(req, res) {
         try {
             const { auid } = req.params;

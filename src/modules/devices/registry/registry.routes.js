@@ -618,17 +618,121 @@ router.put('/user/:userid/device/:auid/availability',
 
 // ── STATE (On / Off) ──────────────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/devices/device/{auid}/config:
+ *   get:
+ *     tags: [Device Registry]
+ *     summary: Get device telemetry schedule
+ *     description: |
+ *       Returns frequency, batch, and the derived Notehub sync windows.
+ *
+ *       Rule:
+ *       - `CC_OUTBOUND = frequency * batch`
+ *       - `CC_INBOUND = CC_OUTBOUND + 5`
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string, example: "GH-D_JU1Z1LNMTWVJA-0QJ3X" }
+ *     responses:
+ *       200:
+ *         description: Telemetry schedule returned
+ *       403: { description: Forbidden }
+ *       404: { description: Device not found }
+ */
 router.get('/device/:auid/config',
     authenticateToken,
     requirePermission('devices:read'),
     registryController.getDeviceConfig
 );
 
+/**
+ * @swagger
+ * /api/devices/device/{auid}/config:
+ *   put:
+ *     tags: [Device Registry]
+ *     summary: Update device telemetry schedule
+ *     description: |
+ *       Updates frequency and batch, then derives and syncs Notehub env values:
+ *       `CC_FREQUENCY`, `CC_BATCH`, `CC_OUTBOUND`, and `CC_INBOUND`.
+ *
+ *       Validation:
+ *       - frequency: 5 to 180 minutes
+ *       - frequency must be in 5-minute steps
+ *       - batch minimum: 2 readings
+ *       - batch maximum is derived so `frequency * batch <= 720`
+ *       - `CC_OUTBOUND = frequency * batch`
+ *       - `CC_INBOUND = CC_OUTBOUND + 5`
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string, example: "GH-D_JU1Z1LNMTWVJA-0QJ3X" }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [frequency, batch]
+ *             properties:
+ *               frequency: { type: integer, example: 10, description: "Minutes between readings" }
+ *               batch: { type: integer, example: 2, description: "Readings per transmit batch" }
+ *     responses:
+ *       200: { description: Telemetry schedule updated }
+ *       400: { description: Invalid frequency or batch }
+ *       403: { description: Forbidden }
+ *       404: { description: Device not found }
+ */
 router.put('/device/:auid/config',
     authenticateToken,
     requirePermission('devices:write'),
     checkFeatureAccess("device_update"),
     registryController.updateDeviceConfig
+);
+
+/**
+ * @swagger
+ * /api/devices/device/{auid}/config/override:
+ *   delete:
+ *     tags: [Device Registry]
+ *     summary: Reset device telemetry schedule to deployment settings
+ *     description: |
+ *       Deletes the device-level Notehub schedule variables so the device inherits
+ *       the Deployment Fleet values again.
+ *
+ *       Cleared device-level keys:
+ *       - `CC_FREQUENCY`
+ *       - `CC_BATCH`
+ *       - `CC_OUTBOUND`
+ *       - `CC_INBOUND`
+ *
+ *       Environment priority:
+ *       `Device > Fleet > Project`; because device schedule keys are removed,
+ *       Fleet values become effective for this device.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: auid
+ *         required: true
+ *         schema: { type: string, example: "GH-D_JU1Z1LNMTWVJA-0QJ3X" }
+ *     responses:
+ *       200: { description: Device schedule override removed }
+ *       400: { description: Device is not assigned to a deployment }
+ *       403: { description: Forbidden }
+ *       404: { description: Device not found }
+ */
+router.delete('/device/:auid/config/override',
+    authenticateToken,
+    requirePermission('devices:write'),
+    checkFeatureAccess("device_update"),
+    registryController.resetDeviceConfigOverride
 );
 
 const stateChangeLimiter = rateLimit({

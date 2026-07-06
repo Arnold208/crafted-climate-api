@@ -457,8 +457,9 @@ class RegistryService {
             86400
         ).catch(() => {});
 
+        let notehubSync = { skipped: true, reason: changed ? 'Notecard sync not attempted' : 'No schedule change' };
         if (changed) {
-            notecardService.syncConfigToNotecard(device).catch(() => {});
+            notehubSync = await notecardService.syncConfigToNotecard(device);
             eventLog.configChanged({
                 auid,
                 devid: device.devid,
@@ -469,7 +470,59 @@ class RegistryService {
             }).catch(() => {});
         }
 
-        return this.getDeviceConfig(auid);
+        const config = await this.getDeviceConfig(auid);
+        return { ...config, notehubSync };
+    }
+
+    async resetDeviceConfigOverride(auid, changedBy) {
+        const device = await registerNewDevice.findOne({ auid });
+        if (!device) throw new Error('Device not found.');
+
+        if (!device.deployment && !device.deploymentId) {
+            throw new Error('Device is not assigned to a deployment.');
+        }
+
+        const projectUid = notecardService.resolveProjectUid(device.model);
+        if (!projectUid) {
+            throw new Error(`No Notehub project UID configured for model '${device.model}'.`);
+        }
+
+        if (!device.noteDevUuid) {
+            return {
+                auid,
+                skipped: true,
+                reason: 'Device is not Notecard-enabled (no noteDevUuid)',
+                inheritedFrom: 'deployment',
+            };
+        }
+
+        const keys = ['CC_FREQUENCY', 'CC_BATCH', 'CC_INBOUND', 'CC_OUTBOUND'];
+        const notehubSync = await notecardService.deleteDeviceEnvKeys(projectUid, device.noteDevUuid, keys);
+
+        await CacheService.invalidate(`device:${auid}:meta`);
+        eventLog.configChanged({
+            auid,
+            devid: device.devid,
+            userId: changedBy,
+            orgId: device.organizationId,
+            before: {
+                frequency: device.frequency,
+                batch: device.batch,
+                source: 'device_override',
+            },
+            after: {
+                source: 'deployment',
+                clearedKeys: keys,
+            },
+        }).catch(() => {});
+
+        return {
+            auid,
+            deploymentId: device.deploymentId || device.deployment,
+            inheritedFrom: 'deployment',
+            clearedKeys: keys,
+            notehubSync,
+        };
     }
 
     async deleteDevice(auid) {

@@ -41,7 +41,7 @@ const checkOrgAccess     = require('../../../middleware/organization/checkOrgAcc
  *       
  *       **MongoDB Synchronization:** Updating `CC_FREQUENCY`, `CC_BATCH`, or `CC_STATE` will automatically sync and persist those configurations back to the device's main document in MongoDB, invalidating the metadata cache.
  *       
- *       **Deployment Fleet Inheritance:** If the device is currently assigned to a deployment, fleet-governed variables (`CC_FREQUENCY`, `CC_BATCH`, `CC_INBOUND`, `CC_OUTBOUND`) will be saved in MongoDB but automatically stripped from the device-level push to Notehub, allowing the device to continue inheriting those variables from the Deployment Fleet.
+ *       **Environment Priority:** Device-level variables are pushed to Notehub and override Fleet and Project variables. Deployment settings should update the Deployment Fleet; owner/admin device settings should update the Device environment.
  *
  *       **Permission required:** Device owner OR collaborator with `edit` role
  *       OR org member with `org.notecard.edit` permission.

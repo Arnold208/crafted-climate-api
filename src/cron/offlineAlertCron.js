@@ -4,6 +4,7 @@ const RegisterDevice = require('../models/devices/registerDevice');
 const { alertQueue } = require('../config/queue/bullMQ/alertQueue');
 const logger = require('../utils/logger');
 const eventLog = require('../modules/devices/eventLog/eventLog.service');
+const { formatDuration } = require('../utils/formatDuration');
 
 // ---------------------------------------------------------------------------
 // CONFIG
@@ -21,17 +22,6 @@ function getAlertStagesForDevice(device) {
         { level: 2, minMinutes: baseThreshold * 8, tag: 'CRITICAL' },
         { level: 3, minMinutes: baseThreshold * 20, tag: 'SEVERE' }
     ];
-}
-
-function formatDuration(minutes) {
-    if (minutes < 60) {
-        return `${Math.round(minutes)} minutes`;
-    }
-    const hours = minutes / 60;
-    if (hours === 1) {
-        return `1 hour`;
-    }
-    return `${parseFloat(hours.toFixed(1))} hours`;
 }
 
 // ---------------------------------------------------------------------------

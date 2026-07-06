@@ -83,7 +83,6 @@ class DeploymentService {
         for (const device of devices) {
             if (device.noteDevUuid) {
                 try {
-                    // Temporarily unset device.deployment so syncConfigToNotecard doesn't skip it
                     device.deployment = null;
                     device.deploymentId = null;
                     await notecardService.syncConfigToNotecard(device);
@@ -245,11 +244,6 @@ class DeploymentService {
                     // Add device to fleet
                     await notecardService.addDeviceToFleet(projectUid, fleetUid, device.noteDevUuid);
                     addedToFleet = true;
-
-                    // Delete device-level overrides for CC_FREQUENCY, CC_BATCH, CC_INBOUND, CC_OUTBOUND
-                    await notecardService.deleteDeviceEnvKeys(projectUid, device.noteDevUuid, [
-                        'CC_FREQUENCY', 'CC_BATCH', 'CC_INBOUND', 'CC_OUTBOUND'
-                    ]);
                 } else {
                     console.warn(`[Deployment] No project UID configured for model: ${device.model}`);
                 }
