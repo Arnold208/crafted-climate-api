@@ -201,10 +201,21 @@ class SubscriptionController {
 
     async upgradeOrgSubscription(req, res) {
         try {
-            const sub = await subscriptionService.upgradeOrgSubscription(req.params.orgId, req.body.targetPlanId, req.user.userid);
-            res.status(200).json({ message: "Organization subscription upgraded successfully", subscription: sub });
+            const result = await subscriptionService.initializeOrgUpgradePayment(
+                req.params.orgId,
+                req.body.targetPlanId,
+                req.user.userid,
+                req.body.billingCycle || 'monthly'
+            );
+            res.status(200).json({
+                message: result.paymentRequired
+                    ? "Payment checkout initialized"
+                    : "Organization subscription upgraded successfully",
+                ...result
+            });
         } catch (err) {
             if (err.message.includes("not found")) return res.status(404).json({ message: err.message });
+            if (err.message.includes("Invalid")) return res.status(400).json({ message: err.message });
             res.status(500).json({ message: "Internal server error", error: err.message });
         }
     }

@@ -26,6 +26,7 @@ const logsRoutes = require('./modules/logs/logs.routes');
 const testRoutes = require('./modules/test/test.routes');
 const adminRoutes = require('./modules/admin/admin.routes');
 const flowRoutes = require('./modules/devices/flow/flow.routes');
+const publicRoutes = require('./modules/public/public.routes');
 
 // ============================================================
 // MRV ENGINE — Measurement, Reporting and Verification
@@ -285,6 +286,7 @@ const analyticsRoutes = require('./modules/analytics/analytics.routes');
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/logs', logsRoutes);
+app.use('/api/public', publicRoutes);
 
 // ============================================================
 // MRV ENGINE ROUTES

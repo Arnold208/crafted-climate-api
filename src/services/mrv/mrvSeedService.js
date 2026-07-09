@@ -31,6 +31,8 @@ async function seedMRVCatalogue() {
     // ── Methodologies ──
     const methodologies = [
       { methodologyId: 'VERRA-VM0050', standardId: 'VERRA-VCS', name: 'Energy Efficiency and Fuel-Switch Measures in Cookstoves', shortCode: 'VM0050', activityTypes: ['CLEAN_COOKING', 'FUEL_SWITCH'], tier: 1, officialUrl: 'https://verra.org/methodologies/vm0050-energy-efficiency-and-fuel-switch-measures-in-cookstoves-v1-0/' },
+      { methodologyId: 'CC-RENEWABLE-ENERGY-PILOT', standardId: 'VERRA-VCS', name: 'Renewable Energy Pilot Readiness Track', shortCode: 'RE-PILOT', activityTypes: ['RENEWABLE_ENERGY'], tier: 3 },
+      { methodologyId: 'CC-ENERGY-EFFICIENCY-PILOT', standardId: 'VERRA-VCS', name: 'Energy Efficiency Pilot Readiness Track', shortCode: 'EE-PILOT', activityTypes: ['ENERGY_EFFICIENCY'], tier: 3 },
       { methodologyId: 'VERRA-VM0051', standardId: 'VERRA-VCS', name: 'Improved Management in Rice Production Systems', shortCode: 'VM0051', activityTypes: ['RICE_MANAGEMENT'], tier: 1, officialUrl: 'https://verra.org/methodologies/improved-management-in-rice-production-systems/' },
       { methodologyId: 'VERRA-VM0042', standardId: 'VERRA-VCS', name: 'Improved Agricultural Land Management', shortCode: 'VM0042', activityTypes: ['AGRICULTURE'], tier: 1, officialUrl: 'https://verra.org/methodologies/vm0042-improved-agricultural-land-management-v2-2/' },
       { methodologyId: 'VERRA-VMR0018', standardId: 'VERRA-VCS', name: 'Methane Avoidance through Separation of Solids from Wastewater or Manure Treatment', shortCode: 'VMR0018', activityTypes: ['WASTEWATER'], tier: 1 },
@@ -55,6 +57,16 @@ async function seedMRVCatalogue() {
     await MRVMethodologyVersion.findOneAndUpdate(
       { methodologyVersionId: 'VERRA-VM0051-1.0' },
       { methodologyVersionId: 'VERRA-VM0051-1.0', methodologyId: 'VERRA-VM0051', standardId: 'VERRA-VCS', version: '1.0', status: 'ACTIVE' },
+      { upsert: true, new: true }
+    );
+    await MRVMethodologyVersion.findOneAndUpdate(
+      { methodologyVersionId: 'CC-RENEWABLE-ENERGY-PILOT-0.1' },
+      { methodologyVersionId: 'CC-RENEWABLE-ENERGY-PILOT-0.1', methodologyId: 'CC-RENEWABLE-ENERGY-PILOT', standardId: 'VERRA-VCS', version: '0.1', status: 'DRAFT' },
+      { upsert: true, new: true }
+    );
+    await MRVMethodologyVersion.findOneAndUpdate(
+      { methodologyVersionId: 'CC-ENERGY-EFFICIENCY-PILOT-0.1' },
+      { methodologyVersionId: 'CC-ENERGY-EFFICIENCY-PILOT-0.1', methodologyId: 'CC-ENERGY-EFFICIENCY-PILOT', standardId: 'VERRA-VCS', version: '0.1', status: 'DRAFT' },
       { upsert: true, new: true }
     );
 

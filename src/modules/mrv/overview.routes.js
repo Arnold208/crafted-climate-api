@@ -3,44 +3,21 @@ const router = require('express').Router();
 const analyticsService = require('../../services/mrv/mrvAnalyticsService');
 const { requirePermission } = require('../../middleware/authenticateApiKey');
 
-const ok  = (res, data) => res.json({ success: true, ...data });
+const ok = (res, data) => res.json({ success: true, ...data });
 const err = (res, e, code = 500) => res.status(code).json({ success: false, error: e.message });
 
 /**
  * @swagger
- * /api/mrv/analytics/portfolio:
- *   get:
- *     summary: Organisation-wide MRV portfolio overview
- *     tags: [MRV Analytics]
- *     security: [{ bearerAuth: [] }]
- *     responses:
- *       200:
- *         description: Portfolio summary
- */
-router.get('/portfolio', requirePermission('mrv:analytics:read'), async (req, res) => {
-  try {
-    const orgId = req.user?.organizationId
-      || req.user?.currentOrganizationId
-      || req.headers['x-org-id'];
-    if (!orgId) return res.status(400).json({ success: false, error: 'organizationId not found â€” pass x-org-id header' });
-    const data = await analyticsService.getPortfolioOverview(orgId);
-    ok(res, { portfolio: data });
-  } catch (e) { err(res, e); }
-});
-
-
-/**
- * @swagger
- * /api/mrv/analytics/overview:
+ * /api/mrv/overview:
  *   get:
  *     summary: MRV operations overview for the current workspace
  *     description: >
- *       Returns a project-developer overview for the authenticated MRV workspace,
- *       including project counts, active devices, observation quality, evidence
- *       status, monitoring periods, calculation posture, and a project portfolio
- *       table. The endpoint is scoped by the authenticated user's active
- *       organization context or the x-org-id header, but the response is intended
- *       for the portal's MRV Overview page rather than organization management.
+ *       Returns the main MRV portal overview for project developers, including
+ *       project portfolio counts, active devices, observation quality, evidence
+ *       status, monitoring periods, calculation posture, and project next actions.
+ *       The endpoint is internally scoped by organization/workspace context from
+ *       the authenticated user or x-org-id header; users should not be asked to
+ *       manually enter organization IDs in the portal.
  *     tags: [MRV Analytics]
  *     security:
  *       - bearerAuth: []
@@ -59,21 +36,13 @@ router.get('/portfolio', requirePermission('mrv:analytics:read'), async (req, re
  *             schema:
  *               type: object
  *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
+ *                 success: { type: boolean, example: true }
  *                 overview:
  *                   type: object
  *                   properties:
- *                     organizationId:
- *                       type: string
- *                       example: org-starter-uuid
- *                     generatedAt:
- *                       type: string
- *                       format: date-time
- *                     warning:
- *                       type: string
- *                       example: This result has not yet been independently verified or approved by Verra.
+ *                     organizationId: { type: string, example: org-starter-uuid }
+ *                     generatedAt: { type: string, format: date-time }
+ *                     warning: { type: string, example: This result has not yet been independently verified or approved by Verra. }
  *                     summary:
  *                       type: object
  *                       properties:
@@ -98,35 +67,13 @@ router.get('/portfolio', requirePermission('mrv:analytics:read'), async (req, re
  *                     charts:
  *                       type: object
  *                       properties:
- *                         projectStatus:
- *                           type: array
- *                           items:
- *                             type: object
- *                             properties:
- *                               status: { type: string, example: MONITORING }
- *                               count: { type: number, example: 6 }
- *                         deviceStatus:
- *                           type: array
- *                           items:
- *                             type: object
- *                         observationQuality:
- *                           type: array
- *                           items:
- *                             type: object
- *                         monitoringPeriodStatus:
- *                           type: array
- *                           items:
- *                             type: object
- *                         evidenceStatus:
- *                           type: array
- *                           items:
- *                             type: object
- *                         calculationStatus:
- *                           type: array
- *                           items:
- *                             type: object
- *                     dataQuality:
- *                       type: object
+ *                         projectStatus: { type: array, items: { type: object } }
+ *                         deviceStatus: { type: array, items: { type: object } }
+ *                         observationQuality: { type: array, items: { type: object } }
+ *                         monitoringPeriodStatus: { type: array, items: { type: object } }
+ *                         evidenceStatus: { type: array, items: { type: object } }
+ *                         calculationStatus: { type: array, items: { type: object } }
+ *                     dataQuality: { type: object }
  *                     projects:
  *                       type: array
  *                       items:
@@ -159,5 +106,3 @@ router.get('/overview', requirePermission('mrv:analytics:read'), async (req, res
 });
 
 module.exports = router;
-
-

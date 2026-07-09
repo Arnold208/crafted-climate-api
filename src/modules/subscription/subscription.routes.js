@@ -475,8 +475,22 @@ router.get('/org/:orgId/current',
  *             required: [targetPlanId]
  *             properties:
  *               targetPlanId: { type: string, example: "plan-premium-uuid" }
+ *               billingCycle: { type: string, example: "monthly", enum: [monthly, yearly] }
  *     responses:
- *       200: { description: Upgraded }
+ *       200:
+ *         description: Checkout initialized or free upgrade applied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: "Payment checkout initialized" }
+ *                 paymentRequired: { type: boolean, example: true }
+ *                 checkoutUrl: { type: string, example: "https://checkout.paystack.com/..." }
+ *                 reference: { type: string, example: "abc123" }
+ *                 amount: { type: number, example: 99 }
+ *                 currency: { type: string, example: "GHS" }
+ *                 callbackUrl: { type: string, example: "https://app.craftedclimate.com/payment/callback" }
  */
 router.post('/org/:orgId/upgrade',
     authenticateToken,

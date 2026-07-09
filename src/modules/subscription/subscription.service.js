@@ -5,6 +5,9 @@ const { v4: uuidv4 } = require('uuid');
 // const CacheService = require('../common/cache.service'); // Replaced by OrganizationService
 const OrganizationService = require('../organization/organization.service');
 const Organization = require('../../models/organization/organizationModel');
+const User = require('../../models/user/userModel');
+const PaymentTransaction = require('../../models/subscriptions/PaymentTransaction');
+const paystackService = require('../../services/paystackService');
 
 class SubscriptionService {
     // --- Admin Operations ---
@@ -162,7 +165,10 @@ class SubscriptionService {
         return { sub, plan };
     }
 
-    async upgradeOrgSubscription(organizationId, targetPlanId, userId) {
+    async upgradeOrgSubscription(organizationId, targetPlanId, userId, billingCycle = "monthly") {
+        if (!["monthly", "yearly"].includes(billingCycle)) {
+            throw new Error("Invalid billing cycle");
+        }
         const targetPlan = await Plan.findOne({ planId: targetPlanId, isActive: true });
         if (!targetPlan) throw new Error("Target plan not found or inactive.");
 
@@ -179,13 +185,13 @@ class SubscriptionService {
                 subscriptionScope: "organization",
                 planId: targetPlanId,
                 status: "active",
-                billingCycle: "monthly",
+                billingCycle,
                 startDate: new Date()
             });
         } else {
             subscription.planId = targetPlanId;
             subscription.status = "active";
-            subscription.billingCycle = "monthly";
+            subscription.billingCycle = billingCycle;
             subscription.startDate = new Date();
             subscription.endDate = null;
         }
@@ -217,6 +223,65 @@ class SubscriptionService {
         await OrganizationService.invalidateOrgCache(organizationId);
 
         return savedSub;
+    }
+
+    async initializeOrgUpgradePayment(organizationId, targetPlanId, userId, billingCycle = 'monthly') {
+        if (!["monthly", "yearly"].includes(billingCycle)) {
+            throw new Error("Invalid billing cycle");
+        }
+
+        const targetPlan = await Plan.findOne({ planId: targetPlanId, isActive: true });
+        if (!targetPlan) throw new Error("Target plan not found or inactive.");
+
+        const user = await User.findOne({ userid: userId }).select('email');
+        if (!user || !user.email) throw new Error("Billing user email not found.");
+
+        const amount = billingCycle === 'yearly'
+            ? Number(targetPlan.priceYearly || 0)
+            : Number(targetPlan.priceMonthly || 0);
+
+        if (amount <= 0) {
+            const subscription = await this.upgradeOrgSubscription(organizationId, targetPlanId, userId, billingCycle);
+            return {
+                paymentRequired: false,
+                subscription,
+            };
+        }
+
+        const amountInPesewas = Math.round(amount * 100);
+        const metadata = {
+            organizationId,
+            planId: targetPlanId,
+            billingCycle,
+            userId,
+            purpose: 'organization_subscription_upgrade'
+        };
+
+        const tx = await paystackService.initializeTransaction(user.email, amountInPesewas, metadata);
+
+        await PaymentTransaction.findOneAndUpdate(
+            { reference: tx.reference },
+            {
+                transactionId: `tx-${tx.reference}`,
+                reference: tx.reference,
+                organizationId,
+                planId: targetPlanId,
+                billingCycle,
+                amount,
+                status: 'pending',
+                userId
+            },
+            { upsert: true, new: true }
+        );
+
+        return {
+            paymentRequired: true,
+            checkoutUrl: tx.authorization_url,
+            reference: tx.reference,
+            amount,
+            currency: process.env.PAYMENT_CURRENCY || 'GHS',
+            callbackUrl: process.env.PAYSTACK_CALLBACK_URL || null,
+        };
     }
 
     async downgradeOrgSubscription(organizationId, targetPlanId, userId) {

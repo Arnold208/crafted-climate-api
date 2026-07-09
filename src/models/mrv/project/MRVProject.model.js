@@ -6,7 +6,7 @@ const schema = new mongoose.Schema({
   description: { type: String },
   activityType: {
     type: String,
-    enum: ['CLEAN_COOKING', 'RICE_MANAGEMENT', 'AGRICULTURE', 'WASTEWATER', 'BIOCHAR', 'FORESTRY', 'WETLAND_RESTORATION', 'GRASSLAND', 'LANDFILL_GAS', 'ENTERIC_METHANE', 'OTHER'],
+    enum: ['CLEAN_COOKING', 'RENEWABLE_ENERGY', 'ENERGY_EFFICIENCY', 'RICE_MANAGEMENT', 'AGRICULTURE', 'WASTEWATER', 'BIOCHAR', 'FORESTRY', 'WETLAND_RESTORATION', 'GRASSLAND', 'LANDFILL_GAS', 'ENTERIC_METHANE', 'OTHER'],
     required: true
   },
   claimType: {

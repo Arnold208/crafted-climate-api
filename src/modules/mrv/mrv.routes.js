@@ -1,7 +1,7 @@
-'use strict';
+﻿'use strict';
 
 /**
- * MRV Engine — Top-level router
+ * MRV Engine â€” Top-level router
  *
  * All routes in this file are mounted at /api/mrv
  * All endpoints are tagged 'MRV Engine' in Swagger docs.
@@ -37,11 +37,11 @@
  *   GET  /api/mrv/projects/:projectId/csv-imports
  *   POST /api/mrv/projects/:projectId/csv-imports
  *   GET  /api/mrv/projects/:projectId/installations
- *   POST /api/mrv/projects/:projectId/installations                              ← link existing device to project
+ *   POST /api/mrv/projects/:projectId/installations                              â† link existing device to project
  *   GET  /api/mrv/projects/:projectId/installations/:installationId
- *   PATCH /api/mrv/projects/:projectId/installations/:installationId/maintenance         ← put device in maintenance
- *   PATCH /api/mrv/projects/:projectId/installations/:installationId/maintenance/return  ← bring device back to ACTIVE
- *   POST /api/mrv/projects/:projectId/installations/:installationId/replace      ← permanent device swap (audit trail preserved)
+ *   PATCH /api/mrv/projects/:projectId/installations/:installationId/maintenance         â† put device in maintenance
+ *   PATCH /api/mrv/projects/:projectId/installations/:installationId/maintenance/return  â† bring device back to ACTIVE
+ *   POST /api/mrv/projects/:projectId/installations/:installationId/replace      â† permanent device swap (audit trail preserved)
  *   GET  /api/mrv/projects/:projectId/calibrations
  *   POST /api/mrv/projects/:projectId/calibrations
  *   GET  /api/mrv/projects/:projectId/receipts
@@ -74,23 +74,23 @@
  *   GET  /api/mrv/projects/:projectId/monitoring-periods/:mpId/calculations
  *   POST /api/mrv/projects/:projectId/calculation-runs/:runId/approve
  *
- *   POST /api/mrv/projects/:projectId/webhooks              ← register outbound webhook endpoint
- *   GET  /api/mrv/projects/:projectId/webhooks              ← list endpoints
- *   PATCH /api/mrv/projects/:projectId/webhooks/:endpointId ← update/pause/resume
- *   DELETE /api/mrv/projects/:projectId/webhooks/:endpointId ← disable
- *   GET  /api/mrv/projects/:projectId/webhooks/:endpointId/deliveries ← delivery log
- *   POST /api/mrv/projects/:projectId/webhooks/:endpointId/test  ← test ping
+ *   POST /api/mrv/projects/:projectId/webhooks              â† register outbound webhook endpoint
+ *   GET  /api/mrv/projects/:projectId/webhooks              â† list endpoints
+ *   PATCH /api/mrv/projects/:projectId/webhooks/:endpointId â† update/pause/resume
+ *   DELETE /api/mrv/projects/:projectId/webhooks/:endpointId â† disable
+ *   GET  /api/mrv/projects/:projectId/webhooks/:endpointId/deliveries â† delivery log
+ *   POST /api/mrv/projects/:projectId/webhooks/:endpointId/test  â† test ping
  *
- *   POST /api/mrv/projects/:projectId/vvb-access            ← issue VVB key
- *   GET  /api/mrv/projects/:projectId/vvb-access            ← list grants
- *   POST /api/mrv/projects/:projectId/vvb-access/:id/revoke ← revoke grant
+ *   POST /api/mrv/projects/:projectId/vvb-access            â† issue VVB key
+ *   GET  /api/mrv/projects/:projectId/vvb-access            â† list grants
+ *   POST /api/mrv/projects/:projectId/vvb-access/:id/revoke â† revoke grant
  *
- *   GET  /api/vvb/:projectId/package          ← VVB: full data package        (vvbRouter, mounted in app.js)
- *   GET  /api/vvb/:projectId/observations     ← VVB: paginated observations   (vvbRouter, mounted in app.js)
- *   GET  /api/vvb/:projectId/evidence-files   ← VVB: evidence list            (vvbRouter, mounted in app.js)
- *   GET  /api/vvb/:projectId/audit-log        ← VVB: audit trail              (vvbRouter, mounted in app.js)
- *   GET  /api/vvb/:projectId/calibrations     ← VVB: calibration records      (vvbRouter, mounted in app.js)
- *   GET  /api/vvb/:projectId/installations    ← VVB: installation records     (vvbRouter, mounted in app.js)
+ *   GET  /api/vvb/:projectId/package          â† VVB: full data package        (vvbRouter, mounted in app.js)
+ *   GET  /api/vvb/:projectId/observations     â† VVB: paginated observations   (vvbRouter, mounted in app.js)
+ *   GET  /api/vvb/:projectId/evidence-files   â† VVB: evidence list            (vvbRouter, mounted in app.js)
+ *   GET  /api/vvb/:projectId/audit-log        â† VVB: audit trail              (vvbRouter, mounted in app.js)
+ *   GET  /api/vvb/:projectId/calibrations     â† VVB: calibration records      (vvbRouter, mounted in app.js)
+ *   GET  /api/vvb/:projectId/installations    â† VVB: installation records     (vvbRouter, mounted in app.js)
  *
  *   POST /api/ingest/telemetry        (mounted separately in app.js)
  *   POST /api/ingest/telemetry/batch  (mounted separately in app.js)
@@ -110,16 +110,20 @@ const webhookRoutes            = require('./webhook.routes');
 const { ownerRouter, vvbRouter } = require('./vvb.routes');
 const analyticsRoutes          = require('./analytics.routes');
 const portfolioAnalyticsRoutes = require('./portfolioAnalytics.routes');
+const overviewRoutes           = require('./overview.routes');
 const reportRoutes             = require('./report.routes');
 const calculationRoutes        = require('./calculation.routes');
+const operationalSetupRoutes   = require('./operationalSetup.routes');
 
-// ── Global MRV gate: authenticate THEN check enterprise/maas_enterprise plan ──
+// â”€â”€ Global MRV gate: authenticate THEN check enterprise/maas_enterprise plan â”€â”€
 // Every sub-router below is protected by both guards.
 router.use(authenticateToken);
 router.use(requireMRVSubscription);
 
+router.use('/', overviewRoutes);
 router.use('/catalogue', catalogueRoutes);
 router.use('/projects', projectRoutes);
+router.use('/projects', operationalSetupRoutes);
 router.use('/projects', monitoringRoutes);
 router.use('/projects', evidenceRoutes);
 router.use('/projects', dataQualityRoutes);
@@ -146,7 +150,7 @@ router.get('/health', (req, res) => {
     success: true,
     engine: 'MRV Engine v1.0.0',
     status: 'operational',
-    vm0050CalculationStatus: 'BLOCKED — mayCalculate=false (pending sign-off)',
+    vm0050CalculationStatus: 'BLOCKED â€” mayCalculate=false (pending sign-off)',
     analyticsStatus: 'operational',
     reportStatus: 'operational',
     timestamp: new Date().toISOString()
@@ -154,3 +158,4 @@ router.get('/health', (req, res) => {
 });
 
 module.exports = { mrvRouter: router, vvbRouter };
+

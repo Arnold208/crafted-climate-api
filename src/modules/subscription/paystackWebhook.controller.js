@@ -52,7 +52,7 @@ class PaystackWebhookController {
                 } else if (organizationId && planId && userId) {
                     console.log(`[PaystackWebhook] Processing direct subscription upgrade/renewal for Org: ${organizationId}`);
                     // Upgrade the subscription
-                    await subscriptionService.upgradeOrgSubscription(organizationId, planId, userId);
+                    await subscriptionService.upgradeOrgSubscription(organizationId, planId, userId, billingCycle || 'monthly');
                     console.log(`[PaystackWebhook] Org subscription successfully upgraded/renewed.`);
                 }
 
