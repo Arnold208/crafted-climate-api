@@ -20,7 +20,13 @@ const schema = new mongoose.Schema({
 
   // Technical configuration
   approvedFirmwareVersions: [{ type: String }],
-  expectedFrequencySeconds: { type: Number, default: 3600 }, // 1h default
+  selectedParameters: [{ type: String }],
+  suitabilitySnapshot: { type: mongoose.Schema.Types.Mixed },
+  frequency: { type: Number, default: 30 }, // minutes between readings, same as registered device schedule
+  batch: { type: Number, default: 2 }, // readings per transmit batch, same as registered device schedule
+  batchWindowMinutes: { type: Number, default: 60 },
+  inboundGraceMinutes: { type: Number, default: 5 },
+  expectedFrequencySeconds: { type: Number, default: 1800 }, // derived from frequency * 60
   installationNotes:        { type: String },
   evidenceIds:              [{ type: String }], // photo IDs of physical installation
 
@@ -76,4 +82,5 @@ schema.index({ projectId: 1, auid: 1 });
 schema.index({ projectId: 1, status: 1 });
 schema.index({ auid: 1, status: 1 });
 module.exports = mongoose.model('SensorInstallation', schema, 'sensorInstallations');
+
 

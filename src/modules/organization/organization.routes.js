@@ -384,7 +384,7 @@ router.delete('/:orgId',
  *         required: true
  *         schema: { type: string, example: "org-starter-uuid" }
  *     responses:
- *       200: { description: List of devices }
+ *       200: { description: "List of organization devices, including MRV availability metadata (`mrvAvailable`, `mrvAssignment`) when a device is already linked to an active MRV installation." }
  */
 router.get('/:orgId/devices',
     authenticateToken,

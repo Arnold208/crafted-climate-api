@@ -21,6 +21,9 @@ const schema = new mongoose.Schema({
   applicabilityApprovedAt: { type: Date },
   applicabilityApprovedBy: { type: String },
   blockedReason: { type: String },
+  supersededAt: { type: Date },
+  supersededBy: { type: String },
+  supersededReason: { type: String },
   notes: { type: String }
 }, { versionKey: false });
 schema.index({ projectId: 1, selectionStatus: 1 });

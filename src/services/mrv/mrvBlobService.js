@@ -87,4 +87,13 @@ async function generateUploadToken({ projectId, evidenceId, filename, expiryMinu
   return { blobName, blobUrl: blockBlobClient.url, expiresAt: expiry };
 }
 
-module.exports = { ensureContainers, writeRawEvent, uploadEvidence, generateUploadToken, CONTAINERS };
+async function readBlobBuffer({ containerName, blobPath }) {
+  const client = getBlobServiceClient();
+  if (!client) return null;
+  const containerClient = client.getContainerClient(containerName);
+  const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
+  const buffer = await blockBlobClient.downloadToBuffer();
+  return buffer;
+}
+module.exports = { ensureContainers, writeRawEvent, uploadEvidence, generateUploadToken, readBlobBuffer, CONTAINERS };
+

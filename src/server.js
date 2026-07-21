@@ -35,6 +35,8 @@ const { startMRVWebhookWorker }        = require('./workers/mrv/mrvWebhookWorker
 
 // 🔥 PRODUCTION HARDENING: Queue monitoring for error visibility
 const { QueueEvents } = require('bullmq');
+const { registerWorker, registerWorkerFailure } = require('./services/workerRuntime.service');
+const queueEventMonitors = [];
 
 // Crons (Moved to src/cron)
 const { startFlushDirectCron }      = require('./cron/flushEnqueueCron');
@@ -64,131 +66,140 @@ if (missingVars.length > 0) {
 
 connectDB();
 
+function startTrackedWorker(name, starter) {
+    try {
+        const worker = starter();
+        registerWorker(name, worker);
+        console.log(`[WorkerStartup] ${name} registered`);
+        return worker;
+    } catch (err) {
+        registerWorkerFailure(name, err);
+        console.error(`[WorkerStartup] ${name} failed to start:`, err.message);
+        return null;
+    }
+}
+
+function monitorQueueEvents(queueName) {
+    const queueEvents = new QueueEvents(queueName, {
+        connection: {
+            host: process.env.REDIS_HOST || '127.0.0.1',
+            port: parseInt(process.env.REDIS_PORT || '6379', 10),
+            password: process.env.REDIS_PASSWORD || undefined,
+        }
+    });
+
+    queueEvents.on('failed', ({ jobId, failedReason }) => {
+        console.error(`[QueueEvents] failed | queue=${queueName} | job=${jobId} | reason=${failedReason}`);
+    });
+
+    queueEvents.on('stalled', ({ jobId }) => {
+        console.error(`[QueueEvents] stalled | queue=${queueName} | job=${jobId} | worker may have crashed or timed out`);
+    });
+
+    queueEvents.on('error', (error) => {
+        console.error(`[QueueEvents] error | queue=${queueName}:`, error.message);
+    });
+
+    queueEventMonitors.push(queueEvents);
+    return queueEvents;
+}
+
 connectRedis()
     .then(() => {
-        // 🔥 LAZY LOAD APP: Ensure Redis is connected before loading app (and rate limiters)
+        // Load app only after Redis is connected so rate limiters and sessions are ready.
         const app = require('./app');
 
-        console.log('👷 Starting background workers...');
-        startTelemetryWorker();
-        startStatusWorker();       // 🆕 Start status worker for heartbeats
-        startSubscriptionWorker(); // 🆕 Start subscription worker
+        console.log('[WorkerStartup] Starting background workers...');
+        startTrackedWorker('telemetry', startTelemetryWorker);
+        startTrackedWorker('status', startStatusWorker);
+        startTrackedWorker('subscriptions', startSubscriptionWorker);
 
-        console.log('⏱️ Starting background crons...');
+        console.log('[CronStartup] Starting background crons...');
         startFlushDirectCron();
         startOfflineAlertCron();
         startSubscriptionCheckCron();
         startSLABreachCron();
-        startAutoDisableCron(); // 🔄 Auto-disable devices inactive > 30 days
-        startResetApiQuotaCron(); // 🔄 Reset monthly API call counters on 1st of month
-        emailWorker.start().then(() =>   console.log('✅ Email worker started'));
-        alertWorker.start().then(() =>   console.log('✅ Alert worker started'));
-        webhookWorker.start().then(() => console.log('✅ Webhook worker started'));
-        pushWorker.start().then(() =>    console.log('✅ Push notification worker started'));
+        startAutoDisableCron();
+        startResetApiQuotaCron();
+        emailWorker.start().then(() => console.log('[WorkerStartup] Email worker started'));
+        alertWorker.start().then(() => console.log('[WorkerStartup] Alert worker started'));
+        webhookWorker.start().then(() => console.log('[WorkerStartup] Webhook worker started'));
+        pushWorker.start().then(() => console.log('[WorkerStartup] Push notification worker started'));
 
         // ============================================================
-        // MRV ENGINE — Start all workers (non-blocking try/catch)
-        // MRV worker failures must never crash the operational server
+        // MRV ENGINE - Start workers independently.
+        // One failed worker must not prevent the rest of the MRV pipeline from running.
         // ============================================================
-        try {
-            console.log('📊 Starting MRV Engine workers...');
-            startMRVEvidenceWorker();
-            startMRVObservationWorker();
-            startMRVValidationWorker();
-            startMRVQualificationWorker();
-            startMRVCalculationWorker();
-            startMRVReportWorker();
-            startMRVNotificationWorker();
-            startMRVCompletenessWorker();
-            startMRVWebhookWorker();
-            console.log('✅ All MRV Engine workers started');
-        } catch (mrvWorkerErr) {
-            console.error('❌ MRV Engine workers failed to start (operational path unaffected):', mrvWorkerErr.message);
-        }
+        console.log('[WorkerStartup] Starting MRV Engine workers...');
+        startTrackedWorker('mrv-evidence', startMRVEvidenceWorker);
+        startTrackedWorker('mrv-observation', startMRVObservationWorker);
+        startTrackedWorker('mrv-validation', startMRVValidationWorker);
+        startTrackedWorker('mrv-qualification', startMRVQualificationWorker);
+        startTrackedWorker('mrv-calculation', startMRVCalculationWorker);
+        startTrackedWorker('mrv-report', startMRVReportWorker);
+        startTrackedWorker('mrv-notifications', startMRVNotificationWorker);
+        startTrackedWorker('mrv-completeness', startMRVCompletenessWorker);
+        startTrackedWorker('mrv-webhook', startMRVWebhookWorker);
+        console.log('[WorkerStartup] MRV Engine worker startup attempted for all queues');
 
-        // 🔥 Initialize Email Templates (Seeds DB)
-        // Guarded by readyState so it never fires before MongoDB is connected.
-        // Azure CosmosDB can take 20-40 s to handshake — firing before connection
-        // causes Mongoose to buffer the query and time out after 10 s.
         const emailTemplateService = require('./services/emailTemplate.service');
+        const mongoose = require('mongoose');
         const initEmailTemplates = () => {
             emailTemplateService.initializeDefaults()
-                .then(() => console.log('✅ Email templates initialized'))
-                .catch(err => console.error('❌ Failed to init templates:', err.message));
+                .then(() => console.log('[Startup] Email templates initialized'))
+                .catch(err => console.error('[Startup] Failed to init templates:', err.message));
         };
 
-        const mongoose = require('mongoose');
         if (mongoose.connection.readyState === 1) {
-            // Already connected (hot reload / fast local start)
             initEmailTemplates();
         } else {
-            // Wait for connection — safe against slow cloud DB (CosmosDB, Atlas, etc.)
             mongoose.connection.once('connected', initEmailTemplates);
         }
 
-
-        // ============================================================
-        // MRV ENGINE — Seed Catalogue (standards, methodologies, sensor capabilities)
-        // Runs AFTER MongoDB connection is confirmed ready (avoids Cosmos DB timeout race)
-        // All entries are upserted (idempotent — safe to run on every restart)
-        // ============================================================
-        // MRV seed uses the same `mongoose` already required above
         const runMRVSeedWhenReady = () => {
-
             try {
                 const { seedMRVCatalogue } = require('./services/mrv/mrvSeedService');
                 const { ensureContainers } = require('./services/mrv/mrvBlobService');
                 ensureContainers().catch(e => console.warn('[MRVBlob] Container ensure skipped:', e.message));
                 seedMRVCatalogue();
             } catch (mrvSeedErr) {
-                console.error('❌ MRV catalogue seed failed (non-fatal):', mrvSeedErr.message);
+                console.error('[Startup] MRV catalogue seed failed (non-fatal):', mrvSeedErr.message);
             }
         };
 
         if (mongoose.connection.readyState === 1) {
-            // Already connected (e.g. hot reload) — run immediately
             runMRVSeedWhenReady();
         } else {
-            // Wait for connection to be established before seeding
             mongoose.connection.once('connected', runMRVSeedWhenReady);
         }
 
-        // 🔥 PRODUCTION HARDENING: Monitor queue for failed/stalled jobs
-        const queueEvents = new QueueEvents('telemetry', {
-            connection: {
-                host: process.env.REDIS_HOST || '127.0.0.1',
-                port: parseInt(process.env.REDIS_PORT || '6379', 10),
-                password: process.env.REDIS_PASSWORD || undefined,
-            }
-        });
+        // Production queue monitoring: failed/stalled visibility for telemetry and MRV queues.
+        [
+            'telemetry',
+            'mrv-evidence',
+            'mrv-observation',
+            'mrv-validation',
+            'mrv-qualification',
+            'mrv-completeness',
+            'mrv-calculation',
+            'mrv-report',
+            'mrv-notifications',
+            'mrv-webhook'
+        ].forEach(monitorQueueEvents);
 
-        queueEvents.on('failed', ({ jobId, failedReason }) => {
-            console.error(`🚨 QUEUE FAILED | Job ID: ${jobId} | Reason: ${failedReason}`);
-        });
-
-        queueEvents.on('stalled', ({ jobId }) => {
-            console.error(`⏸️ QUEUE STALLED | Job ID: ${jobId} | Worker may have crashed or timed out`);
-        });
-
-        queueEvents.on('error', (error) => {
-            console.error('❌ QueueEvents Error:', error);
-        });
-
-        console.log('✅ QueueEvents monitoring initialized for telemetry queue');
+        console.log('[QueueEvents] Monitoring initialized for telemetry and MRV queues');
 
         const PORT = process.env.PORT || 3000;
 
         const server = app.listen(PORT, () => {
-            console.log(`🚀 Server running at http://localhost:${PORT}`);
-            console.log(`📘 Swagger docs available at http://localhost:${PORT}/climate-docs`);
+            console.log(`Server running at http://localhost:${PORT}`);
+            console.log(`Swagger docs available at http://localhost:${PORT}/climate-docs`);
         });
 
         setupRealtime(server);
 
-        // ✅ START PUB/SUB BRIDGE: Redis device:status-change → Socket.IO rooms
-        // This MUST be called after setupRealtime() so `io` is ready.
         startStatusBridge().catch(err =>
-            console.error('❌ Failed to start status bridge:', err.message)
+            console.error('[Startup] Failed to start status bridge:', err.message)
         );
     })
     .catch((err) => {

@@ -1,6 +1,15 @@
 'use strict';
 const TelemetryReceipt = require('../../models/mrv/evidence/TelemetryReceipt.model');
 
+function normalizeReceiptTransport(transport) {
+  const value = String(transport || '').toLowerCase();
+  if (value === 'hub' || value === 'notehub' || value === 'mqtt') return 'notehub-mqtt';
+  if (value === 'socket' || value === 'socket.io') return 'socketio';
+  if (value === 'http' || value === 'ingest') return 'http-ingest';
+  if (['notehub-mqtt', 'socketio', 'http-ingest', 'manual'].includes(value)) return value;
+  return 'notehub-mqtt';
+}
+
 function buildIdempotencyKey({ sourceEventId, devid, sequenceNumber, observedAt, payloadHash }) {
   if (sourceEventId) return `evt:${sourceEventId}`;
   if (devid && sequenceNumber) return `seq:${devid}:${sequenceNumber}`;
@@ -20,7 +29,7 @@ async function createPendingReceipt({
 }) {
   return TelemetryReceipt.create({
     receiptId, ingestionId, idempotencyKey, sourceEventId,
-    transport, sourceTopic, devid, auid, model,
+    transport: normalizeReceiptTransport(transport), sourceTopic, devid, auid, model,
     organizationId, projectIds: projectIds || [],
     receivedAt, observedAt: observedAt || null,
     timeSource: timeSource || 'server-received',

@@ -7,6 +7,7 @@ const { client: redisClient } = require("../redis/redis");
 const apiKeyService = require("../../services/apiKey.service");
 const { checkDeviceAccessCompatibility } = require("../../middleware/devices/checkDeviceAccessCompatibility");
 const RegisterDevice = require("../../models/devices/registerDevice");
+const MRVProject = require("../../models/mrv/project/MRVProject.model");
 const { nanoid } = require("nanoid");
 const { telemetryQueue, statusQueue, subscriptionQueue } = require("../queue/bullMQ/bullqueue");
 const logger = require("../../utils/logger");
@@ -283,6 +284,38 @@ function setupRealtime(server) {
     });
 
     // ── COMMAND: USER/API CLIENT → DEVICE ──
+
+
+    socket.on("mrv:project:join", async (projectId, ack) => {
+      if (!projectId || typeof projectId !== "string") {
+        return ack?.({ ok: false, error: "Invalid MRV project ID" });
+      }
+      try {
+        const project = await MRVProject.findOne({ projectId, deletedAt: null }).lean();
+        if (!project) return ack?.({ ok: false, error: "MRV project not found" });
+
+        const isProgrammeAdmin = socket.user?.platformRole === 'platform_admin' || socket.user?.role === 'admin';
+        const userId = socket.user?.userid;
+        const isMember = project.members?.some((member) => String(member.userId) === String(userId));
+        const orgMatch = project.organizationId && (
+          String(project.organizationId) === String(socket.user?.currentOrganizationId) ||
+          (Array.isArray(socket.user?.organization) && socket.user.organization.map(String).includes(String(project.organizationId)))
+        );
+
+        if (!isProgrammeAdmin && !isMember && !orgMatch) {
+          return ack?.({ ok: false, error: "Forbidden: You do not have access to this MRV project." });
+        }
+
+        const room = `mrv:project:${projectId}`;
+        socket.join(room);
+        socket.emit("mrv:project:joined", { ok: true, projectId, room });
+        ack?.({ ok: true, projectId, room });
+      } catch (err) {
+        console.error("MRV project join error:", err);
+        ack?.({ ok: false, error: "MRV project join failed" });
+      }
+    });
+
     socket.on("command:send", async ({ auid, command }, ack) => {
       if (isDevice) return ack?.({ ok: false, error: "Devices cannot send commands." });
 
@@ -446,6 +479,13 @@ function setupRealtime(server) {
   return io;
 }
 
+
+
+function publishMRVProjectEvent(projectId, eventName, payload = {}) {
+  if (!io || !projectId || !eventName) return;
+  io.to(`mrv:project:${projectId}`).emit(eventName, { projectId, ...payload, ts: Date.now() });
+}
+
 function publishToAUID(auid, data) {
   if (!io) return;
   io.to(auid).emit("telemetry", data);
@@ -535,4 +575,4 @@ async function startStatusBridge() {
   }
 }
 
-module.exports = { setupRealtime, publishToAUID, sendCommandToAUID, publishStatusToSocket, startStatusBridge };
+module.exports = { setupRealtime, publishToAUID, sendCommandToAUID, publishStatusToSocket, publishMRVProjectEvent, startStatusBridge };

@@ -7,6 +7,7 @@ const { verifyMRVProjectAccess } = require('../../middleware/mrv/verifyMRVProjec
 const { mrvAuditEvent } = require('../../middleware/mrv/mrvAuditEvent');
 const MonitoringPeriod = require('../../models/mrv/monitoring/MonitoringPeriod.model');
 const MRVObservation = require('../../models/mrv/evidence/MRVObservation.model');
+const MRVProject = require('../../models/mrv/project/MRVProject.model');
 const { mrvCompletenessQueue } = require('../../workers/mrv/queues');
 
 /**
@@ -38,7 +39,8 @@ const { mrvCompletenessQueue } = require('../../workers/mrv/queues');
  */
 router.get('/:projectId/monitoring-periods', authenticateToken, requirePermission('mrv:monitoring:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
-    const periods = await MonitoringPeriod.find({ projectId: req.params.projectId }).sort({ _id: -1 }).lean();
+    const periods = await MonitoringPeriod.find({ projectId: req.params.projectId }).lean();
+    periods.sort((a, b) => new Date(b.createdAt || b.startDate || 0) - new Date(a.createdAt || a.startDate || 0));
     res.json({ success: true, data: periods });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -145,8 +147,17 @@ router.post('/:projectId/monitoring-periods/:monitoringPeriodId/open', authentic
     const period = await MonitoringPeriod.findOne({ monitoringPeriodId: req.params.monitoringPeriodId, projectId: req.params.projectId });
     if (!period) return res.status(404).json({ error: 'Monitoring period not found' });
     if (period.status !== 'DRAFT') return res.status(409).json({ error: `Cannot open period in status: ${period.status}` });
+    const project = await MRVProject.findOne({ projectId: req.params.projectId }).lean();
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (project.readinessStatus !== 'READY') return res.status(409).json({ error: 'Run readiness and resolve all blocking items before opening monitoring.' });
+    const existingOpenPeriod = await MonitoringPeriod.findOne({ projectId: req.params.projectId, monitoringPeriodId: { $ne: req.params.monitoringPeriodId }, status: 'OPEN' }).lean();
+    if (existingOpenPeriod) return res.status(409).json({ error: `Monitoring period ${existingOpenPeriod.monitoringPeriodId} is already open. Close it before opening another period.` });
     period.status = 'OPEN'; period.openedAt = new Date(); period.openedBy = req.user?.userid;
     await period.save();
+    await MRVProject.findOneAndUpdate(
+      { projectId: req.params.projectId, status: { $in: ['READY_FOR_MONITORING', 'CANDIDATE', 'APPLICABILITY_REVIEW', 'LEGAL_REVIEW', 'SANDBOX'] } },
+      { $set: { status: 'MONITORING', monitoringPeriodStart: period.startDate, updatedAt: new Date() } },
+    );
     res.json({ success: true, data: period });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -239,10 +250,12 @@ router.get('/:projectId/monitoring-periods/:monitoringPeriodId/observations', au
     if (qualityStatus) filter.qualityStatus = qualityStatus;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [observations, total] = await Promise.all([
-      MRVObservation.find(filter).sort({ observedAt: -1 }).skip(skip).limit(parseInt(limit)).lean(),
+      MRVObservation.find(filter).lean(),
       MRVObservation.countDocuments(filter)
     ]);
-    res.json({ success: true, data: observations, pagination: { page: parseInt(page), limit: parseInt(limit), total } });
+    observations.sort((a, b) => new Date(b.observedAt || 0) - new Date(a.observedAt || 0));
+    const paged = observations.slice(skip, skip + parseInt(limit));
+    res.json({ success: true, data: paged, pagination: { page: parseInt(page), limit: parseInt(limit), total } });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

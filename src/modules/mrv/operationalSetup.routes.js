@@ -47,6 +47,34 @@ function boundaryFromRows(rows) {
   return { type: 'Polygon', coordinates: [coordinates] };
 }
 
+function normalizeGeoJsonPolygon(boundary) {
+  if (!boundary || boundary.type !== 'Polygon' || !Array.isArray(boundary.coordinates?.[0])) {
+    const err = new Error('Boundary must be a GeoJSON Polygon with longitude/latitude coordinates');
+    err.status = 400;
+    throw err;
+  }
+
+  const coordinates = boundary.coordinates[0]
+    .map((point) => {
+      const lng = Number(point?.[0]);
+      const lat = Number(point?.[1]);
+      return Number.isFinite(lat) && Number.isFinite(lng) ? [lng, lat] : null;
+    })
+    .filter(Boolean);
+
+  if (coordinates.length < 3) {
+    const err = new Error('Boundary polygon requires at least three valid points');
+    err.status = 400;
+    throw err;
+  }
+
+  const first = coordinates[0];
+  const last = coordinates[coordinates.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) coordinates.push(first);
+
+  return { type: 'Polygon', coordinates: [coordinates] };
+}
+
 /**
  * @swagger
  * /api/mrv/projects/{projectId}/assets:
@@ -130,6 +158,89 @@ router.post('/:projectId/assets', authenticateToken,
   }
 );
 
+const EDITABLE_ASSET_FIELDS = ['assetType', 'name', 'description', 'assetTag', 'siteId', 'serialNumber', 'model', 'manufacturer', 'installedAt', 'locationDescription', 'ownershipType', 'quantity', 'status', 'evidenceIds', 'attributes'];
+
+/**
+ * @swagger
+ * /api/mrv/projects/{projectId}/assets/{assetId}:
+ *   patch:
+ *     summary: Amend an MRV asset while preserving revision history
+ *     description: Updates the current asset record and appends the previous values to revisionHistory for audit review.
+ *     tags: [MRV Engine - Projects]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: assetId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason: { type: string, description: Audit reason for the amendment }
+ *               name: { type: string }
+ *               description: { type: string }
+ *               assetTag: { type: string }
+ *               siteId: { type: string }
+ *               serialNumber: { type: string }
+ *               model: { type: string }
+ *               manufacturer: { type: string }
+ *               installedAt: { type: string, format: date }
+ *               locationDescription: { type: string }
+ *               ownershipType: { type: string, enum: [PROJECT_OWNED, PARTICIPANT_OWNED, LEASED, PARTNER_OWNED, UNKNOWN] }
+ *               quantity: { type: number }
+ *               status: { type: string, enum: [PLANNED, ACTIVE, MAINTENANCE, RETIRED] }
+ *               evidenceIds: { type: array, items: { type: string } }
+ *               attributes: { type: object }
+ *     responses:
+ *       200:
+ *         description: Asset amended
+ */
+router.patch('/:projectId/assets/:assetId', authenticateToken,
+  requirePermission('mrv:projects:write'),
+  verifyMRVProjectAccess(['mrv-project-manager', 'mrv-field-officer', 'mrv-programme-admin']),
+  mrvAuditEvent({ action: 'ASSET_UPDATED', entityType: 'MRVAsset', getEntityId: (req) => req.params.assetId }),
+  async (req, res) => {
+    try {
+      const asset = await MRVAsset.findOne({ projectId: req.params.projectId, assetId: req.params.assetId });
+      if (!asset) return res.status(404).json({ error: 'Asset not found' });
+
+      const previous = asset.toObject();
+      const changes = {};
+      EDITABLE_ASSET_FIELDS.forEach((field) => {
+        if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+          let value = req.body[field];
+          if (field === 'installedAt') value = value ? new Date(value) : undefined;
+          if (field === 'quantity') value = Number(value || 1);
+          asset[field] = value;
+          changes[field] = value;
+        }
+      });
+
+      if (!Array.isArray(asset.revisionHistory)) asset.revisionHistory = [];
+      asset.revisionHistory.push({
+        revisedAt: new Date(),
+        revisedBy: req.user?.userid,
+        reason: req.body.reason || 'Asset record amended',
+        previous: EDITABLE_ASSET_FIELDS.reduce((snapshot, field) => {
+          snapshot[field] = previous[field];
+          return snapshot;
+        }, {}),
+        changes,
+      });
+      asset.updatedAt = new Date();
+      await asset.save();
+      res.json({ success: true, data: asset });
+    } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+  }
+);
 /**
  * @swagger
  * /api/mrv/projects/{projectId}/sites/{siteId}/boundary-import:
@@ -181,6 +292,64 @@ router.post('/:projectId/sites/:siteId/boundary-import', authenticateToken,
   }
 );
 
+/**
+ * @swagger
+ * /api/mrv/projects/{projectId}/sites/{siteId}/boundary:
+ *   put:
+ *     summary: Save a site boundary polygon drawn from the MRV map
+ *     description: Accepts a GeoJSON Polygon using longitude/latitude coordinates and stores it against the project site.
+ *     tags: [MRV Engine - Projects]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: siteId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [boundary]
+ *             properties:
+ *               boundary:
+ *                 type: object
+ *                 required: [type, coordinates]
+ *                 properties:
+ *                   type: { type: string, enum: [Polygon] }
+ *                   coordinates:
+ *                     type: array
+ *                     items:
+ *                       type: array
+ *                       items:
+ *                         type: array
+ *                         items: { type: number }
+ *     responses:
+ *       200:
+ *         description: Site boundary saved
+ */
+router.put('/:projectId/sites/:siteId/boundary', authenticateToken,
+  requirePermission('mrv:projects:write'),
+  verifyMRVProjectAccess(['mrv-project-manager', 'mrv-field-officer', 'mrv-programme-admin']),
+  mrvAuditEvent({ action: 'SITE_BOUNDARY_UPDATED', entityType: 'MRVSite', getEntityId: (req) => req.params.siteId }),
+  async (req, res) => {
+    try {
+      const boundary = normalizeGeoJsonPolygon(req.body.boundary);
+      const site = await MRVSite.findOneAndUpdate(
+        { projectId: req.params.projectId, siteId: req.params.siteId, deletedAt: null },
+        { $set: { boundary, updatedAt: new Date() } },
+        { new: true }
+      );
+      if (!site) return res.status(404).json({ error: 'Site not found' });
+      res.json({ success: true, data: site, points: boundary.coordinates[0].length });
+    } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+  }
+);
 /**
  * @swagger
  * /api/mrv/projects/{projectId}/baseline:
@@ -335,3 +504,8 @@ router.post('/:projectId/monitoring-plan', authenticateToken,
 );
 
 module.exports = router;
+
+
+
+
+

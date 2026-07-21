@@ -1,10 +1,11 @@
 'use strict';
-const { Worker } = require('bullmq');
+const { Worker, Queue } = require('bullmq');
 const { v4: uuidv4 } = require('uuid');
 const MRVObservation = require('../../models/mrv/evidence/MRVObservation.model');
 const MRVValidationRun = require('../../models/mrv/evidence/MRVValidationRun.model');
 const { mrvQualificationQueue } = require('./queues');
 const logger = require('../../utils/logger');
+const { extractObservationPayload } = require('../../services/mrv/mrvObservationExtractionService');
 
 const RUNNER_VERSION = '1.0.0';
 
@@ -36,13 +37,43 @@ function runChecks(obs) {
   return { checks, overallResult };
 }
 
+async function rehydrateMeasurementsIfMissing(obs, connection) {
+  if (Object.keys(obs.measurements || {}).length > 0 || !obs.ingestionId) {
+    return obs;
+  }
+
+  const observationQueue = new Queue('mrv-observation', { connection });
+  try {
+    const job = await observationQueue.getJob(`obs-${obs.ingestionId}`);
+    const envelope = job?.data?.envelope;
+    if (!envelope) return obs;
+
+    const { measurements, derivedValues, monitoringPeriodId } = extractObservationPayload(envelope);
+    if (Object.keys(measurements).length === 0) return obs;
+
+    const update = {
+      measurements,
+      derivedValues,
+      monitoringPeriodId: obs.monitoringPeriodId || monitoringPeriodId || null
+    };
+    await MRVObservation.findOneAndUpdate({ observationId: obs.observationId }, { $set: update });
+    logger.info(`[MRVValidation] Rehydrated measurements for ${obs.observationId} from retained observation job`);
+    return { ...obs, ...update };
+  } catch (err) {
+    logger.warn(`[MRVValidation] Could not rehydrate measurements for ${obs.observationId}: ${err.message}`);
+    return obs;
+  } finally {
+    await observationQueue.close();
+  }
+}
 function startMRVValidationWorker() {
   const connection = { host: process.env.REDIS_HOST || '127.0.0.1', port: parseInt(process.env.REDIS_PORT || '6379', 10), password: process.env.REDIS_PASSWORD || undefined, keepAlive: 30000, maxRetriesPerRequest: null };
 
   const worker = new Worker('mrv-validation', async (job) => {
     const { observationId } = job.data;
-    const obs = await MRVObservation.findOne({ observationId }).lean();
+    let obs = await MRVObservation.findOne({ observationId }).lean();
     if (!obs) { logger.warn(`[MRVValidation] Observation not found: ${observationId}`); return; }
+    obs = await rehydrateMeasurementsIfMissing(obs, connection);
 
     const { checks, overallResult } = runChecks(obs);
     const statusMap = { ACCEPTED: 'ACCEPTED', ACCEPTED_WITH_WARNING: 'ACCEPTED_WITH_WARNING', QUARANTINED: 'QUARANTINED', REJECTED: 'REJECTED' };

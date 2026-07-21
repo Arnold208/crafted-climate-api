@@ -3,6 +3,7 @@ const Deployment = require('../../models/deployment/deploymentModel');
 const Organization = require('../../models/organization/organizationModel');
 const registryService = require('../devices/registry/registry.service');
 const axios = require('axios');
+const SensorInstallation = require('../../models/mrv/evidence/SensorInstallation.model');
 
 class OrganizationDevicesController {
     // List Devices
@@ -17,15 +18,40 @@ class OrganizationDevicesController {
 
             const effectiveOrgId = currentOrgId || orgId;
             const devices = await RegisteredDevice.find({
-                organization: effectiveOrgId,
+                $or: [
+                    { organizationId: effectiveOrgId },
+                    { organization: effectiveOrgId }
+                ],
                 deletedAt: null
+            }).lean();
+
+            const auids = devices.map((device) => device.auid).filter(Boolean);
+            const activeInstallations = auids.length
+                ? await SensorInstallation.find({
+                    auid: { $in: auids },
+                    status: { $in: ['ACTIVE', 'MAINTENANCE', 'PLANNED'] }
+                }).lean()
+                : [];
+            const assignmentByAuid = new Map(activeInstallations.map((installation) => [installation.auid, installation]));
+            const enriched = devices.map((device) => {
+                const assignment = assignmentByAuid.get(device.auid);
+                return {
+                    ...device,
+                    mrvAssignment: assignment ? {
+                        projectId: assignment.projectId,
+                        siteId: assignment.siteId,
+                        installationId: assignment.installationId,
+                        status: assignment.status
+                    } : null,
+                    mrvAvailable: !assignment
+                };
             });
-            res.status(200).json(devices);
+
+            res.status(200).json(enriched);
         } catch (err) {
             res.status(500).json({ message: 'Server error', error: err.message });
         }
     }
-
     // Get Single Device
     async getDevice(req, res) {
         try {
@@ -39,7 +65,10 @@ class OrganizationDevicesController {
             const effectiveOrgId = currentOrgId || orgId;
             const device = await RegisteredDevice.findOne({
                 auid,
-                organization: effectiveOrgId,
+                $or: [
+                    { organizationId: effectiveOrgId },
+                    { organization: effectiveOrgId }
+                ],
                 deletedAt: null
             });
 
@@ -64,7 +93,10 @@ class OrganizationDevicesController {
             const effectiveOrgId = currentOrgId || orgId;
             const device = await RegisteredDevice.findOne({
                 auid,
-                organization: effectiveOrgId,
+                $or: [
+                    { organizationId: effectiveOrgId },
+                    { organization: effectiveOrgId }
+                ],
                 deletedAt: null
             });
 
@@ -117,7 +149,10 @@ class OrganizationDevicesController {
             const effectiveOrgId = currentOrgId || orgId;
             const device = await RegisteredDevice.findOne({
                 auid,
-                organization: effectiveOrgId,
+                $or: [
+                    { organizationId: effectiveOrgId },
+                    { organization: effectiveOrgId }
+                ],
                 deletedAt: null
             });
 

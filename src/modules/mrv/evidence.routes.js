@@ -7,7 +7,7 @@ const { verifyMRVProjectAccess } = require('../../middleware/mrv/verifyMRVProjec
 const { mrvAuditEvent } = require('../../middleware/mrv/mrvAuditEvent');
 const { requirePermission } = require('../../middleware/authenticateApiKey');
 const { hashBuffer } = require('../../services/mrv/mrvHashService');
-const { uploadEvidence, generateUploadToken } = require('../../services/mrv/mrvBlobService');
+const { uploadEvidence, generateUploadToken, readBlobBuffer } = require('../../services/mrv/mrvBlobService');
 const installationSvc = require('../../services/mrv/mrvInstallationService');
 const ExternalEvidenceRecord = require('../../models/mrv/evidence/ExternalEvidenceRecord.model');
 const ManualObservation = require('../../models/mrv/evidence/ManualObservation.model');
@@ -59,7 +59,8 @@ router.get('/:projectId/evidence', authenticateToken, requirePermission('mrv:evi
     const filter = { projectId: req.params.projectId };
     if (req.query.evidenceType) filter.evidenceType = req.query.evidenceType;
     if (req.query.monitoringPeriodId) filter.monitoringPeriodId = req.query.monitoringPeriodId;
-    const records = await ExternalEvidenceRecord.find(filter).sort({ _id: -1 }).lean();
+    const records = await ExternalEvidenceRecord.find(filter).lean();
+    records.sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0) - new Date(a.uploadedAt || a.createdAt || 0));
     res.json({ success: true, data: records });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -202,6 +203,44 @@ router.post('/:projectId/evidence/upload-token', authenticateToken,
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+/**
+ * @swagger
+ * /api/mrv/projects/{projectId}/evidence/{evidenceId}/preview:
+ *   get:
+ *     summary: Preview an evidence file inline
+ *     description: Streams a private evidence blob through the authenticated API with inline content disposition for browser preview.
+ *     tags: [MRV Engine - Evidence and Ingest]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: evidenceId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Evidence file stream
+ *       404:
+ *         description: Evidence file not found
+ */
+router.get('/:projectId/evidence/:evidenceId/preview', authenticateToken, requirePermission('mrv:evidence:read'), verifyMRVProjectAccess(), async (req, res) => {
+  try {
+    const record = await ExternalEvidenceRecord.findOne({ projectId: req.params.projectId, evidenceId: req.params.evidenceId }).lean();
+    if (!record) return res.status(404).json({ error: 'Evidence record not found' });
+    if (!record.blobPath) return res.status(404).json({ error: 'Evidence file is not available in blob storage' });
+    const buffer = await readBlobBuffer({ containerName: record.blobContainer || 'mrv-evidence', blobPath: record.blobPath });
+    if (!buffer) return res.status(503).json({ error: 'Evidence preview is unavailable because blob storage is not configured' });
+    const filename = encodeURIComponent(record.title || record.blobPath.split('/').pop() || `${record.evidenceId}`);
+    res.setHeader('Content-Type', record.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.setHeader('X-Evidence-Id', record.evidenceId);
+    res.send(buffer);
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+});
 // ── Manual Observations ───────────────────────────────────────────────────
 
 /**
@@ -243,7 +282,8 @@ router.get('/:projectId/manual-observations', authenticateToken, requirePermissi
     if (req.query.monitoringPeriodId) filter.monitoringPeriodId = req.query.monitoringPeriodId;
     if (req.query.parameterId) filter.parameterId = req.query.parameterId;
     if (req.query.status) filter.status = req.query.status;
-    const obs = await ManualObservation.find(filter).sort({ observedAt: -1 }).lean();
+    const obs = await ManualObservation.find(filter).lean();
+    obs.sort((a, b) => new Date(b.observedAt || 0) - new Date(a.observedAt || 0));
     res.json({ success: true, data: obs });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -417,7 +457,8 @@ router.get('/:projectId/installations', authenticateToken, requirePermission('mr
     if (status) filter.status = status;
     if (siteId) filter.siteId = siteId;
     if (auid)   filter.auid   = auid;
-    const installations = await SensorInstallation.find(filter).sort({ _id: -1 }).lean();
+    const installations = await SensorInstallation.find(filter).lean();
+    installations.sort((a, b) => new Date(b.installedAt || b.validFrom || b.createdAt || 0) - new Date(a.installedAt || a.validFrom || a.createdAt || 0));
     res.json({ success: true, count: installations.length, data: installations });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -432,8 +473,8 @@ router.get('/:projectId/installations', authenticateToken, requirePermission('mr
  *
  *       **Business Rules enforced:**
  *       1. Device must exist and belong to the **same organization** as the project
- *       2. Device model is checked against the project's methodology sensor capability map
- *       3. Device cannot already have an ACTIVE/MAINTENANCE installation on this project+site
+ *       2. Device measured parameters are checked against the project methodology. If `selectedParameters` is omitted, all registered device datapoints are selected by default.
+ *       3. Device cannot already have an ACTIVE/MAINTENANCE/PLANNED installation in any MRV project
  *       4. Project must not be CLOSED, COMPLETED, or ARCHIVED
  *
  *       **What happens on success:**
@@ -496,9 +537,9 @@ router.get('/:projectId/installations', authenticateToken, requirePermission('mr
  *               value:
  *                 auid: sandbox-gas-solo-001
  *                 siteId: SITE-SANDBOX-ACCRA-001
- *                 positionDescription: Indoor kitchen — household cluster A, Accra pilot site
+ *                 positionDescription: Indoor kitchen - household cluster A, Accra pilot site
  *                 coordinates: [-0.187, 5.6037]
- *                 expectedFrequencySeconds: 3600
+ *                 expectedFrequencySeconds: 30
  *     responses:
  *       201:
  *         description: Device successfully linked to project
@@ -513,7 +554,7 @@ router.get('/:projectId/installations', authenticateToken, requirePermission('mr
  *       400: { description: Missing required fields }
  *       403: { description: Device belongs to a different organization OR insufficient role }
  *       404: { description: Device or project not found }
- *       409: { description: Device already has an active installation on this project OR project is closed }
+ *       409: { description: Device already has an active MRV installation OR project is closed }
  */
 router.post('/:projectId/installations', authenticateToken,
   requirePermission('mrv:evidence:write'),
@@ -868,7 +909,8 @@ router.post('/:projectId/calibrations', authenticateToken,
  */
 router.get('/:projectId/csv-imports', authenticateToken, requirePermission('mrv:evidence:read'), verifyMRVProjectAccess(), async (req, res) => {
   try {
-    const imports = await CSVImport.find({ projectId: req.params.projectId }).sort({ uploadedAt: -1 }).lean();
+    const imports = await CSVImport.find({ projectId: req.params.projectId }).lean();
+    imports.sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0) - new Date(a.uploadedAt || a.createdAt || 0));
     res.json({ success: true, data: imports });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1061,13 +1103,24 @@ router.get('/:projectId/receipts', authenticateToken, requirePermission('mrv:evi
     const filter = { projectIds: req.params.projectId };
     if (status) filter.status = status;
     if (auid) filter.auid = auid;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+    const pageLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100);
+    const skip = (pageNumber - 1) * pageLimit;
     const [receipts, total] = await Promise.all([
-      TelemetryReceipt.find(filter).sort({ receivedAt: -1 }).skip(skip).limit(parseInt(limit)).lean(),
+      TelemetryReceipt.find(filter).sort({ receivedAt: -1 }).skip(skip).limit(pageLimit).lean(),
       TelemetryReceipt.countDocuments(filter)
     ]);
-    res.json({ success: true, data: receipts, pagination: { page: parseInt(page), limit: parseInt(limit), total } });
+    const data = receipts.map((receipt) => ({
+      ...receipt,
+      blobPath: receipt.rawBlobPath || null,
+      blobContainer: receipt.rawBlobContainer || 'mrv-raw',
+      blobHash: receipt.rawBlobHash || null,
+    }));
+    res.json({ success: true, data, pagination: { page: pageNumber, limit: pageLimit, total, pages: Math.ceil(total / pageLimit) } });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;
+
+
+

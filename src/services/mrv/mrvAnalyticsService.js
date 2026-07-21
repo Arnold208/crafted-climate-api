@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 const MRVObservation = require('../../models/mrv/evidence/MRVObservation.model');
 const MonitoringPeriod = require('../../models/mrv/monitoring/MonitoringPeriod.model');
 const MRVProject = require('../../models/mrv/project/MRVProject.model');
@@ -9,7 +9,7 @@ const CalculationRun = require('../../models/mrv/accounting/CalculationRun.model
 const CacheService = require('../../modules/common/cache.service');
 
 const ACCEPTED_STATUSES = ['ACCEPTED', 'ACCEPTED_WITH_WARNING', 'MANUALLY_APPROVED'];
-const ACTIVE_PROJECT_STATUSES = ['READY_FOR_MONITORING', 'MONITORING', 'CALCULATION', 'VVB_VERIFICATION', 'VERRA_REVIEW'];
+const ACTIVE_PROJECT_STATUSES = ['MONITORING', 'CALCULATION', 'VVB_VERIFICATION', 'VERRA_REVIEW'];
 const NON_ACTIVE_PROJECT_STATUSES = ['SANDBOX', 'CANDIDATE', 'APPLICABILITY_REVIEW', 'LEGAL_REVIEW', 'PROJECT_CLOSED', 'WITHDRAWN', 'SUSPENDED'];
 
 function countFromAggregation(rows, key = '_id') {
@@ -24,24 +24,35 @@ function percent(part, total) {
   return Number(((part / total) * 100).toFixed(1));
 }
 
+function projectActionState(project, counts) {
+  if (project.readinessStatus === 'NOT_READY') return 'BLOCKED';
+  if (project.applicabilityStatus === 'NOT_APPLICABLE' || project.applicabilityStatus === 'REQUIRES_REVIEW') return 'BLOCKED';
+  if (project.readinessStatus === 'READY' && !ACTIVE_PROJECT_STATUSES.includes(project.status)) return 'READY_TO_START';
+  if (project.status === 'READY_FOR_MONITORING') return 'READY_TO_START';
+  if ((counts.quarantinedObservations || 0) > 0 || (counts.pendingObservations || 0) > 0) return 'REVIEW_REQUIRED';
+  if ((counts.openMonitoringPeriods || 0) > 0) return 'MONITORING';
+  if (project.status === 'CALCULATION') return 'CALCULATION_REVIEW';
+  if (project.status === 'VVB_VERIFICATION') return 'VERIFIER_REVIEW';
+  if (project.status === 'VERRA_REVIEW') return 'VERRA_REVIEW';
+  return 'OPEN_WORKSPACE';
+}
+
 function projectNextAction(project, counts) {
-  if (['SANDBOX', 'CANDIDATE', 'APPLICABILITY_REVIEW', 'LEGAL_REVIEW'].includes(project.status)) {
-    return 'Resolve readiness and applicability requirements';
-  }
-  if ((counts.quarantinedObservations || 0) > 0 || (counts.pendingObservations || 0) > 0) {
-    return 'Review data quality items';
-  }
-  if ((counts.openMonitoringPeriods || 0) > 0) return 'Monitor active period';
-  if (project.status === 'CALCULATION') return 'Review calculation run';
-  if (project.status === 'VVB_VERIFICATION') return 'Support verifier review';
-  if (project.status === 'VERRA_REVIEW') return 'Track Verra review';
+  const actionState = projectActionState(project, counts);
+  if (actionState === 'BLOCKED') return 'Resolve readiness requirements';
+  if (actionState === 'READY_TO_START') return 'Open monitoring period';
+  if (actionState === 'REVIEW_REQUIRED') return 'Review data quality items';
+  if (actionState === 'MONITORING') return 'Monitor active period';
+  if (actionState === 'CALCULATION_REVIEW') return 'Review calculation run';
+  if (actionState === 'VERIFIER_REVIEW') return 'Support verifier review';
+  if (actionState === 'VERRA_REVIEW') return 'Track Verra review';
   return 'Open project workspace';
 }
 
 class MRVAnalyticsService {
 
   /**
-   * Project summary â€” fast, Redis-cached (5 min TTL).
+   * Project summary — fast, Redis-cached (5 min TTL).
    * Returns total periods, observations, acceptance rate, total tCO2e, active sensors,
    * current period completeness.
    */
@@ -414,10 +425,14 @@ class MRVAnalyticsService {
           const evidence = evByProject[project.projectId] || {};
           const calculation = calcByProject[project.projectId] || {};
           const counts = { ...obs, ...periods, ...installations, ...evidence, ...calculation };
+          const actionState = projectActionState(project, counts);
           return {
             projectId: project.projectId,
             name: project.name,
             status: project.status,
+            readinessStatus: project.readinessStatus || null,
+            applicabilityStatus: project.applicabilityStatus || null,
+            actionState,
             activityType: project.activityType,
             claimType: project.claimType,
             country: project.country,
@@ -436,6 +451,9 @@ class MRVAnalyticsService {
           };
         });
 
+        const readinessReadyProjects = projectRows.filter(project => project.readinessStatus === 'READY').length;
+        const projectsRequiringAction = projectRows.filter(project => project.actionState === 'BLOCKED').length;
+
         return {
           organizationId,
           generatedAt: new Date().toISOString(),
@@ -444,6 +462,8 @@ class MRVAnalyticsService {
             totalProjects: projects.length,
             activeProjects,
             inactiveProjects: projects.length - activeProjects,
+            readinessReadyProjects,
+            projectsRequiringAction,
             totalSites: siteCount,
             activeDevices: installationCounts.ACTIVE || 0,
             maintenanceDevices: installationCounts.MAINTENANCE || 0,

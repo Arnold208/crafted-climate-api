@@ -5,6 +5,7 @@ const { updateReceiptStatus } = require('../../services/mrv/mrvIdempotencyServic
 const { mrvValidationQueue } = require('./queues');
 const MRVObservation = require('../../models/mrv/evidence/MRVObservation.model');
 const logger = require('../../utils/logger');
+const { extractObservationPayload } = require('../../services/mrv/mrvObservationExtractionService');
 
 function startMRVObservationWorker() {
   const connection = { host: process.env.REDIS_HOST || '127.0.0.1', port: parseInt(process.env.REDIS_PORT || '6379', 10), password: process.env.REDIS_PASSWORD || undefined, keepAlive: 30000, maxRetriesPerRequest: null };
@@ -20,21 +21,7 @@ function startMRVObservationWorker() {
 
     const { auid, model, organizationId, projectIds, receivedAt, observedAt, timeSource, clockQuality, body } = envelope;
 
-    // envelope.body = the full raw ingest payload (req.body).
-    // Sensor readings are nested inside rawEvent.body (the 'body' field of the ingest event).
-    // monitoringPeriodId is at the top level of the raw ingest payload.
-    const rawEvent      = body || {};
-    const sensorReadings = rawEvent.body || {};        // nested sensor readings object
-    const monitoringPeriodId = rawEvent.monitoringPeriodId || null;
-
-    // Dynamic measurement extraction — only numeric values from the sensor readings object
-    const measurements = {};
-    const derivedValues = {};
-    for (const [key, val] of Object.entries(sensorReadings)) {
-      if (typeof val === 'number') measurements[key] = val;
-    }
-    if (measurements.aqi     !== undefined) derivedValues.aqi     = measurements.aqi;
-    if (measurements.battery !== undefined) derivedValues.battery = measurements.battery;
+    const { monitoringPeriodId, measurements, derivedValues } = extractObservationPayload(envelope);
 
     const observationId = `OBS-${uuidv4()}`;
     await MRVObservation.create({

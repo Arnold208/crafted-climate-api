@@ -7,7 +7,7 @@
  * Business Rules:
  *   1. Device must belong to the same org as the project
  *   2. Device model must match a SensorCapability linked to the project's methodology
- *   3. Device cannot already have an ACTIVE/MAINTENANCE installation on this project+site
+ *   3. Device cannot already have an ACTIVE/MAINTENANCE/PLANNED installation in another MRV project
  *   4. Project must not be CLOSED/COMPLETED/ARCHIVED
  *   5. Installations are NEVER deleted — status changes only (full audit trail)
  *   6. ACTIVE → MAINTENANCE: temporary offline (returns to ACTIVE after)
@@ -19,13 +19,46 @@ const { v4: uuidv4 } = require('uuid');
 const SensorInstallation = require('../../models/mrv/evidence/SensorInstallation.model');
 const MRVProject         = require('../../models/mrv/project/MRVProject.model');
 const Device             = require('../../models/devices/registerDevice');
-const MRVSensorCapability = require('../../models/mrv/catalogue/MRVSensorCapability.model');
 const ProjectMethodologyAssignment = require('../../models/mrv/project/ProjectMethodologyAssignment.model');
 const { logMRVEvent } = require('./mrvAuditService');
+const { evaluateDeviceMethodologySuitability } = require('./mrvDeviceSuitabilityService');
 const logger             = require('../../utils/logger');
 
 // Project statuses that block new installations
 const CLOSED_STATUSES = ['CLOSED', 'COMPLETED', 'ARCHIVED', 'CANCELLED'];
+const SCHEDULE_LIMITS = Object.freeze({
+  minFrequencyMinutes: 5,
+  maxFrequencyMinutes: 180,
+  frequencyStepMinutes: 5,
+  minBatch: 2,
+  maxTransmitWindowMinutes: 720,
+  inboundGraceMinutes: 5,
+});
+
+function toPositiveInteger(value, fieldName) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) throw Object.assign(new Error(`${fieldName} must be a whole number.`), { status: 400 });
+  return parsed;
+}
+
+function deriveScheduleConfig(frequency, batch) {
+  const frequencyMinutes = toPositiveInteger(frequency, 'Frequency');
+  const batchCount = toPositiveInteger(batch, 'Batch size');
+  if (frequencyMinutes < SCHEDULE_LIMITS.minFrequencyMinutes) throw Object.assign(new Error(`Minimum reporting frequency is ${SCHEDULE_LIMITS.minFrequencyMinutes} minutes.`), { status: 400 });
+  if (frequencyMinutes > SCHEDULE_LIMITS.maxFrequencyMinutes) throw Object.assign(new Error(`Maximum reporting frequency is ${SCHEDULE_LIMITS.maxFrequencyMinutes} minutes.`), { status: 400 });
+  if (frequencyMinutes % SCHEDULE_LIMITS.frequencyStepMinutes !== 0) throw Object.assign(new Error(`Reporting frequency must be in ${SCHEDULE_LIMITS.frequencyStepMinutes}-minute steps.`), { status: 400 });
+  if (batchCount < SCHEDULE_LIMITS.minBatch) throw Object.assign(new Error(`Minimum batch size is ${SCHEDULE_LIMITS.minBatch} readings.`), { status: 400 });
+  const maxBatch = Math.max(SCHEDULE_LIMITS.minBatch, Math.floor(SCHEDULE_LIMITS.maxTransmitWindowMinutes / frequencyMinutes));
+  if (batchCount > maxBatch) throw Object.assign(new Error(`Maximum batch size is ${maxBatch} for a ${frequencyMinutes}-minute frequency.`), { status: 400 });
+  const batchWindowMinutes = frequencyMinutes * batchCount;
+  return {
+    frequency: frequencyMinutes,
+    batch: batchCount,
+    batchWindowMinutes,
+    inboundGraceMinutes: SCHEDULE_LIMITS.inboundGraceMinutes,
+    expectedFrequencySeconds: frequencyMinutes * 60,
+  };
+}
 
 // ── Validation helpers ────────────────────────────────────────────────────
 
@@ -44,36 +77,36 @@ async function validateDeviceOwnership(device, project) {
   }
 }
 
-async function validateDeviceCapability(device, projectId) {
-  // Get the project's methodology assignment
+async function validateDeviceCapability(device, projectId, selectedParameters) {
   const assignment = await ProjectMethodologyAssignment.findOne({ projectId }).lean();
-  if (!assignment) return; // no methodology yet — allow installation, warn later in readiness check
+  if (!assignment) return null; // no methodology yet - allow installation, warn later in readiness check
 
-  // Check if this device model has any capability mapping to the project's methodology
-  const capability = await MRVSensorCapability.findOne({
-    model: device.model,
-    'methodologyMappings.methodologyId': assignment.methodologyId,
-    'methodologyMappings.qualification': { $ne: 'NOT_QUALIFIED' }
-  }).lean();
+  const suitability = await evaluateDeviceMethodologySuitability({
+    device,
+    methodologyId: assignment.methodologyId,
+    methodologyVersionId: assignment.methodologyVersionId,
+    selectedParameters,
+  });
 
-  if (!capability) {
-    logger.warn(`[MRVInstallation] Device model=${device.model} has no qualified capability for methodology=${assignment.methodologyId}. Installation allowed but will be flagged in readiness assessment.`);
-    // We warn but don't block — the readiness assessment will flag this as a blocker
-    // This allows field teams to install first and fix methodology assignment later
+  if (!suitability.qualified) {
+    logger.warn(`[MRVInstallation] Device model=${device.model} has no selected parameter suitable for methodology=${assignment.methodologyId}. Installation allowed but readiness will flag it.`);
+  } else if (!suitability.hasCalculationInput) {
+    logger.info(`[MRVInstallation] Device model=${device.model} is supporting evidence for methodology=${assignment.methodologyId}, not primary calculation input.`);
   }
+
+  return suitability;
 }
 
-async function validateNoActiveInstallation(auid, projectId, siteId) {
+async function validateNoActiveInstallation(auid, projectId) {
   const existing = await SensorInstallation.findOne({
     auid,
-    projectId,
-    ...(siteId ? { siteId } : {}),
     status: { $in: ['ACTIVE', 'MAINTENANCE', 'PLANNED'] }
   }).lean();
 
   if (existing) {
+    const scope = existing.projectId === projectId ? 'this project' : `project ${existing.projectId}`;
     throw Object.assign(
-      new Error(`Device auid=${auid} already has an active installation on this project (installationId=${existing.installationId}, status=${existing.status})`),
+      new Error(`Device auid=${auid} already has an active MRV installation on ${scope} (installationId=${existing.installationId}, status=${existing.status})`),
       { status: 409 }
     );
   }
@@ -107,12 +140,16 @@ async function linkDevice(projectId, auid, data, requestingUserId) {
   await validateDeviceOwnership(device, project);
 
   // 5. Validate device capability (warn if mismatch, don't block)
-  await validateDeviceCapability(device, projectId);
+  const suitability = await validateDeviceCapability(device, projectId, data.selectedParameters || data.monitoredParameters);
 
   // 6. Validate no duplicate active installation
-  await validateNoActiveInstallation(auid, projectId, data.siteId);
+  await validateNoActiveInstallation(auid, projectId);
 
   // 7. Create installation record
+  const schedule = deriveScheduleConfig(
+    data.frequency !== undefined ? data.frequency : (device.frequency || 30),
+    data.batch !== undefined ? data.batch : (device.batch || 2),
+  );
   const installationId = `INST-${uuidv4()}`;
   const installation = await SensorInstallation.create({
     installationId,
@@ -126,8 +163,14 @@ async function linkDevice(projectId, auid, data, requestingUserId) {
     validTo:              null,
     coordinates:          data.coordinates || null,
     positionDescription:  data.positionDescription || null,
-    expectedFrequencySeconds: data.expectedFrequencySeconds || 3600,
+    frequency:            schedule.frequency,
+    batch:                schedule.batch,
+    batchWindowMinutes:   schedule.batchWindowMinutes,
+    inboundGraceMinutes:  schedule.inboundGraceMinutes,
+    expectedFrequencySeconds: schedule.expectedFrequencySeconds,
     installationNotes:    data.installationNotes || null,
+    selectedParameters:   suitability?.selectedParameters || [],
+    suitabilitySnapshot:  suitability || null,
     status:               'ACTIVE',
     installedBy:          requestingUserId,
     installedAt:          new Date(),
@@ -156,7 +199,7 @@ async function linkDevice(projectId, auid, data, requestingUserId) {
     actorId:         requestingUserId,
     entityType:      'SensorInstallation',
     entityId:        installationId,
-    metadata:        { auid, model: device.model, siteId: data.siteId }
+    metadata:        { auid, model: device.model, siteId: data.siteId, selectedParameters: suitability?.selectedParameters || [], suitability: suitability ? { qualified: suitability.qualified, qualification: suitability.qualification, hasCalculationInput: suitability.hasCalculationInput } : null }
   });
 
   logger.info(`[MRVInstallation] Device linked: auid=${auid} → project=${projectId} (${installationId})`);
@@ -389,3 +432,5 @@ module.exports = {
   listInstallations,
   getInstallation,
 };
+
+

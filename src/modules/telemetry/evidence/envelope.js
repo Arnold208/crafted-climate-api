@@ -21,6 +21,15 @@ const { v4: uuidv4 } = require('uuid');
  * @param {string[]}    params.projectIds         - MRV project IDs (empty if unresolved)
  * @returns {object} Canonical envelope ready for the mrv-evidence queue
  */
+function normalizeTransport(transport) {
+  const value = String(transport || '').toLowerCase();
+  if (value === 'hub' || value === 'notehub' || value === 'mqtt') return 'notehub-mqtt';
+  if (value === 'socket' || value === 'socket.io') return 'socketio';
+  if (value === 'http' || value === 'ingest') return 'http-ingest';
+  if (['notehub-mqtt', 'socketio', 'http-ingest', 'manual'].includes(value)) return value;
+  return 'notehub-mqtt';
+}
+
 function buildCanonicalEnvelope({
   rawEvent, devid, auid, model,
   transport, sourceTopic, sourceEventId,
@@ -29,13 +38,14 @@ function buildCanonicalEnvelope({
 }) {
   const ingestionId = uuidv4();
   const receivedAt = new Date().toISOString();
+  const normalizedTransport = normalizeTransport(transport);
 
   // Determine clock quality heuristics
   let timeSource = 'server-received';
   let clockQuality = 'unverified';
   if (observedAt) {
-    timeSource = transport === 'notehub-mqtt' ? 'notehub' : 'device';
-    clockQuality = transport === 'notehub-mqtt' ? 'synchronised' : 'device-reported';
+    timeSource = normalizedTransport === 'notehub-mqtt' ? 'notehub' : 'device';
+    clockQuality = normalizedTransport === 'notehub-mqtt' ? 'synchronised' : 'device-reported';
   }
 
   return {
@@ -45,7 +55,7 @@ function buildCanonicalEnvelope({
     devid: devid || null,
     auid: auid || null,
     model: model || null,
-    transport,
+    transport: normalizedTransport,
     sourceTopic: sourceTopic || null,
     sourceEventId: sourceEventId || null,
     observedAt: observedAt || null,

@@ -11,8 +11,153 @@ const MRVProjectPartner = require('../../models/mrv/project/MRVProjectPartner.mo
 const ProjectMethodologyAssignment = require('../../models/mrv/project/ProjectMethodologyAssignment.model');
 const ReadinessAssessment = require('../../models/mrv/project/ReadinessAssessment.model');
 const Organization = require('../../models/organization/organizationModel');
+const User = require('../../models/user/userModel');
+const MRVProjectInvitation = require('../../models/mrv/project/MRVProjectInvitation.model');
+const { sendCCEmailSafe } = require('../../services/email/craftedClimateMailer');
 const { runApplicabilityAssessment } = require('../../services/mrv/mrvApplicabilityService');
 const { runReadinessAssessment }     = require('../../services/mrv/mrvReadinessService');
+const MRV_ROLES = [
+  'mrv-project-manager',
+  'mrv-field-officer',
+  'mrv-data-reviewer',
+  'mrv-methodology-manager',
+  'mrv-report-manager',
+  'mrv-independent-verifier',
+  'mrv-programme-admin',
+  'mrv-auditor',
+];
+const ORG_ROLES = ['org-admin', 'org-support', 'org-user', 'viewer', 'editor'];
+
+const userDisplayName = (user) => {
+  if (!user) return '';
+  return [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username || user.email || user.userid;
+};
+
+
+const OPERATIONAL_PROJECT_STATUSES = new Set(['MONITORING', 'CALCULATION', 'VVB_VERIFICATION', 'VERRA_REVIEW', 'ISSUANCE_COMPLETE']);
+
+function mrvProjectActionState(project) {
+  if (project.readinessStatus === 'NOT_READY') return 'BLOCKED';
+  if (project.applicabilityStatus === 'NOT_APPLICABLE' || project.applicabilityStatus === 'REQUIRES_REVIEW') return 'BLOCKED';
+  if (project.readinessStatus === 'READY' && !OPERATIONAL_PROJECT_STATUSES.has(project.status)) return 'READY_TO_START';
+  if (project.status === 'READY_FOR_MONITORING') return 'READY_TO_START';
+  if (project.status === 'MONITORING') return 'MONITORING';
+  if (project.status === 'CALCULATION') return 'CALCULATION_REVIEW';
+  if (project.status === 'VVB_VERIFICATION') return 'VERIFIER_REVIEW';
+  if (project.status === 'VERRA_REVIEW') return 'VERRA_REVIEW';
+  return 'SETUP_IN_PROGRESS';
+}
+
+function mrvProjectNextAction(project) {
+  const actionState = mrvProjectActionState(project);
+  if (actionState === 'BLOCKED') return 'Resolve readiness items';
+  if (actionState === 'READY_TO_START') return 'Open monitoring period';
+  if (actionState === 'MONITORING') return 'Review data quality';
+  if (actionState === 'CALCULATION_REVIEW') return 'Review calculation run';
+  if (actionState === 'VERIFIER_REVIEW') return 'Support verifier review';
+  if (actionState === 'VERRA_REVIEW') return 'Track Verra review';
+  return 'Continue project setup';
+}
+function canManageProjectArchive(project, user) {
+  if (user?.platformRole === 'admin') return true;
+  const userId = user?.userid || user?._id?.toString();
+  const member = (project?.members || []).find((item) => item.userId === userId);
+  return ['mrv-project-manager', 'mrv-programme-admin'].includes(member?.role);
+}
+
+async function buildProjectTeamContext(projectId) {
+  const project = await MRVProject.findOne({ projectId, deletedAt: null }).lean();
+  if (!project) {
+    const err = new Error('Project not found');
+    err.status = 404;
+    throw err;
+  }
+
+  const org = await Organization.findOne({ organizationId: project.organizationId, deletedAt: null }).lean();
+  if (!org) {
+    const err = new Error('Organization not found');
+    err.status = 404;
+    throw err;
+  }
+
+  const orgMemberIds = (org.collaborators || []).map((member) => member.userid).filter(Boolean);
+  const projectMemberIds = (project.members || []).map((member) => member.userId).filter(Boolean);
+  const userIds = [...new Set([...orgMemberIds, ...projectMemberIds])];
+  const users = await User.find(
+    { userid: { $in: userIds } },
+    'userid firstName lastName username email profilePicture status lastActive',
+  ).lean();
+  const usersById = new Map(users.map((user) => [user.userid, user]));
+  const projectRoleByUser = new Map((project.members || []).map((member) => [member.userId, member]));
+
+  const organizationMembers = (org.collaborators || []).map((member) => {
+    const user = usersById.get(member.userid);
+    const projectMember = projectRoleByUser.get(member.userid);
+    return {
+      userid: member.userid,
+      name: userDisplayName(user),
+      email: user?.email || '',
+      orgRole: member.role,
+      permissions: member.permissions || [],
+      joinedAt: member.joinedAt || member.addedAt,
+      profilePicture: user?.profilePicture,
+      status: user?.status,
+      lastActive: user?.lastActive,
+      projectRole: projectMember?.role || null,
+      projectAddedAt: projectMember?.addedAt || null,
+    };
+  });
+
+  const projectMembers = (project.members || []).map((member) => {
+    const user = usersById.get(member.userId);
+    const orgMember = (org.collaborators || []).find((collab) => collab.userid === member.userId);
+    return {
+      userId: member.userId,
+      name: userDisplayName(user),
+      email: user?.email || '',
+      role: member.role,
+      orgRole: orgMember?.role || null,
+      addedAt: member.addedAt,
+      addedBy: member.addedBy,
+      profilePicture: user?.profilePicture,
+      status: user?.status,
+    };
+  });
+
+  const invitations = await MRVProjectInvitation.find({
+    projectId,
+    accepted: false,
+    expiresAt: { $gt: new Date() },
+  }).lean();
+  invitations.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+  return {
+    organization: {
+      organizationId: org.organizationId,
+      name: org.name,
+      planType: org.planType,
+      organizationType: org.organizationType,
+    },
+    project: {
+      projectId: project.projectId,
+      name: project.name,
+      status: project.status,
+    },
+    organizationMembers,
+    projectMembers,
+    invitations: invitations.map((invite) => ({
+      invitationId: invite.invitationId,
+      email: invite.email,
+      orgRole: invite.orgRole,
+      mrvRole: invite.mrvRole,
+      needsSignUp: invite.needsSignUp,
+      invitedBy: invite.invitedBy,
+      createdAt: invite.createdAt,
+      expiresAt: invite.expiresAt,
+    })),
+    roles: { mrvRoles: MRV_ROLES, orgRoles: ORG_ROLES },
+  };
+}
 
 /**
  * @swagger
@@ -61,13 +206,25 @@ router.get('/', authenticateToken, requirePermission('mrv:projects:read'), async
     const user = req.user;
     const orgId = req.query.organizationId;
     if (!orgId) return res.status(400).json({ error: 'organizationId query param required' });
-    const filter = { organizationId: orgId, deletedAt: null };
+
+    const archivedOnly = ['true', '1', 'only'].includes(String(req.query.archived || '').toLowerCase());
+    const includeDeleted = ['true', '1'].includes(String(req.query.includeDeleted || '').toLowerCase());
+    const filter = { organizationId: orgId };
+    if (archivedOnly) filter.deletedAt = { $ne: null };
+    else if (!includeDeleted) filter.deletedAt = null;
+
     if (user.platformRole !== 'admin') {
       filter['members.userId'] = user.userid || user._id?.toString();
     }
     if (req.query.status) filter.status = req.query.status;
-    const projects = await MRVProject.find(filter).lean();
-    res.json({ success: true, data: projects });
+    const projects = await MRVProject.find(filter).sort({ _id: -1 }).lean();
+    const rows = projects.map((project) => ({
+      ...project,
+      archived: Boolean(project.deletedAt),
+      actionState: mrvProjectActionState(project),
+      nextAction: project.deletedAt ? 'Restore project or keep archived' : mrvProjectNextAction(project),
+    }));
+    res.json({ success: true, data: rows });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -261,6 +418,93 @@ router.patch('/:projectId', authenticateToken, requirePermission('mrv:projects:w
 );
 
 // ── Sites ──────────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/mrv/projects/{projectId}/archive:
+ *   patch:
+ *     summary: Archive an MRV project without deleting audit records
+ *     description: Soft-deletes the project by setting deletedAt. Related MRV records remain intact and the project is hidden from normal portfolio lists.
+ *     tags: [MRV Engine - Projects]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason: { type: string, example: Created in error or no longer active }
+ *     responses:
+ *       200:
+ *         description: Project archived
+ */
+router.patch('/:projectId/archive', authenticateToken, requirePermission('mrv:projects:write'), verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
+  mrvAuditEvent({ action: 'PROJECT_ARCHIVED', entityType: 'MRVProject', getEntityId: (req) => req.params.projectId }),
+  async (req, res) => {
+    try {
+      const now = new Date();
+      const updated = await MRVProject.findOneAndUpdate(
+        { projectId: req.params.projectId, deletedAt: null },
+        {
+          $set: {
+            deletedAt: now,
+            deletedBy: req.user?.userid || req.user?._id?.toString(),
+            deleteReason: String(req.body?.reason || '').trim() || undefined,
+            updatedAt: now,
+          },
+        },
+        { new: true },
+      ).lean();
+      if (!updated) return res.status(404).json({ error: 'Active MRV project not found' });
+      res.json({ success: true, data: { ...updated, archived: true, nextAction: 'Restore project or keep archived' } });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  }
+);
+
+/**
+ * @swagger
+ * /api/mrv/projects/{projectId}/restore:
+ *   patch:
+ *     summary: Restore an archived MRV project
+ *     description: Clears deletedAt so the project appears in normal MRV portfolio lists again. Related audit records are not modified.
+ *     tags: [MRV Engine - Projects]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Project restored
+ */
+router.patch('/:projectId/restore', authenticateToken, requirePermission('mrv:projects:write'),
+  mrvAuditEvent({ action: 'PROJECT_RESTORED', entityType: 'MRVProject', getEntityId: (req) => req.params.projectId }),
+  async (req, res) => {
+    try {
+      const project = await MRVProject.findOne({ projectId: req.params.projectId, deletedAt: { $ne: null } }).lean();
+      if (!project) return res.status(404).json({ error: 'Archived MRV project not found' });
+      if (!canManageProjectArchive(project, req.user)) {
+        return res.status(403).json({ error: 'Only an MRV project manager or programme admin can restore this project.' });
+      }
+      const now = new Date();
+      const updated = await MRVProject.findOneAndUpdate(
+        { projectId: req.params.projectId },
+        {
+          $set: { restoredAt: now, restoredBy: req.user?.userid || req.user?._id?.toString(), updatedAt: now },
+          $unset: { deletedAt: '', deletedBy: '', deleteReason: '' },
+        },
+        { new: true },
+      ).lean();
+      res.json({ success: true, data: { ...updated, archived: false, actionState: mrvProjectActionState(updated), nextAction: mrvProjectNextAction(updated) } });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  }
+);
 
 /**
  * @swagger
@@ -503,6 +747,143 @@ router.post('/:projectId/methodology-assignments', authenticateToken,
 
 // ── Members ───────────────────────────────────────────────────────────────
 
+
+/**
+ * @swagger
+ * /api/mrv/projects/{projectId}/team/invite:
+ *   post:
+ *     summary: Invite or assign a team member to an MRV project by email
+ *     description: Existing Crafted Climate users are added to the workspace/project immediately. New users receive an invitation email that preserves the requested workspace and MRV role.
+ *     tags: [MRV Engine - Projects]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, mrvRole]
+ *             properties:
+ *               email: { type: string, format: email }
+ *               mrvRole: { type: string, enum: [mrv-project-manager, mrv-field-officer, mrv-data-reviewer, mrv-methodology-manager, mrv-report-manager, mrv-independent-verifier, mrv-programme-admin, mrv-auditor] }
+ *               orgRole: { type: string, enum: [org-admin, org-support, org-user, viewer, editor] }
+ *     responses:
+ *       200:
+ *         description: Existing user assigned to the project
+ *       201:
+ *         description: Invitation recorded and email queued
+ */
+router.post('/:projectId/team/invite', authenticateToken,
+  requirePermission('mrv:projects:write'),
+  verifyMRVProjectAccess(['mrv-project-manager', 'mrv-programme-admin']),
+  mrvAuditEvent({ action: 'TEAM_MEMBER_INVITED', entityType: 'MRVProject', getEntityId: (req) => req.params.projectId }),
+  async (req, res) => {
+    try {
+      const email = String(req.body.email || '').trim().toLowerCase();
+      const mrvRole = req.body.mrvRole || req.body.role;
+      const orgRole = req.body.orgRole || 'org-user';
+
+      if (!email || !email.includes('@')) return res.status(400).json({ error: 'A valid email address is required' });
+      if (!MRV_ROLES.includes(mrvRole)) return res.status(400).json({ error: 'A valid MRV project role is required' });
+      if (!ORG_ROLES.includes(orgRole)) return res.status(400).json({ error: 'A valid workspace role is required' });
+
+      const project = await MRVProject.findOne({ projectId: req.params.projectId, deletedAt: null });
+      if (!project) return res.status(404).json({ error: 'Project not found' });
+
+      const org = await Organization.findOne({ organizationId: project.organizationId, deletedAt: null });
+      if (!org) return res.status(404).json({ error: 'Organization not found' });
+
+      const invitee = await User.findOne({ email }).lean();
+      const inviterName = userDisplayName(req.user) || req.user?.username || req.user?.email || 'Crafted Climate';
+
+      if (invitee?.userid) {
+        const isOrgMember = org.collaborators.some((member) => member.userid === invitee.userid);
+        if (!isOrgMember) {
+          org.collaborators.push({ userid: invitee.userid, role: orgRole, joinedAt: new Date(), permissions: [] });
+          await org.save();
+          await User.updateOne({ userid: invitee.userid }, { $addToSet: { organization: org.organizationId }, $set: { currentOrganizationId: org.organizationId } });
+        }
+
+        await MRVProject.updateOne({ projectId: project.projectId }, { $pull: { members: { userId: invitee.userid } } });
+        const updated = await MRVProject.findOneAndUpdate(
+          { projectId: project.projectId },
+          { $addToSet: { members: { userId: invitee.userid, role: mrvRole, addedAt: new Date(), addedBy: req.user?.userid } } },
+          { new: true },
+        );
+
+        const projectUrl = `${process.env.APP_URL || 'https://console.craftedclimate.co'}/mrv/projects/${project.projectId}/team`;
+        await sendCCEmailSafe({
+          type: 'org.invitation',
+          to: email,
+          vars: {
+            orgName: org.name,
+            inviteeName: userDisplayName(invitee),
+            inviterName,
+            role: `${orgRole} / ${mrvRole}`,
+            acceptUrl: projectUrl,
+            signupUrl: projectUrl,
+            isNewUser: false,
+            expiresAt: null,
+          },
+        });
+
+        return res.json({ success: true, message: 'Existing user assigned to the MRV project', data: updated });
+      }
+
+      await MRVProjectInvitation.deleteMany({ projectId: project.projectId, email, accepted: false });
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const invitation = await MRVProjectInvitation.create({
+        invitationId: `mrv-inv-${uuidv4()}`,
+        token: uuidv4().replace(/-/g, ''),
+        email,
+        projectId: project.projectId,
+        organizationId: org.organizationId,
+        orgRole,
+        mrvRole,
+        needsSignUp: true,
+        invitedBy: req.user?.userid,
+        expiresAt,
+      });
+
+      const acceptUrl = `${process.env.APP_URL || 'https://console.craftedclimate.co'}/accept-invite?token=${invitation.token}&projectId=${project.projectId}`;
+      const signupUrl = `${process.env.APP_URL || 'https://console.craftedclimate.co'}/signup?invitationId=${invitation.invitationId}&token=${invitation.token}`;
+      await sendCCEmailSafe({
+        type: 'org.invitation',
+        to: email,
+        vars: {
+          orgName: org.name,
+          inviteeName: email,
+          inviterName,
+          role: `${orgRole} / ${mrvRole}`,
+          acceptUrl,
+          signupUrl,
+          isNewUser: true,
+          expiresAt,
+        },
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Invitation sent. The MRV role will be applied when the user joins Crafted Climate.',
+        data: {
+          invitationId: invitation.invitationId,
+          email: invitation.email,
+          orgRole: invitation.orgRole,
+          mrvRole: invitation.mrvRole,
+          expiresAt: invitation.expiresAt,
+          needsSignUp: true,
+        },
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
 /**
  * @swagger
  * /api/mrv/projects/{projectId}/members:

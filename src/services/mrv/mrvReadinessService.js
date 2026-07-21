@@ -20,6 +20,8 @@ const ProjectMethodologyAssignment = require('../../models/mrv/project/ProjectMe
 const SensorInstallation           = require('../../models/mrv/evidence/SensorInstallation.model');
 const CalibrationRecord            = require('../../models/mrv/evidence/CalibrationRecord.model');
 const logger                       = require('../../utils/logger');
+const { runApplicabilityAssessment } = require('./mrvApplicabilityService');
+const { upsertProjectIssueNotifications } = require('./mrvIssueNotificationService');
 
 // Lazy-require monitoring period to avoid missing-model crash at startup
 function getMRVMonitoringPeriod() {
@@ -36,7 +38,7 @@ const FIELD_ROLES = new Set([
 
 // Methodology assignment statuses that are acceptable for opening monitoring
 const APPROVED_ASSIGNMENT_STATUSES = new Set([
-  'CONFIRMED', 'APPROVED_FOR_MONITORING', 'ACTIVE',
+  'CONFIRMED', 'APPROVED_FOR_MONITORING', 'ACTIVE', 'APPLICABILITY_APPROVED',
 ]);
 
 // ── Individual checks ─────────────────────────────────────────────────────
@@ -94,9 +96,9 @@ async function checkCalibrationRecords(projectId) {
   if (activeInstallations.length === 0) {
     return {
       check:    'calibration_records',
-      passed:   false,
-      severity: 'BLOCKER',
-      message:  'No active installations to check calibration for.',
+      passed:   true,
+      severity: null,
+      message:  'Calibration check skipped until an ACTIVE installation exists.',
     };
   }
 
@@ -106,10 +108,12 @@ async function checkCalibrationRecords(projectId) {
   const valid        = [];
 
   for (const inst of activeInstallations) {
-    const latestCal = await CalibrationRecord.findOne({
+    const calibrationRecords = await CalibrationRecord.find({
       auid:   inst.auid,
       status: { $in: ['VALID', 'APPROVED'] },
-    }).sort({ calibratedAt: -1 }).lean();
+    }).lean();
+    calibrationRecords.sort((a, b) => new Date(b.calibratedAt || b.validFrom || 0) - new Date(a.calibratedAt || a.validFrom || 0));
+    const latestCal = calibrationRecords[0];
 
     if (!latestCal) {
       uncalibrated.push({ auid: inst.auid, model: inst.model, issue: 'No calibration record found' });
@@ -117,7 +121,8 @@ async function checkCalibrationRecords(projectId) {
     }
 
     const intervalDays = latestCal.validityIntervalDays || DEFAULT_CALIBRATION_INTERVAL_DAYS;
-    const expiresAt    = new Date(latestCal.calibratedAt);
+    const calibrationDate = latestCal.calibratedAt || latestCal.validFrom;
+    const expiresAt    = new Date(calibrationDate);
     expiresAt.setDate(expiresAt.getDate() + intervalDays);
 
     const daysRemaining = Math.floor((expiresAt - now) / (1000 * 60 * 60 * 24));
@@ -145,7 +150,9 @@ async function checkCalibrationRecords(projectId) {
 }
 
 async function checkMethodologyAssignment(projectId) {
-  const assignment = await ProjectMethodologyAssignment.findOne({ projectId }).lean();
+  const assignments = await ProjectMethodologyAssignment.find({ projectId }).lean();
+  assignments.sort((a, b) => new Date(b.selectedAt || 0) - new Date(a.selectedAt || 0));
+  const assignment = assignments.find((item) => item.selectionStatus !== 'SUPERSEDED') || assignments[0];
   if (!assignment) {
     return {
       check:    'methodology_assignment',
@@ -154,14 +161,15 @@ async function checkMethodologyAssignment(projectId) {
       message:  'No methodology assignment found. Assign and confirm a methodology before opening monitoring.',
     };
   }
-  const approved = APPROVED_ASSIGNMENT_STATUSES.has(assignment.status);
+  const assignmentStatus = assignment.status || assignment.selectionStatus || 'CANDIDATE';
+  const approved = APPROVED_ASSIGNMENT_STATUSES.has(assignmentStatus);
   return {
     check:    'methodology_assignment',
     passed:   approved,
     severity: approved ? null : 'BLOCKER',
     message:  approved
-      ? `Methodology ${assignment.methodologyId} assignment status: ${assignment.status}`
-      : `Methodology assignment status "${assignment.status}" is not approved for monitoring. Required: ${[...APPROVED_ASSIGNMENT_STATUSES].join(' | ')}`,
+      ? `Methodology ${assignment.methodologyId} assignment status: ${assignmentStatus}`
+      : `Methodology assignment status "${assignmentStatus}" is not approved for monitoring. Run applicability and resolve blockers first. Required: ${[...APPROVED_ASSIGNMENT_STATUSES].join(' | ')}`,
   };
 }
 
@@ -217,8 +225,13 @@ async function checkFieldTeamMember(projectId) {
  * @returns {{ overallReady, blockers, warnings, checks, assessedAt }}
  */
 async function runReadinessAssessment(projectId) {
-  const project = await MRVProject.findOne({ projectId }).lean();
+  let project = await MRVProject.findOne({ projectId }).lean();
   if (!project) throw Object.assign(new Error(`Project not found: ${projectId}`), { status: 404 });
+
+  if (!project.applicabilityStatus) {
+    await runApplicabilityAssessment(projectId);
+    project = await MRVProject.findOne({ projectId }).lean();
+  }
 
   // Run all checks — sequential where dependencies exist, parallel elsewhere
   const [applicabilityCheck, installationsCheck, noOpenPeriodCheck, assignmentCheck, fieldTeamCheck] =
@@ -239,17 +252,21 @@ async function runReadinessAssessment(projectId) {
   const overallReady = blockers.length === 0;
   const assessedAt = new Date();
 
+  const projectUpdates = {
+    readinessStatus:     overallReady ? 'READY' : 'NOT_READY',
+    readinessAssessedAt: assessedAt,
+    readinessChecks:     checks,
+    updatedAt:           assessedAt,
+  };
+
+  if (overallReady && !project.sandboxFlag && ['CANDIDATE', 'APPLICABILITY_REVIEW', 'LEGAL_REVIEW'].includes(project.status)) {
+    projectUpdates.status = 'READY_FOR_MONITORING';
+  }
+
   // Persist to project
   await MRVProject.findOneAndUpdate(
     { projectId },
-    {
-      $set: {
-        readinessStatus:     overallReady ? 'READY' : 'NOT_READY',
-        readinessAssessedAt: assessedAt,
-        readinessChecks:     checks,
-        updatedAt:           assessedAt,
-      },
-    }
+    { $set: projectUpdates }
   );
 
   logger.info(`[MRVReadiness] Project ${projectId}: ${overallReady ? 'READY' : 'NOT_READY'} (${blockers.length} blockers, ${warnings.length} warnings)`);

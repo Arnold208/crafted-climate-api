@@ -1,8 +1,9 @@
 'use strict';
 const { Worker } = require('bullmq');
 const MRVObservation = require('../../models/mrv/evidence/MRVObservation.model');
-const MRVMethodologyImplementation = require('../../models/mrv/catalogue/MRVMethodologyImplementation.model');
 const SensorInstallation = require('../../models/mrv/evidence/SensorInstallation.model');
+const ProjectMethodologyAssignment = require('../../models/mrv/project/ProjectMethodologyAssignment.model');
+const { evaluateDeviceMethodologySuitability } = require('../../services/mrv/mrvDeviceSuitabilityService');
 const logger = require('../../utils/logger');
 
 function startMRVQualificationWorker() {
@@ -36,14 +37,26 @@ function startMRVQualificationWorker() {
         continue;
       }
 
-      const implementation = await MRVMethodologyImplementation.findOne({ status: 'APPROVED_FOR_PROJECT_DESIGN', mayCalculate: true }).lean();
-      if (implementation) {
-        const { sensorCapabilityMappings = [] } = implementation;
-        const mapping = sensorCapabilityMappings.find(m => m.model === obs.model);
-        const qualification = mapping ? mapping.role : 'SUPPORTING_EVIDENCE_ONLY';
-        qualificationResults.push({ methodologyVersionId: implementation.methodologyVersionId, implementationId: implementation.implementationId, channel: obs.model, qualification, reason: mapping ? 'Sensor capability mapped' : 'No capability mapping found — defaulting to SUPPORTING_EVIDENCE_ONLY' });
+      const assignment = await ProjectMethodologyAssignment.findOne({ projectId: installation.projectId, selectionStatus: { $ne: 'SUPERSEDED' } }).lean();
+      if (assignment) {
+        const selectedParameters = Object.keys(obs.measurements || {});
+        const suitability = await evaluateDeviceMethodologySuitability({
+          device: { model: installation.model || obs.model, datapoints: selectedParameters },
+          methodologyId: assignment.methodologyId,
+          methodologyVersionId: assignment.methodologyVersionId,
+          selectedParameters: selectedParameters.length ? selectedParameters : installation.selectedParameters,
+        });
+        qualificationResults.push({
+          methodologyVersionId: assignment.methodologyVersionId,
+          implementationId: assignment.implementationId || null,
+          channel: selectedParameters.join(', ') || obs.model,
+          qualification: suitability.qualification,
+          reason: suitability.matches.length ? `Matched methodology parameter rules: ${suitability.matches.map((m) => `${m.measurementCode}:${m.qualification}`).join(', ')}` : 'No selected observation parameter matched methodology rules.',
+          matches: suitability.matches,
+          warnings: suitability.warnings,
+        });
       } else {
-        qualificationResults.push({ methodologyVersionId: null, implementationId: null, channel: obs.model, qualification: 'SUPPORTING_EVIDENCE_ONLY', reason: 'No approved implementation — mayCalculate=false' });
+        qualificationResults.push({ methodologyVersionId: null, implementationId: null, channel: obs.model, qualification: 'SUPPORTING_EVIDENCE_ONLY', reason: 'No methodology assignment - mayCalculate=false' });
       }
     }
 

@@ -52,6 +52,20 @@ const schema = new mongoose.Schema({
   sandboxFlag: { type: Boolean, default: false }, // SANDBOX_NON_CREDITING marker
   sandboxNote: { type: String },
   selectedStandardVersionId: { type: String },
+  applicabilityStatus: {
+    type: String,
+    enum: ['CONFIRMED', 'CANDIDATE', 'REQUIRES_REVIEW', 'NOT_APPLICABLE'],
+    default: null
+  },
+  applicabilityAssessedAt: { type: Date },
+  applicabilityChecks: [{ type: mongoose.Schema.Types.Mixed }],
+  readinessStatus: {
+    type: String,
+    enum: ['READY', 'NOT_READY'],
+    default: null
+  },
+  readinessAssessedAt: { type: Date },
+  readinessChecks: [{ type: mongoose.Schema.Types.Mixed }],
   ghanaPathway: {
     type: { type: String, enum: ['VOLUNTARY_ONLY', 'ARTICLE_6_2', 'ARTICLE_6_4', 'UNDETERMINED'], default: 'UNDETERMINED' },
     cmoEngagementStatus: { type: String, enum: ['NOT_STARTED', 'IN_PROGRESS', 'SUBMITTED', 'APPROVED', 'NOT_REQUIRED'], default: 'NOT_STARTED' },
@@ -104,8 +118,13 @@ const schema = new mongoose.Schema({
   createdBy: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
-  deletedAt: { type: Date, default: null, index: true }
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: String },
+  deleteReason: { type: String },
+  restoredAt: { type: Date },
+  restoredBy: { type: String }
 }, { versionKey: false });
 schema.index({ organizationId: 1, status: 1 });
 schema.index({ organizationId: 1, deletedAt: 1 });
 module.exports = mongoose.model('MRVProject', schema, 'mrvProjects');
+

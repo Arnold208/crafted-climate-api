@@ -122,7 +122,9 @@ class MRVCalculationService {
       .digest('hex');
 
     // ── 7. Determine run version ─────────────────────────────────────────────
-    const prevRun = await CalculationRun.findOne({ monitoringPeriodId }).sort({ runVersion: -1 }).lean();
+    const prevRuns = await CalculationRun.find({ monitoringPeriodId }).lean();
+    prevRuns.sort((a, b) => (b.runVersion || 0) - (a.runVersion || 0));
+    const prevRun = prevRuns[0];
     const runVersion = prevRun ? prevRun.runVersion + 1 : 1;
 
     // ── 8. Persist CalculationRun ────────────────────────────────────────────
@@ -195,18 +197,18 @@ class MRVCalculationService {
    * Get the latest calculation run for a monitoring period.
    */
   async getLatestRun(monitoringPeriodId) {
-    return CalculationRun.findOne({ monitoringPeriodId })
-      .sort({ runVersion: -1 })
-      .lean();
+    const runs = await CalculationRun.find({ monitoringPeriodId }).lean();
+    runs.sort((a, b) => (b.runVersion || 0) - (a.runVersion || 0));
+    return runs[0] || null;
   }
 
   /**
    * Get all runs for a monitoring period (full history).
    */
   async getAllRuns(monitoringPeriodId) {
-    return CalculationRun.find({ monitoringPeriodId })
-      .sort({ runVersion: -1 })
-      .lean();
+    const runs = await CalculationRun.find({ monitoringPeriodId }).lean();
+    runs.sort((a, b) => (b.runVersion || 0) - (a.runVersion || 0));
+    return runs;
   }
 
   /**

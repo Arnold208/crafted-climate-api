@@ -47,7 +47,7 @@ class MRVReportService {
       ExternalEvidenceRecord.find({ projectId: period.projectId }).lean(),
       SensorInstallation.find({ projectId: period.projectId }).lean(),
       CalibrationRecord.find({ projectId: period.projectId }).lean(),
-      CalculationRun.findOne({ monitoringPeriodId }).sort({ runVersion: -1 }).lean(),
+      CalculationRun.find({ monitoringPeriodId }).lean(),
     ]);
 
     // ── Section 1: Report header ───────────────────────────────────────────
@@ -68,6 +68,9 @@ class MRVReportService {
       generatedBy,
       reportVersion:      1,
     };
+    const calculationRuns = Array.isArray(calculationRun) ? calculationRun : [];
+    calculationRuns.sort((a, b) => (b.runVersion || 0) - (a.runVersion || 0));
+    const latestCalculationRun = calculationRuns[0] || null;
 
     // ── Section 2: Device inventory ────────────────────────────────────────
     const deviceInventory = installations.map(inst => {
@@ -124,26 +127,26 @@ class MRVReportService {
 
     // ── Section 5: Calculation results ────────────────────────────────────
     let calculationResults;
-    if (calculationRun) {
+    if (latestCalculationRun) {
       calculationResults = {
-        calculationRunId:                 calculationRun.calculationRunId,
-        runVersion:                       calculationRun.runVersion,
-        status:                           calculationRun.status,
+        calculationRunId:                 latestCalculationRun.calculationRunId,
+        runVersion:                       latestCalculationRun.runVersion,
+        status:                           latestCalculationRun.status,
         methodology:                      'VM0050',
         baselineTier:                     'TIER_1_IPCC',
-        constants:                        calculationRun.intermediateValues?.constants,
-        totalLpgConsumedKg:               calculationRun.results?.total_lpg_consumed_kg,
-        baselineEmissions_be_tco2e:       calculationRun.results?.be_tco2e,
-        projectEmissions_pe_tco2e:        calculationRun.results?.pe_tco2e,
-        leakage_lk_tco2e:                 calculationRun.results?.lk_tco2e,
-        netEmissionReduction_er_tco2e:    calculationRun.results?.net_er_tco2e,
-        netEmissionReduction_rounded:     calculationRun.results?.net_er_tco2e_rounded,
-        observationCount:                 calculationRun.results?.observation_count,
-        inputDatasetHash:                 calculationRun.inputDatasetHash,
-        calculatedAt:                     calculationRun.calculatedAt,
-        calculatedBy:                     calculationRun.calculatedBy,
-        approvedBy:                       calculationRun.approvedBy,
-        approvedAt:                       calculationRun.approvedAt,
+        constants:                        latestCalculationRun.intermediateValues?.constants,
+        totalLpgConsumedKg:               latestCalculationRun.results?.total_lpg_consumed_kg,
+        baselineEmissions_be_tco2e:       latestCalculationRun.results?.be_tco2e,
+        projectEmissions_pe_tco2e:        latestCalculationRun.results?.pe_tco2e,
+        leakage_lk_tco2e:                 latestCalculationRun.results?.lk_tco2e,
+        netEmissionReduction_er_tco2e:    latestCalculationRun.results?.net_er_tco2e,
+        netEmissionReduction_rounded:     latestCalculationRun.results?.net_er_tco2e_rounded,
+        observationCount:                 latestCalculationRun.results?.observation_count,
+        inputDatasetHash:                 latestCalculationRun.inputDatasetHash,
+        calculatedAt:                     latestCalculationRun.calculatedAt,
+        calculatedBy:                     latestCalculationRun.calculatedBy,
+        approvedBy:                       latestCalculationRun.approvedBy,
+        approvedAt:                       latestCalculationRun.approvedAt,
       };
     } else {
       calculationResults = {
@@ -255,10 +258,9 @@ class MRVReportService {
    */
   async getOrGenerateReport(monitoringPeriodId, generatedBy = 'api') {
     // Return cached FINAL report if it exists and has sections
-    const existing = await MRVReport
-      .findOne({ monitoringPeriodId, status: 'FINAL' })
-      .sort({ reportVersion: -1 })
-      .lean();
+    const finalReports = await MRVReport.find({ monitoringPeriodId, status: 'FINAL' }).lean();
+    finalReports.sort((a, b) => (b.reportVersion || 0) - (a.reportVersion || 0));
+    const existing = finalReports[0];
 
     if (existing?.sections && Object.keys(existing.sections).length > 0) {
       return existing;
@@ -269,10 +271,9 @@ class MRVReportService {
     const sha256 = crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
 
     // Determine next version number
-    const prevReport = await MRVReport
-      .findOne({ monitoringPeriodId })
-      .sort({ reportVersion: -1 })
-      .lean();
+    const previousReports = await MRVReport.find({ monitoringPeriodId }).lean();
+    previousReports.sort((a, b) => (b.reportVersion || 0) - (a.reportVersion || 0));
+    const prevReport = previousReports[0];
     const reportVersion = prevReport ? prevReport.reportVersion + 1 : 1;
 
     const report = await MRVReport.create({
@@ -308,21 +309,24 @@ class MRVReportService {
    * @returns {Object} Export package
    */
   async buildExportPackage(projectId, monitoringPeriodId) {
-    const [report, vvbCase] = await Promise.all([
-      MRVReport
-        .findOne({ monitoringPeriodId, projectId })
-        .sort({ reportVersion: -1 })
-        .lean(),
-      VerificationCase
-        .findOne({ projectId, status: 'OPINION_RECORDED', scope: { $in: ['VERIFICATION', 'COMBINED'] } })
-        .sort({ openedAt: -1 })
-        .lean(),
+    const [reportRows, vvbCaseRows] = await Promise.all([
+      MRVReport.find({ monitoringPeriodId, projectId }).lean(),
+      VerificationCase.find({ projectId, status: 'OPINION_RECORDED', scope: { $in: ['VERIFICATION', 'COMBINED'] } }).lean(),
     ]);
 
-    if (!report) {
+    const reports = Array.isArray(reportRows) ? reportRows : [];
+    reports.sort((a, b) => (b.reportVersion || 0) - (a.reportVersion || 0));
+    const latestReport = reports[0];
+    const vvbCases = Array.isArray(vvbCaseRows) ? vvbCaseRows : [];
+    vvbCases.sort((a, b) => new Date(b.openedAt || b.createdAt || 0) - new Date(a.openedAt || a.createdAt || 0));
+    const latestVvbCase = vvbCases[0];
+
+    if (!latestReport) {
       throw new Error(`No report found for monitoring period ${monitoringPeriodId}. Generate one first via GET /report.`);
     }
 
+    const report = latestReport;
+    const vvbCase = latestVvbCase;
     const sections    = report.sections || {};
     const calc        = sections.calculationResults || {};
     const attachments = sections.attachmentsManifest || [];
@@ -390,9 +394,9 @@ class MRVReportService {
    * @param {{ registry: string, notes?: string, requestedBy: string }} opts
    */
   async initiateSubmission(projectId, monitoringPeriodId, { registry, notes, requestedBy }) {
-    const report = await MRVReport
-      .findOne({ monitoringPeriodId, projectId })
-      .sort({ reportVersion: -1 });
+    const reports = await MRVReport.find({ monitoringPeriodId, projectId });
+    reports.sort((a, b) => (b.reportVersion || 0) - (a.reportVersion || 0));
+    const report = reports[0];
 
     if (!report) throw new Error('No report found for this monitoring period');
     if (report.status === 'SUBMITTED') throw new Error('This report has already been submitted');
@@ -465,9 +469,9 @@ class MRVReportService {
    * @param {{ countersignedBy: string }} opts
    */
   async countersignSubmission(projectId, monitoringPeriodId, { countersignedBy }) {
-    const report = await MRVReport
-      .findOne({ monitoringPeriodId, projectId })
-      .sort({ reportVersion: -1 });
+    const reports = await MRVReport.find({ monitoringPeriodId, projectId });
+    reports.sort((a, b) => (b.reportVersion || 0) - (a.reportVersion || 0));
+    const report = reports[0];
 
     if (!report) throw new Error('No report found for this monitoring period');
     if (report.status === 'SUBMITTED') throw new Error('This report has already been submitted');

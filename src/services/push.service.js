@@ -63,10 +63,15 @@ function buildMessage(token, title, body, type, imageUrl, data = {}) {
             },
         },
         apns: {
+            headers: {
+                'apns-push-type': 'alert',
+                'apns-priority': isHighPrio ? '10' : '5',
+            },
             payload: {
                 aps: {
                     sound: isHighPrio ? 'default' : undefined,
                     badge: 1,
+                    ...(imageUrl ? { 'mutable-content': 1 } : {}),
                 },
             },
             ...(imageUrl ? {

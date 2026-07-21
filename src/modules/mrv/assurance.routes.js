@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
 const authenticateToken = require('../../middleware/bearermiddleware');
@@ -8,6 +8,13 @@ const VerificationCase = require('../../models/mrv/assurance/VerificationCase.mo
 const VerificationFinding = require('../../models/mrv/assurance/VerificationFinding.model');
 const RegistryEvent = require('../../models/mrv/assurance/RegistryEvent.model');
 const MRVAuditEvent = require('../../models/mrv/assurance/MRVAuditEvent.model');
+const ExternalEvidenceRecord = require('../../models/mrv/evidence/ExternalEvidenceRecord.model');
+const MRVObservation = require('../../models/mrv/evidence/MRVObservation.model');
+const SensorInstallation = require('../../models/mrv/evidence/SensorInstallation.model');
+const CalibrationRecord = require('../../models/mrv/evidence/CalibrationRecord.model');
+const MonitoringPeriod = require('../../models/mrv/monitoring/MonitoringPeriod.model');
+const CalculationRun = require('../../models/mrv/accounting/CalculationRun.model');
+const MRVReport = require('../../models/mrv/outbound/MRVReport.model');
 
 // ── Verification Cases ────────────────────────────────────────────────────
 
@@ -99,6 +106,77 @@ router.post('/:projectId/verification-cases', authenticateToken,
     if (!scope) return res.status(400).json({ error: 'scope is required (VALIDATION | VERIFICATION | COMBINED)' });
     const vc = await VerificationCase.create({ caseId: `VVC-${uuidv4()}`, projectId: req.params.projectId, organizationId: req.mrvProject.organizationId, scope, vvbOrganizationName, vvbContactName, vvbContactEmail, reportId, calculationRunId, openedBy: req.user?.userid });
     res.status(201).json({ success: true, data: vc });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * @swagger
+ * /api/mrv/projects/{projectId}/verification-cases/{caseId}/context:
+ *   get:
+ *     summary: Get verifier review context for a verification case
+ *     description: Returns a read-only project data room snapshot for the selected verification case, including linked report, calculation run, evidence files, observations, installations, calibrations, monitoring periods, and findings.
+ *     tags: [MRV Engine - Assurance and Audit]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: caseId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Verification case context
+ *       404:
+ *         description: Verification case not found
+ */
+router.get('/:projectId/verification-cases/:caseId/context', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
+  try {
+    const { projectId, caseId } = req.params;
+    const verificationCase = await VerificationCase.findOne({ projectId, caseId }).lean();
+    if (!verificationCase) return res.status(404).json({ error: 'Verification case not found' });
+
+    const [findings, periods, evidenceFiles, observations, installations, calibrations, registryEvents] = await Promise.all([
+      VerificationFinding.find({ projectId, caseId }).lean(),
+      MonitoringPeriod.find({ projectId }).lean(),
+      ExternalEvidenceRecord.find({ projectId }).select('-largeFileUploadToken').lean(),
+      MRVObservation.find({ projectId }).sort({ observedAt: -1 }).limit(500).lean(),
+      SensorInstallation.find({ projectId }).lean(),
+      CalibrationRecord.find({ projectId }).lean(),
+      RegistryEvent.find({ projectId }).lean()
+    ]);
+
+    const report = verificationCase.reportId
+      ? await MRVReport.findOne({ projectId, reportId: verificationCase.reportId }).lean()
+      : await MRVReport.findOne({ projectId }).sort({ reportVersion: -1 }).lean();
+    const calculationRun = verificationCase.calculationRunId
+      ? await CalculationRun.findOne({ projectId, calculationRunId: verificationCase.calculationRunId }).lean()
+      : report?.monitoringPeriodId
+        ? await CalculationRun.findOne({ projectId, monitoringPeriodId: report.monitoringPeriodId }).sort({ runVersion: -1 }).lean()
+        : await CalculationRun.findOne({ projectId }).sort({ _id: -1 }).lean();
+
+    const observationSummary = observations.reduce((acc, obs) => {
+      const key = obs.qualityStatus || 'UNKNOWN';
+      acc[key] = (acc[key] || 0) + 1;
+      acc.total += 1;
+      return acc;
+    }, { total: 0 });
+
+    res.json({ success: true, data: {
+      generatedAt: new Date().toISOString(),
+      verificationCase,
+      findings,
+      report,
+      calculationRun,
+      monitoringPeriods: periods,
+      evidenceFiles,
+      observations: { count: observations.length, summary: observationSummary, records: observations },
+      installations,
+      calibrations,
+      registryEvents
+    } });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -291,7 +369,8 @@ router.post('/:projectId/verification-cases/:caseId/opinion', authenticateToken,
  */
 router.get('/:projectId/registry-events', authenticateToken, verifyMRVProjectAccess(), async (req, res) => {
   try {
-    const events = await RegistryEvent.find({ projectId: req.params.projectId }).sort({ eventDate: -1 }).lean();
+    const events = await RegistryEvent.find({ projectId: req.params.projectId }).lean();
+    events.sort((a, b) => new Date(b.eventDate || b.createdAt || 0) - new Date(a.eventDate || a.createdAt || 0));
     res.json({ success: true, data: events });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -410,10 +489,12 @@ router.get('/:projectId/audit-log', authenticateToken, verifyMRVProjectAccess(['
     const { page = 1, limit = 100 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [events, total] = await Promise.all([
-      MRVAuditEvent.find({ projectId: req.params.projectId }).sort({ occurredAt: -1 }).skip(skip).limit(parseInt(limit)).lean(),
+      MRVAuditEvent.find({ projectId: req.params.projectId }).lean(),
       MRVAuditEvent.countDocuments({ projectId: req.params.projectId })
     ]);
-    res.json({ success: true, data: events, pagination: { page: parseInt(page), limit: parseInt(limit), total } });
+    events.sort((a, b) => new Date(b.occurredAt || b.createdAt || 0) - new Date(a.occurredAt || a.createdAt || 0));
+    const paged = events.slice(skip, skip + parseInt(limit));
+    res.json({ success: true, data: paged, pagination: { page: parseInt(page), limit: parseInt(limit), total } });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
