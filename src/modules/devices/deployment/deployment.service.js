@@ -7,11 +7,75 @@ const notecardService = require('../notecard/notecard.service');
 const { nanoid } = require('nanoid');
 
 class DeploymentService {
-    async createDeployment({ name, description, userid, organizationId }) {
+    async createDeployment({ name, description, siteType, location, nextMaintenanceDate, file, userid, organizationId }) {
         const existing = await Deployment.findOne({ organizationId, name, deletedAt: null });
         if (existing) throw new Error("Deployment name already exists in this organization.");
 
         const deploymentid = `dep-${nanoid(12)}`;
+
+        // Handle image upload to Azure Blob Storage
+        let imageUrl = null;
+        if (file) {
+            const { containerClient, generateSignedUrl } = require('../../../config/storage/storage');
+            const fileName = `upload-${Date.now()}-${file.originalname}`;
+            const blockBlobClient = containerClient.getBlockBlobClient(fileName);
+            await blockBlobClient.upload(file.buffer, file.size, {
+                blobHTTPHeaders: { blobContentType: file.mimetype },
+            });
+            imageUrl = generateSignedUrl(fileName);
+        }
+
+        // Handle location parsing and reverse-geocoding via Azure Maps
+        let resolvedLocation = null;
+        if (location) {
+            let coords = null;
+            if (typeof location === 'string') {
+                try {
+                    coords = JSON.parse(location);
+                } catch (e) {
+                    coords = location.split(',').map(Number).filter(n => !isNaN(n));
+                }
+            } else if (Array.isArray(location)) {
+                coords = location;
+            }
+
+            if (coords && coords.length === 2) {
+                const [latitude, longitude] = coords;
+                let locationInfo = { latitude, longitude };
+                try {
+                    const axios = require('axios');
+                    const geoRes = await axios.get(`${process.env.AZURE_MAPS_BASE_URL || 'https://atlas.microsoft.com'}/search/address/reverse/json`, {
+                        params: {
+                            'api-version': '1.0',
+                            'subscription-key': process.env.AZURE_MAPS_SUBSCRIPTION_KEY,
+                            query: `${latitude},${longitude}`,
+                        },
+                        timeout: 5000
+                    });
+                    const address = geoRes?.data?.addresses?.[0]?.address || {};
+                    locationInfo = {
+                        ...locationInfo,
+                        country: address.country,
+                        region: address.countrySubdivision,
+                        city: address.municipality,
+                        postalCode: address.postalCode,
+                        street: address.street,
+                        municipality: address.municipality,
+                        municipalitySubdivision: address.municipalitySubdivision,
+                        formattedAddress: geoRes?.data?.addresses?.[0]?.address?.freeformAddress || ''
+                    };
+                } catch (err) {
+                    console.warn("[DeploymentService] Geocoding failed:", err.message);
+                }
+                resolvedLocation = JSON.stringify(locationInfo);
+            }
+        }
+
+        let resolvedMaintenanceDate = null;
+        if (nextMaintenanceDate) {
+            const d = new Date(nextMaintenanceDate);
+            if (!isNaN(d.getTime())) resolvedMaintenanceDate = d;
+        }
 
         const deployment = await Deployment.create({
             deploymentid,
@@ -19,7 +83,11 @@ class DeploymentService {
             createdBy: userid,
             organizationId,
             name,
-            description
+            description,
+            siteType: siteType || null,
+            location: resolvedLocation,
+            nextMaintenanceDate: resolvedMaintenanceDate,
+            imageUrl
         });
 
         try {
@@ -54,7 +122,7 @@ class DeploymentService {
         });
     }
 
-    async updateDeployment(deploymentId, organizationId, { name, description }) {
+    async updateDeployment(deploymentId, organizationId, { name, description, siteType, location, nextMaintenanceDate, file }) {
         const deployment = await this.getDeployment(deploymentId, organizationId);
         if (!deployment) throw new Error('Deployment not found');
 
@@ -68,7 +136,76 @@ class DeploymentService {
             deployment.name = name;
         }
 
-        if (description) deployment.description = description;
+        if (description !== undefined) deployment.description = description;
+        if (siteType !== undefined) deployment.siteType = siteType || null;
+
+        if (file) {
+            const { containerClient, generateSignedUrl } = require('../../../config/storage/storage');
+            const fileName = `upload-${Date.now()}-${file.originalname}`;
+            const blockBlobClient = containerClient.getBlockBlobClient(fileName);
+            await blockBlobClient.upload(file.buffer, file.size, {
+                blobHTTPHeaders: { blobContentType: file.mimetype },
+            });
+            deployment.imageUrl = generateSignedUrl(fileName);
+        }
+
+        if (location !== undefined) {
+            let resolvedLocation = null;
+            if (location) {
+                let coords = null;
+                if (typeof location === 'string') {
+                    try {
+                        coords = JSON.parse(location);
+                    } catch (e) {
+                        coords = location.split(',').map(Number).filter(n => !isNaN(n));
+                    }
+                } else if (Array.isArray(location)) {
+                    coords = location;
+                }
+
+                if (coords && coords.length === 2) {
+                    const [latitude, longitude] = coords;
+                    let locationInfo = { latitude, longitude };
+                    try {
+                        const axios = require('axios');
+                        const geoRes = await axios.get(`${process.env.AZURE_MAPS_BASE_URL || 'https://atlas.microsoft.com'}/search/address/reverse/json`, {
+                            params: {
+                                'api-version': '1.0',
+                                'subscription-key': process.env.AZURE_MAPS_SUBSCRIPTION_KEY,
+                                query: `${latitude},${longitude}`,
+                            },
+                            timeout: 5000
+                        });
+                        const address = geoRes?.data?.addresses?.[0]?.address || {};
+                        locationInfo = {
+                            ...locationInfo,
+                            country: address.country,
+                            region: address.countrySubdivision,
+                            city: address.municipality,
+                            postalCode: address.postalCode,
+                            street: address.street,
+                            municipality: address.municipality,
+                            municipalitySubdivision: address.municipalitySubdivision,
+                            formattedAddress: geoRes?.data?.addresses?.[0]?.address?.freeformAddress || ''
+                        };
+                    } catch (err) {
+                        console.warn("[DeploymentService] Geocoding failed:", err.message);
+                    }
+                    resolvedLocation = JSON.stringify(locationInfo);
+                }
+            }
+            deployment.location = resolvedLocation;
+        }
+
+        if (nextMaintenanceDate !== undefined) {
+            let resolvedMaintenanceDate = null;
+            if (nextMaintenanceDate) {
+                const d = new Date(nextMaintenanceDate);
+                if (!isNaN(d.getTime())) resolvedMaintenanceDate = d;
+            }
+            deployment.nextMaintenanceDate = resolvedMaintenanceDate;
+        }
+
         return await deployment.save();
     }
 
@@ -365,8 +502,94 @@ class DeploymentService {
         return { message: 'Device removed successfully from deployment' };
     }
 
-    async listDeployments(organizationId) {
-        return await Deployment.find({ organizationId, deletedAt: null });
+    async listDeployments(organizationId, { search, siteType, region } = {}) {
+        const query = { organizationId, deletedAt: null };
+
+        if (siteType) {
+            query.siteType = siteType;
+        }
+
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } },
+                { location: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        if (region) {
+            query.location = { $regex: region, $options: 'i' };
+        }
+
+        const deployments = await Deployment.find(query);
+
+        // Hydrate each deployment with computed metrics
+        const hydratedDeployments = [];
+        let totalDevicesAcrossAll = 0;
+        let onlineDevicesAcrossAll = 0;
+
+        for (const dep of deployments) {
+            const devices = await RegisteredDevice.find({
+                auid: { $in: dep.devices },
+                organizationId,
+                deletedAt: null
+            });
+
+            const devicesCount = devices.length;
+            totalDevicesAcrossAll += devicesCount;
+
+            const onlineCount = devices.filter(d => d.status === 'online').length;
+            onlineDevicesAcrossAll += onlineCount;
+
+            // Determine status
+            let status = 'Good';
+            if (devicesCount > 0) {
+                if (onlineCount === 0) {
+                    status = 'Attention';
+                } else if (onlineCount < devicesCount) {
+                    status = 'Moderate';
+                }
+            }
+
+            // Find last update
+            let lastUpdate = null;
+            if (devicesCount > 0) {
+                const dates = devices.map(d => d.updatedAt || d.createdAt).filter(Boolean);
+                if (dates.length > 0) {
+                    lastUpdate = new Date(Math.max(...dates.map(d => d.getTime())));
+                }
+            }
+
+            const uptime = devicesCount
+                ? ((onlineCount / devicesCount) * 100).toFixed(1) + '%'
+                : '100.0%';
+
+            hydratedDeployments.push({
+                ...dep.toObject(),
+                devicesCount,
+                status,
+                uptime,
+                lastUpdate
+            });
+        }
+
+        const totalSites = deployments.length;
+        const averageUptime = totalDevicesAcrossAll
+            ? ((onlineDevicesAcrossAll / totalDevicesAcrossAll) * 100).toFixed(1) + '%'
+            : '100.0%';
+
+        // Active Alert calculation: number of offline devices
+        const activeAlerts = totalDevicesAcrossAll - onlineDevicesAcrossAll;
+
+        return {
+            summary: {
+                totalSites,
+                totalDevices: totalDevicesAcrossAll,
+                averageUptime,
+                activeAlerts
+            },
+            deployments: hydratedDeployments
+        };
     }
 }
 

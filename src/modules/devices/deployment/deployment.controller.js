@@ -3,13 +3,22 @@ const deploymentService = require('./deployment.service');
 class DeploymentController {
     async createDeployment(req, res) {
         try {
-            const { name, description } = req.body;
+            const { name, description, siteType, location, nextMaintenanceDate } = req.body;
             const userid = req.user.userid;
             const organizationId = req.currentOrgId;
 
             if (!organizationId) return res.status(400).json({ message: "User has not selected an active organization." });
 
-            const deployment = await deploymentService.createDeployment({ name, description, userid, organizationId });
+            const deployment = await deploymentService.createDeployment({
+                name,
+                description,
+                siteType,
+                location,
+                nextMaintenanceDate,
+                file: req.file,
+                userid,
+                organizationId
+            });
             return res.status(201).json({ message: "Deployment created successfully", deployment });
         } catch (error) {
             if (error.message.includes('exists')) return res.status(400).json({ message: error.message });
@@ -39,7 +48,8 @@ class DeploymentController {
 
     async updateDeployment(req, res) {
         try {
-            const deployment = await deploymentService.updateDeployment(req.params.deploymentId, req.currentOrgId, req.body);
+            const updates = { ...req.body, file: req.file };
+            const deployment = await deploymentService.updateDeployment(req.params.deploymentId, req.currentOrgId, updates);
             return res.status(200).json({ deployment });
         } catch (error) {
             if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
@@ -121,8 +131,9 @@ class DeploymentController {
 
     async listDeployments(req, res) {
         try {
-            const deployments = await deploymentService.listDeployments(req.currentOrgId);
-            return res.status(200).json({ deployments });
+            const { search, siteType, region } = req.query;
+            const result = await deploymentService.listDeployments(req.currentOrgId, { search, siteType, region });
+            return res.status(200).json(result);
         } catch (error) {
             return res.status(500).json({ message: error.message });
         }

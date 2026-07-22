@@ -5,6 +5,7 @@ const deploymentController = require('./deployment.controller');
 const authenticateToken = require('../../../middleware/bearermiddleware');
 const checkOrgAccess = require('../../../middleware/organization/checkOrgAccess');
 const { requirePermission } = require('../../../middleware/authenticateApiKey');
+const { upload } = require('../../../config/storage/storage');
 
 /**
  * @swagger
@@ -24,18 +25,59 @@ const { requirePermission } = require('../../../middleware/authenticateApiKey');
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required: [name]
  *             properties:
- *               name: { type: string, example: "Afrilogic Environmental Solutions" }
- *               description: { type: string, example: "Battery level has dropped below 15% threshold." }
+ *               name:
+ *                 type: string
+ *                 example: "Accra Central School"
+ *               description:
+ *                 type: string
+ *                 example: "Urban Office monitoring station."
+ *               siteType:
+ *                 type: string
+ *                 example: "Urban Office"
+ *               location:
+ *                 type: string
+ *                 description: Comma-separated or JSON array coordinates [latitude, longitude]
+ *                 example: "5.601, -0.187"
+ *               nextMaintenanceDate:
+ *                 type: string
+ *                 format: date-time
+ *                 example: "2026-08-20T12:00:00Z"
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: Image file to upload for the deployment/site
  *     responses:
- *       201: { description: Deployment created }
+ *       201:
+ *         description: Deployment created successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: "Deployment created successfully" }
+ *                 deployment:
+ *                   type: object
+ *                   properties:
+ *                     deploymentid: { type: string, example: "dep-sX6fg8oMcIXv" }
+ *                     name: { type: string, example: "Accra Central School" }
+ *                     description: { type: string, example: "Urban Office monitoring station." }
+ *                     siteType: { type: string, example: "Urban Office" }
+ *                     location: { type: string, example: "{\"latitude\":5.602,\"longitude\":-0.188,\"city\":\"Accra\",\"region\":\"Greater Accra\",\"country\":\"Ghana\"}" }
+ *                     nextMaintenanceDate: { type: string, format: date-time, example: "2026-08-20T12:00:00.000Z" }
+ *                     imageUrl: { type: string, example: "https://example.com/images/upload.jpg" }
+ *       400:
+ *         description: Bad request (missing org context or duplicate name).
+ *       500:
+ *         description: Server error.
  */
 router.post('/deployments',
     authenticateToken,
+    upload.single('image'),
     requirePermission('devices:write'),
     checkOrgAccess('org.deployments.create'),
     deploymentController.createDeployment
@@ -89,18 +131,66 @@ router.get('/deployments/:deploymentId/devices',
  * /api/devices/deployments/{deploymentId}:
  *   patch:
  *     tags: [Deployments]
- *     summary: Update deployment name or description
+ *     summary: Update deployment details
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: deploymentId
  *         required: true
  *         schema: { type: string, example: "dep-starter-uuid" }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: "Accra Central School"
+ *               description:
+ *                 type: string
+ *                 example: "Updated monitoring station details."
+ *               siteType:
+ *                 type: string
+ *                 example: "Commercial Monitoring"
+ *               location:
+ *                 type: string
+ *                 description: Comma-separated or JSON array coordinates [latitude, longitude]
+ *                 example: "5.601, -0.187"
+ *               nextMaintenanceDate:
+ *                 type: string
+ *                 format: date-time
+ *                 example: "2026-08-20T12:00:00Z"
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: New image file to upload for the deployment/site
  *     responses:
- *       200: { description: Deployment updated }
- *       404: { description: Deployment not found }
+ *       200:
+ *         description: Deployment updated successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 deployment:
+ *                   type: object
+ *                   properties:
+ *                     deploymentid: { type: string, example: "dep-sX6fg8oMcIXv" }
+ *                     name: { type: string, example: "Accra Central School" }
+ *                     description: { type: string, example: "Updated description." }
+ *                     siteType: { type: string, example: "Commercial Monitoring" }
+ *                     location: { type: string, example: "{\"latitude\":6.672,\"longitude\":-1.624,\"city\":\"Kumasi\",\"region\":\"Ashanti\",\"country\":\"Ghana\"}" }
+ *                     nextMaintenanceDate: { type: string, format: date-time, example: "2026-08-20T12:00:00.000Z" }
+ *                     imageUrl: { type: string, example: "https://example.com/images/upload.jpg" }
+ *       404:
+ *         description: Deployment not found.
  */
 router.patch('/deployments/:deploymentId',
     authenticateToken,
+    upload.single('image'),
     requirePermission('devices:write'),
     checkOrgAccess('org.deployments.edit'),
     deploymentController.updateDeployment
@@ -247,8 +337,53 @@ router.delete('/deployments/:deploymentId/devices/:auid',
  *   get:
  *     tags: [Deployments]
  *     summary: List all deployments in the organization
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: Search query matching name or geocoded location
+ *       - in: query
+ *         name: siteType
+ *         schema: { type: string }
+ *         description: Filter by site type category
+ *       - in: query
+ *         name: region
+ *         schema: { type: string }
+ *         description: Filter by geographic region subdivision
  *     responses:
- *       200: { description: Deployments list retrieved }
+ *       200:
+ *         description: Deployments list and aggregate summary retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     totalSites: { type: integer, example: 4 }
+ *                     totalDevices: { type: integer, example: 26 }
+ *                     averageUptime: { type: string, example: "99.1%" }
+ *                     activeAlerts: { type: integer, example: 1 }
+ *                 deployments:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       deploymentid: { type: string, example: "dep-StarterUUID" }
+ *                       name: { type: string, example: "Accra Central School" }
+ *                       description: { type: string, example: "Urban Office monitoring station" }
+ *                       siteType: { type: string, example: "Urban Office" }
+ *                       location: { type: string, example: "{\"latitude\":5.602,\"longitude\":-0.188,\"city\":\"Accra\",\"region\":\"Greater Accra\",\"country\":\"Ghana\"}" }
+ *                       nextMaintenanceDate: { type: string, format: date-time, example: "2026-08-25T12:00:00.000Z" }
+ *                       imageUrl: { type: string, example: "https://example.com/image.jpg" }
+ *                       devicesCount: { type: integer, example: 8 }
+ *                       status: { type: string, example: "Good" }
+ *                       uptime: { type: string, example: "100.0%" }
+ *                       lastUpdate: { type: string, format: date-time, example: "2026-07-22T23:45:00.000Z" }
  */
 router.get('/deployments',
     authenticateToken,

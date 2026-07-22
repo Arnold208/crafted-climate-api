@@ -70,6 +70,26 @@ const deploymentSchema = new mongoose.Schema({
     default: {}
   },
 
+  siteType: {
+    type: String,
+    default: null
+  },
+
+  location: {
+    type: String,
+    default: null
+  },
+
+  nextMaintenanceDate: {
+    type: Date,
+    default: null
+  },
+
+  imageUrl: {
+    type: String,
+    default: null
+  },
+
   /** Platform Hardening: Data Safety */
   deletedAt: {
     type: Date,
