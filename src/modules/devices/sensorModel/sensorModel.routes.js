@@ -116,6 +116,14 @@ router.get("/models/search",
  *     security:
  *       - bearerAuth: []
  *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: uuid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "model-12345"
+ *         description: The UUID of the sensor model
  *     responses:
  *       200: { description: Sensor model details }
  *       404: { description: Model not found }
@@ -136,6 +144,14 @@ router.get("/models/uuid/:uuid",
  *     security:
  *       - bearerAuth: []
  *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: model
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "env"
+ *         description: The name of the sensor model
  *     responses:
  *       200: { description: Sensor model details }
  *       404: { description: Model not found }
@@ -156,6 +172,14 @@ router.get("/models/:model",
  *     security:
  *       - bearerAuth: []
  *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: model
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "env"
+ *         description: The name of the sensor model to update
  *     requestBody:
  *       required: true
  *       content:
@@ -199,6 +223,14 @@ router.put("/models/:model",
  *     security:
  *       - bearerAuth: []
  *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: model
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "env"
+ *         description: The name of the sensor model to delete
  *     responses:
  *       200: { description: Model deleted }
  *       404: { description: Model not found }
