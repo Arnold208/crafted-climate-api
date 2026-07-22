@@ -49,7 +49,7 @@ class ManufacturerService {
             sku,
             batchNumber,
             status: 'MANUFACTURED',
-            datapoints,
+            datapoints: (datapoints && datapoints.length > 0) ? datapoints : (sensorModel.datapoints || []),
             auid,
             serial,
             noteDevUuid

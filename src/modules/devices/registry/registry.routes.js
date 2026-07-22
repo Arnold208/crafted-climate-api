@@ -180,6 +180,7 @@ router.get('/permissions/catalog',
  *               serial: { type: string, example: "SN-987654321" }
  *               location: { type: array, items: { type: number }, example: [5.56, -0.20] }
  *               nickname: { type: string, example: "nickname_example" }
+ *               netMode: { type: string, enum: [cellular, wifi, satellite], example: "cellular", default: "cellular", description: "Connectivity mode" }
  *               frequency: { type: integer, example: 1, default: 30, description: "Expected reporting interval in minutes" }
  *               batch: { type: integer, example: 1, default: 2, description: "Telemetry batch size" }
  *     responses:
@@ -364,6 +365,7 @@ router.get('/user/:userid/device/:auid/location',
  *             properties:
  *               nickname: { type: string, example: "nickname_example" }
  *               location: { type: array, items: { type: number }, example: [5.56, -0.20] }
+ *               netMode: { type: string, enum: [cellular, wifi, satellite], example: "satellite" }
  *               frequency: { type: integer, example: 1, description: "Expected reporting interval in minutes" }
  *               batch: { type: integer, example: 1, description: "Telemetry batch size" }
  *               notificationPreferences:

@@ -27,6 +27,10 @@ const sensorModelSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  datapoints: {
+    type: [String],
+    default: [],
+  },
   createdAt: {
     type: Date,
     default: Date.now,

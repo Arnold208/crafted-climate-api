@@ -3,13 +3,26 @@ const sensorModelService = require('./sensorModel.service');
 class SensorModelController {
     async createModel(req, res) {
         try {
-            const { model, description, version } = req.body;
+            const { model, description, version, datapoints } = req.body;
             if (!req.file || !model || !description) {
                 return res.status(400).send({ message: "Model, description, and image are required." });
             }
 
+            let parsedDatapoints = [];
+            if (datapoints) {
+                if (typeof datapoints === 'string') {
+                    try {
+                        parsedDatapoints = JSON.parse(datapoints);
+                    } catch (e) {
+                        parsedDatapoints = datapoints.split(',').map(item => item.trim()).filter(Boolean);
+                    }
+                } else if (Array.isArray(datapoints)) {
+                    parsedDatapoints = datapoints;
+                }
+            }
+
             const newModel = await sensorModelService.createModel({
-                model, description, version, file: req.file
+                model, description, version, file: req.file, datapoints: parsedDatapoints
             });
 
             return res.status(201).send({ message: `Model "${model}" created successfully with image.`, data: newModel });
@@ -60,8 +73,20 @@ class SensorModelController {
 
     async updateModel(req, res) {
         try {
-            const { description } = req.body;
-            const updated = await sensorModelService.updateModel(req.params.model, description, req.file);
+            const { description, datapoints } = req.body;
+            let parsedDatapoints = undefined;
+            if (datapoints !== undefined) {
+                if (typeof datapoints === 'string') {
+                    try {
+                        parsedDatapoints = JSON.parse(datapoints);
+                    } catch (e) {
+                        parsedDatapoints = datapoints.split(',').map(item => item.trim()).filter(Boolean);
+                    }
+                } else if (Array.isArray(datapoints)) {
+                    parsedDatapoints = datapoints;
+                }
+            }
+            const updated = await sensorModelService.updateModel(req.params.model, description, req.file, parsedDatapoints);
             return res.status(200).send({ message: "Model updated successfully", data: updated });
         } catch (err) {
             if (err.message.includes('not found')) return res.status(404).send({ message: err.message });

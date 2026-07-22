@@ -60,6 +60,40 @@ const checkPlanFeature = require('../../middleware/subscriptions/checkPlanFeatur
  *       500:
  *         description: Server Error
  */
+/**
+ * @swagger
+ * /api/telemetry/satellite/ingest:
+ *   post:
+ *     tags:
+ *       - Telemetry
+ *     summary: Ingest satellite telemetry from UDP gateway
+ *     description: |
+ *       Ingests decoded telemetry packets sent by the local/cloud Satellite UDP Gateway server.
+ *       Identifies registered device by `device_id` (`devid`, `auid`, or `serial`).
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               device_id: { type: string, example: "AFRI-NTN-001" }
+ *               received_utc: { type: string, example: "2026-07-21T03:22:28.123Z" }
+ *               source_ip: { type: string, example: "127.0.0.1" }
+ *               source_port: { type: integer, example: 5005 }
+ *               received_via: { type: string, example: "local_udp_gateway_test" }
+ *               payload: { type: object }
+ *     responses:
+ *       201:
+ *         description: Telemetry ingested successfully
+ *       400:
+ *         description: Missing or invalid device_id or payload
+ *       404:
+ *         description: Device not found
+ */
+router.post('/satellite/ingest', ingestRouteLimiter, telemetryController.ingestSatellite);
+router.post('/satellite', ingestRouteLimiter, telemetryController.ingestSatellite);
+
 router.post('/:model', ingestRouteLimiter, requirePermission('telemetry:write'), enforceTelemetryIngestion, telemetryController.ingest);
 
 /**

@@ -51,9 +51,10 @@ const adminOnly = [authenticateToken, authorizeRoles('admin', 'supervisor')];
  *                 example: "C8:3A:35:AA:12:44"
  *               datapoints:
  *                 type: array
+ *                 description: Optional. List of sensor datapoints. Defaults to the model's configured datapoints if omitted.
  *                 items:
  *                   type: string
- *                   example: "items_example"
+ *                   example: "temperature"
  *                 example: ["temperature", "humidity", "pm2_5", "uv"]
  *               noteDevUuid:
  *                 type: string
@@ -205,6 +206,7 @@ router.get('/:id', ...adminOnly, manufacturerController.getDeviceById);
  *                 example: "ASSIGNED"
  *               datapoints:
  *                 type: array
+ *                 description: List of sensor datapoints
  *                 example: ["temperature", "humidity", "pm2_5"]
  *     responses:
  *       200:

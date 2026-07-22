@@ -273,8 +273,8 @@ class RegistryService {
         
         let netModeChanged = false;
         if (netMode !== undefined && netMode !== device.netMode) {
-            if (!['cellular', 'wifi'].includes(netMode)) {
-                throw new Error("Invalid netMode. Must be 'cellular' or 'wifi'");
+            if (!['cellular', 'wifi', 'satellite'].includes(netMode)) {
+                throw new Error("Invalid netMode. Must be 'cellular', 'wifi', or 'satellite'");
             }
             if (netMode === 'cellular') {
                 const Plan = require('../../../models/subscriptions/Plan');
@@ -711,8 +711,8 @@ class RegistryService {
         if (!VALID_STATES.includes(newState)) {
             throw new Error(`Invalid state. Must be one of: ${VALID_STATES.join(', ')}`);
         }
-        if (newNetMode && !['cellular', 'wifi'].includes(newNetMode)) {
-            throw new Error(`Invalid netMode. Must be one of: 'cellular' or 'wifi'`);
+        if (newNetMode && !['cellular', 'wifi', 'satellite'].includes(newNetMode)) {
+            throw new Error(`Invalid netMode. Must be one of: 'cellular', 'wifi', or 'satellite'`);
         }
 
         const device = await registerNewDevice.findOne({ auid });

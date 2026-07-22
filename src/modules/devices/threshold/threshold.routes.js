@@ -92,6 +92,40 @@ router.get('/devices/:auid/thresholds',
  *         name: auid
  *         required: true
  *         schema: { type: string, example: "GH-ENV-12345XYZ" }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [datapoint, operator]
+ *             properties:
+ *               datapoint:
+ *                 type: string
+ *                 description: Sensor datapoint key (e.g., temperature, ph, ec)
+ *                 example: "temperature"
+ *               operator:
+ *                 type: string
+ *                 enum: [">", ">=", "<", "<=", "between", "outside"]
+ *                 example: ">"
+ *               min:
+ *                 type: number
+ *                 description: Minimum boundary value. Required for >, >=, between, outside.
+ *                 example: 35
+ *               max:
+ *                 type: number
+ *                 description: Maximum boundary value. Required for <, <=, between, outside.
+ *                 example: 45
+ *               cooldownMinutes:
+ *                 type: integer
+ *                 description: Alert suppression/cooldown period in minutes.
+ *                 example: 30
+ *               alertChannels:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Alert notification channels.
+ *                 example: ["email"]
  *     responses:
  *       201: { description: Threshold created }
  */
@@ -112,6 +146,39 @@ router.post('/devices/:auid/thresholds',
  *         name: id
  *         required: true
  *         schema: { type: string, example: "id_example" }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               datapoint:
+ *                 type: string
+ *                 description: Sensor datapoint key
+ *                 example: "temperature"
+ *               operator:
+ *                 type: string
+ *                 enum: [">", ">=", "<", "<=", "between", "outside"]
+ *                 example: ">"
+ *               min:
+ *                 type: number
+ *                 description: Minimum boundary value
+ *                 example: 35
+ *               max:
+ *                 type: number
+ *                 description: Maximum boundary value
+ *                 example: 45
+ *               cooldownMinutes:
+ *                 type: integer
+ *                 description: Alert cooldown period in minutes
+ *                 example: 30
+ *               alertChannels:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Alert notification channels
+ *                 example: ["email"]
  *     responses:
  *       200: { description: Threshold updated }
  *       404: { description: Threshold not found }

@@ -25,6 +25,19 @@ class TelemetryController {
         }
     }
 
+    // POST /api/telemetry/satellite/ingest
+    async ingestSatellite(req, res) {
+        try {
+            const result = await telemetryService.ingestSatelliteTelemetry(req.body);
+            return res.status(201).json(result);
+        } catch (error) {
+            console.error('[TelemetryController] Satellite Ingest Error:', error);
+            if (error.message.includes('not found')) return res.status(404).json({ message: error.message });
+            if (error.message.includes('Missing') || error.message.includes('invalid')) return res.status(400).json({ message: error.message });
+            return res.status(500).json({ message: 'Server error' });
+        }
+    }
+
     // GET /api/telemetry/:userid/device/:auid
     async getDeviceTelemetry(req, res) {
         try {

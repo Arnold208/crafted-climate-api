@@ -121,6 +121,97 @@ class TelemetryService {
     }
 
     /**
+     * Ingest telemetry sent from UDP Satellite gateway
+     */
+    async ingestSatelliteTelemetry(body) {
+        const { device_id, received_utc, source_ip, source_port, received_via, payload } = body || {};
+
+        if (!device_id) {
+            throw new Error('Missing device_id'); // 400
+        }
+
+        if (!payload || typeof payload !== 'object') {
+            throw new Error('Missing or invalid telemetry payload'); // 400
+        }
+
+        // 1. Device Lookup (devid, auid, or serial)
+        let device = await getDeviceCache(device_id);
+
+        if (!device) {
+            const dbDevice = await registerNewDevice.findOne({
+                $or: [
+                    { devid: device_id },
+                    { auid: device_id },
+                    { serial: device_id }
+                ]
+            });
+
+            if (!dbDevice) {
+                throw new Error(`Device '${device_id}' not found`); // 404
+            }
+
+            await setDeviceCache(device_id, dbDevice);
+            device = dbDevice;
+        }
+
+        // 2. Parse Timestamps
+        const transportDate = received_utc ? new Date(received_utc) : new Date();
+        const timestampMs = isNaN(transportDate.getTime()) ? Date.now() : transportDate.getTime();
+
+        // 3. Build Telemetry Object for storage
+        const mappedTelemetry = {
+            auid: device.auid,
+            transport_time: transportDate,
+            telem_time: transportDate,
+            date: timestampMs,
+            timestamp: timestampMs,
+            temperature: typeof payload.temperature_c === 'number' ? payload.temperature_c : 0,
+            humidity: typeof payload.humidity_pct === 'number' ? payload.humidity_pct : 0,
+            pressure: typeof payload.pressure_hpa === 'number' ? payload.pressure_hpa : 0,
+            gas_raw: typeof payload.gas_raw === 'number' ? payload.gas_raw : 0,
+            sequence: typeof payload.sequence === 'number' ? payload.sequence : 0,
+            raw_hex: payload.raw_hex || '',
+            aqi: calculateAQI(0),
+            towerInfo: {
+                source_ip: source_ip || null,
+                source_port: source_port || null,
+                received_via: received_via || 'udp_gateway',
+                satellite_sequence: payload.sequence ?? null,
+                satellite_raw_hex: payload.raw_hex || null,
+                satellite_gas_raw: payload.gas_raw ?? null,
+                received_utc: received_utc || transportDate.toISOString()
+            }
+        };
+
+        // 4. Cache to Redis + Dirty Set
+        await cacheTelemetryToRedis(device.auid, mappedTelemetry, device);
+
+        // 5. Trigger Status Update (Heartbeat)
+        const { statusQueue } = require('../../config/queue/bullMQ/bullqueue');
+        await statusQueue.add('processStatus', {
+            body: { devid: device.devid }
+        }, {
+            removeOnComplete: true,
+            removeOnFail: true
+        });
+
+        const config = {
+            CC_NET_MODE: device.netMode || 'satellite',
+            CC_FREQUENCY: device.frequency || 30,
+            CC_BATCH: device.batch || 2,
+            CC_STATE: device.state || 'active'
+        };
+
+        return {
+            success: true,
+            message: 'Satellite telemetry processed successfully',
+            auid: device.auid,
+            devid: device.devid,
+            config
+        };
+    }
+
+    /**
      * Get Telemetry (Redis -> Mongo Fallback)
      */
     async getDeviceTelemetry(userid, auid, limit = 50, orgRole = null) {

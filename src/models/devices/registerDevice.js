@@ -126,7 +126,7 @@ const registerNewDeviceSchema = new mongoose.Schema({
   },
   netMode: {
     type: String,
-    enum: ['cellular', 'wifi'],
+    enum: ['cellular', 'wifi', 'satellite'],
     default: 'cellular'
   },
 

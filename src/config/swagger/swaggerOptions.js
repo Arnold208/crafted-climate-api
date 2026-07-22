@@ -222,6 +222,10 @@ If a payment fails or the checkout window expires:
             auid: { type: 'string' },
             devid: { type: 'string' },
             model: { type: 'string' },
+            netMode: { type: 'string', enum: ['cellular', 'wifi', 'satellite'], example: 'cellular' },
+            acquisitionType: { type: 'string', enum: ['purchase', 'maas'], example: 'purchase' },
+            hardwareVersion: { type: 'string', nullable: true },
+            firmwareVersion: { type: 'string', nullable: true },
             organization: { type: 'string' }
           }
         },

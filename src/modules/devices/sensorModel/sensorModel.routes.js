@@ -48,6 +48,12 @@ const adminOnly = [authenticateToken, authorizeRoles('admin', 'supervisor')];
  *                 example: "properties_example"
  *                 format: binary
  *                 description: Image file for the sensor model
+ *               datapoints:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Sensor-only datapoints list
+ *                 example: ["temperature", "humidity"]
  *             required:
  *               - model
  *               - description
@@ -166,6 +172,12 @@ router.get("/models/:model",
  *                 example: "properties_example"
  *                 format: binary
  *                 description: New image file
+ *               datapoints:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Sensor-only datapoints list
+ *                 example: ["temperature", "humidity"]
  *     responses:
  *       200: { description: Model updated }
  *       404: { description: Model not found }
