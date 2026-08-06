@@ -18,6 +18,7 @@ const aquaTelemetrySchema = new mongoose.Schema({
 
   // Sensor readings (Aqua datapoints)
   ec: { type: Number, default: 0 },
+  tds: { type: Number, default: 0 },
   humidity: { type: Number, default: 0 },
   temperature_water: { type: Number, default: 0 },
   temperature_ambient: { type: Number, default: 0 },

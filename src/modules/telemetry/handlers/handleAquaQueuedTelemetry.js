@@ -75,6 +75,7 @@ async function handleAquaQueuedTelemetry(messageObj) {
             telem_time: new Date(telemTime).toISOString(),  // ISO format
             transport_time: new Date(transportTime).toISOString(),
             ec: +body.ec || 0,
+            tds: +body.tds || 0,
             humidity: +body.humidity || 0,
             temperature_water: +body.temperature_water || 0,
             temperature_ambient: +body.temperature_ambient || 0,

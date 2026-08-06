@@ -26,7 +26,7 @@ const CSV_COLUMNS = {
         'pm1', 'pm2_5', 'pm10', 'pm1s', 'pm2_5s', 'pm10s', 'lux', 'uv', 'sound', 'aqi', 'voltage', 'current', 'battery', 'error'
     ],
     aqua: [
-        'auid', 'transport_time', 'telem_time', 'ec', 'humidity', 'temperature_water', 'temperature_ambient',
+        'auid', 'transport_time', 'telem_time', 'ec', 'tds', 'humidity', 'temperature_water', 'temperature_ambient',
         'pressure', 'ph', 'do', 'lux', 'turbidity', 'voltage', 'current', 'aqi', 'battery', 'error'
     ],
     'gas-solo': [

@@ -26,6 +26,7 @@ const modelKeyMaps = {
     ph: 'ph',
     do: 'do',
     ec: 'ec',
+    tds: 'tds',
     h: 'humidity',
     p: 'pressure',
     l: 'lux',
