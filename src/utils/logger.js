@@ -3,7 +3,7 @@ require('winston-daily-rotate-file');
 const path = require('path');
 const fs   = require('fs');
 
-const logDir = path.resolve('logs');
+const logDir = path.resolve(__dirname, '../../logs');
 
 // Ensure the log directory exists before Winston tries to open files.
 // On Azure App Service the working directory may not have a 'logs' folder yet.
@@ -24,19 +24,26 @@ const logFormat = winston.format.combine(
 // File transports — only added when the log directory is writable.
 const fileTransports = [];
 try {
-    fileTransports.push(
-        new winston.transports.DailyRotateFile({
-            filename:    path.join(logDir, 'error-%DATE%.log'),
-            datePattern: 'YYYY-MM-DD',
-            level:       'error',
-            maxFiles:    '14d',
-        }),
-        new winston.transports.DailyRotateFile({
-            filename:    path.join(logDir, 'combined-%DATE%.log'),
-            datePattern: 'YYYY-MM-DD',
-            maxFiles:    '14d',
-        })
-    );
+    const errorTransport = new winston.transports.DailyRotateFile({
+        filename:    path.join(logDir, 'error-%DATE%.log'),
+        datePattern: 'YYYY-MM-DD',
+        level:       'error',
+        maxFiles:    '14d',
+    });
+    errorTransport.on('error', err => {
+        console.error('[Logger] Error in error-log file transport:', err.message);
+    });
+
+    const combinedTransport = new winston.transports.DailyRotateFile({
+        filename:    path.join(logDir, 'combined-%DATE%.log'),
+        datePattern: 'YYYY-MM-DD',
+        maxFiles:    '14d',
+    });
+    combinedTransport.on('error', err => {
+        console.error('[Logger] Error in combined-log file transport:', err.message);
+    });
+
+    fileTransports.push(errorTransport, combinedTransport);
 } catch (e) {
     console.warn('[Logger] Could not create file transports — falling back to console only:', e.message);
 }
