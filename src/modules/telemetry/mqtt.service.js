@@ -4,6 +4,13 @@ const CacheService  = require("../common/cache.service");
 const eventLog      = require("../devices/eventLog/eventLog.service");
 const { client: redisClient } = require("../../config/redis/redis");
 
+// ── Monitoring State Variables ──────────────────────────────────────────────
+let isConnected = false;
+let alertSent = false;
+let disconnectTime = null;
+let graceTimer = null;
+let startupTimer = null;
+
 // ── Batch config lookup: Redis-first, DB fallback ─────────────────────────────
 // Reads device.batch (configured readings per batch) without making a DB call
 // when the Redis cache is warm (which it is after the first telemetry from a device).
@@ -54,6 +61,23 @@ function logBatchReceipt(devid, batchSeq, received, expected) {
 function initializeMQTTClient(client, topics) {
     client.on("connect", () => {
         console.log("🔗 Connected to MQTT broker");
+
+        // Reset tracking states
+        isConnected = true;
+        if (startupTimer) {
+            clearTimeout(startupTimer);
+            startupTimer = null;
+        }
+        if (graceTimer) {
+            clearTimeout(graceTimer);
+            graceTimer = null;
+        }
+
+        if (alertSent) {
+            sendMqttAlert(false); // Send recovery alert
+            alertSent = false;
+        }
+        disconnectTime = null;
 
         // 🔒 HARDENING: Request QoS 1 to ensure at-least-once delivery
         client.subscribe(topics, { qos: 1 }, (err, granted) => {
@@ -224,14 +248,131 @@ function initializeMQTTClient(client, topics) {
         }
     });
 
+    const handleDisconnect = (reason) => {
+        if (!isConnected) return; // Already offline
+
+        isConnected = false;
+        disconnectTime = disconnectTime || new Date();
+        console.warn(`[MqttMonitor] MQTT connection lost (${reason}). Auto-retrying in background...`);
+
+        if (!graceTimer) {
+            graceTimer = setTimeout(async () => {
+                if (!isConnected && !alertSent) {
+                    alertSent = true;
+                    await sendMqttAlert(true, reason);
+                }
+                graceTimer = null;
+            }, 35000); // 35 seconds grace period (gives 3 retries at 10s intervals + buffer)
+        }
+    };
+
     client.on("error", (err) => {
         console.error("❌ MQTT connection error:", err.message);
-        client.end();
+        handleDisconnect(`Connection error: ${err.message}`);
     });
 
     client.on("close", () => {
         console.log("🔌 MQTT connection closed");
+        handleDisconnect("Connection closed");
     });
+
+    client.on("offline", () => {
+        console.log("🔌 MQTT connection offline");
+        handleDisconnect("Connection offline");
+    });
+}
+
+// ── Alerting Utility ────────────────────────────────────────────────────────
+async function sendMqttAlert(isDowntime, errorDetails = "") {
+    const adminEmail = "arnold.kimkpe@afrilogicsolutions.com";
+    const adminPhone = "+233505953242";
+    
+    // Import dynamically to avoid circular dependency / early load errors
+    const { sendSMS } = require("../../config/sms/sms");
+    const { sendCCEmail } = require("../../services/email/craftedClimateMailer");
+
+    const timeZone = "Africa/Accra";
+    const timeStr = new Date().toLocaleTimeString("en-US", { timeZone });
+    const dateStr = new Date().toLocaleDateString("en-US", { timeZone });
+
+    if (isDowntime) {
+        const subject = `🚨 CRITICAL: MQTT Service Offline`;
+        const message = `The MQTT Telemetry Service went offline on ${dateStr} at ${timeStr}. Error: ${errorDetails || 'Connection closed/lost'}. Immediate action is required to restore sensor operations.`;
+
+        console.error(`[MqttMonitor] Sending downtime alert to ${adminEmail} and ${adminPhone}`);
+
+        // 1. Send SMS
+        try {
+            await sendSMS(adminPhone, `CRITICAL ALERT: Crafted Climate MQTT service is OFFLINE since ${timeStr}. Error: ${errorDetails || 'Connection lost'}.`);
+            console.log(`[MqttMonitor] Downtime SMS sent successfully.`);
+        } catch (err) {
+            console.error(`[MqttMonitor] Failed to send downtime SMS:`, err.message);
+        }
+
+        // 2. Send Email
+        try {
+            await sendCCEmail({
+                type: 'notification.generic',
+                to: adminEmail,
+                vars: {
+                    userName: 'Arnold Kimkpe',
+                    title: subject,
+                    message: message,
+                    theme: 'critical',
+                    category: 'System Alert',
+                    transactional: true
+                }
+            });
+            console.log(`[MqttMonitor] Downtime Email sent successfully.`);
+        } catch (err) {
+            console.error(`[MqttMonitor] Failed to send downtime Email:`, err.message);
+        }
+    } else {
+        // Recovery
+        const msDowntime = disconnectTime ? (new Date() - disconnectTime) : 0;
+        const downtimeDuration = msDowntime > 0 ? formatDuration(msDowntime) : 'unknown duration';
+        const subject = `✅ RESOLVED: MQTT Service Operational`;
+        const message = `The MQTT Telemetry Service has recovered and is now online on ${dateStr} at ${timeStr}. Total downtime: ${downtimeDuration}.`;
+
+        console.log(`[MqttMonitor] Sending recovery alert to ${adminEmail} and ${adminPhone}`);
+
+        // 1. Send SMS
+        try {
+            await sendSMS(adminPhone, `RESOLVED: Crafted Climate MQTT service is back ONLINE at ${timeStr}. Downtime: ${downtimeDuration}.`);
+            console.log(`[MqttMonitor] Recovery SMS sent successfully.`);
+        } catch (err) {
+            console.error(`[MqttMonitor] Failed to send recovery SMS:`, err.message);
+        }
+
+        // 2. Send Email
+        try {
+            await sendCCEmail({
+                type: 'notification.generic',
+                to: adminEmail,
+                vars: {
+                    userName: 'Arnold Kimkpe',
+                    title: subject,
+                    message: message,
+                    theme: 'success',
+                    category: 'System Alert',
+                    transactional: true
+                }
+            });
+            console.log(`[MqttMonitor] Recovery Email sent successfully.`);
+        } catch (err) {
+            console.error(`[MqttMonitor] Failed to send recovery Email:`, err.message);
+        }
+    }
+}
+
+function formatDuration(ms) {
+    const totalSecs = Math.floor(ms / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    if (mins > 0) {
+        return `${mins}m ${secs}s`;
+    }
+    return `${secs}s`;
 }
 
 function connectSecureMqtt() {
@@ -248,6 +389,16 @@ function connectSecureMqtt() {
 
     const mqttClient = createMqttClient();
     initializeMQTTClient(mqttClient, topics);
+
+    // Startup check: alert if we don't connect within 35 seconds
+    if (startupTimer) clearTimeout(startupTimer);
+    startupTimer = setTimeout(async () => {
+        if (!isConnected && !alertSent) {
+            alertSent = true;
+            await sendMqttAlert(true, "Startup connection timeout (failed to connect within 35s)");
+        }
+        startupTimer = null;
+    }, 35000);
 }
 
 module.exports = { connectSecureMqtt };

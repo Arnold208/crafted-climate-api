@@ -28,6 +28,7 @@ let options = {
   clientId: process.env.MQTT_SECURE_CLIENT_ID,
   keepalive: parseInt(process.env.MQTT_SECURE_KEEPALIVE, 10) || 60,
   connectTimeout: parseInt(process.env.MQTT_SECURE_CONNECT_TIMEOUT, 10) || 5000,
+  reconnectPeriod: 10000, // 🔄 Retry connection every 10 seconds (gives significant gaps to auto-retry)
   // 🔒 HARDENING: Enable persistent sessions for QoS 1 delivery while offline
   clean: false,
   properties: {
